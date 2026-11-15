@@ -1,5 +1,5 @@
-#pragman once
-#include <Qwidget>
+#pragma once
+#include <QWidget>
 #include <QTimer>
 #include <QString>
 #include <QImage>
@@ -24,6 +24,6 @@ private:
     static QImage toQImage(constcv::Mat &BGR);
     // backend work of decoding and scanning
     cameraScanner scanner;
-    Qlabel *view;
+    QLabel *view;
     QTimer timer;
 };
