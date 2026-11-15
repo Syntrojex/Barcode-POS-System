@@ -1,6 +1,12 @@
  <h1 align="center">🏷️ BarcodeHub</h1>
 
 <p align="center">
+  <b>A C++17-based Point of Sale system with barcode scanning, product management, order processing, and billing.</b>
+  <br />
+  Developed as an academic project for Introduction to Software Engineering at FAST-NUCES.
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white" />
   <img src="https://img.shields.io/badge/Qt-6-41CD52?style=for-the-badge&logo=qt&logoColor=white" />
   <img src="https://img.shields.io/badge/OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white" />
@@ -8,55 +14,62 @@
   <img src="https://img.shields.io/badge/Platform-Windows%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white" />
 </p>
 
-<p align="center">
-  <b>A C++ desktop application for barcode generation, image decoding, and real-time camera scanning.</b>
-  <br />
-  Developed as an academic project for Introduction to Software Engineering at FAST-NUCES.
-</p>
-
 ---
 
 ## 📌 Project Overview
 
-**BarcodeHub** is a collaborative academic project developed for the **Introduction to Software Engineering (ISE)** course at FAST-NUCES.
+**BarcodeHub** is a C++ desktop application being developed as a barcode-based Point of Sale (POS) system.
 
-The application aims to simplify product identification and barcode-related operations in retail environments through a desktop interface.
+The project extends its initial barcode generation and reading capabilities into a GUI-based retail workflow, allowing cashiers to scan products, retrieve product information, manage orders, and generate bills.
 
-Developed incrementally, the project focuses on reliability, usability, and maintainable software architecture.
+Developed incrementally, BarcodeHub emphasizes modularity, code quality, and reusability.
 
 ---
 
 ## ✨ Key Features
 
-- 🏷️ **Barcode Generation** — Generate barcodes from supported six-digit product codes.
-- 📷 **Camera Scanning** — Scan barcodes using connected cameras.
-- 🖼️ **Image Decoding** — Decode barcodes from uploaded images.
-- 📋 **Scan History** — Maintain session-based scan logs.
-- 📤 **CSV Export** — Export scan history.
-- 🎨 **Desktop GUI** — Interactive interface built with Qt Widgets.
+### Increment 1 — Completed
+
+- 🏷️ Barcode generation for supported six-digit numeric product codes.
+- 📖 Barcode reading functionality.
+- 🖥️ Qt Widgets-based desktop application foundation.
+
+### Increment 2 — In Development
+
+- 📷 Camera-based barcode scanning.
+- 📦 Product lookup and description from `Product.txt`.
+- 🛒 Cart and order management.
+- 📊 Product stock validation.
+- 🧾 Automated bill generation.
+- 💳 Cash, card, and wallet payment modes.
+- 📁 File-based product, order, and billing records.
+- 🎨 GUI-based Point of Sale workflow.
 
 ---
 
-## 📷 Camera & Image Scanning
+## 🔄 POS Workflow
 
-- Select a camera and resolution to start live scanning.
-- Freeze, resume, mirror, and capture camera frames.
-- Upload PNG, JPEG, or BMP images for decoding.
-- View successful scans in Scan Logs and export them as CSV.
+The planned POS workflow consists of four main modules:
+
+1. **Product Management** — Retrieve product information and validate stock.
+2. **Camera & Scanner** — Scan product barcodes using a connected camera.
+3. **Order Management** — Record orders and manage product quantities.
+4. **Billing** — Calculate totals, generate bills, and record payment information.
 
 ---
 
-## 🔢 Supported Barcode Format
+## 📄 Data Management
 
-The current increment supports a project-specific six-digit barcode format:
+BarcodeHub uses text files to store its records:
 
-- **Input:** Six digits, starting with a nonzero digit.
-- **Encoding:** `0 + code + Mod-10 check digit`.
-- **Decoding:** Format and checksum validation.
+| File | Purpose |
+|---|---|
+| `Product.txt` | Product specifications and available stock |
+| `Order.txt` | Customer and order information |
+| `OrderDetail.txt` | Products and quantities associated with orders |
+| `Bill.txt` | Generated bill information and payment status |
 
-This is a project-specific encoding based on an EAN-8-sized structure. It does not claim support for arbitrary EAN-8, EAN-13, QR codes, or Code 128.
-
-SVG export and thermal printing are currently disabled.
+Each record follows the specified field order and uses `#` as its end-of-record marker.
 
 ---
 
@@ -66,12 +79,12 @@ SVG export and thermal printing are currently disabled.
 |---|---|
 | **C++17** | Core application logic |
 | **Qt 6 Widgets** | Desktop graphical interface |
-| **OpenCV** | Image processing and camera capture |
+| **OpenCV** | Camera capture and image processing |
 | **CMake** | Build configuration |
 | **MinGW-w64** | Windows C++ compilation |
-| **PowerShell** | Automated setup and packaging |
+| **PowerShell** | Build automation |
 | **Git & GitHub** | Version control and collaboration |
-| **GitHub Actions** | Automatic branch synchronization |
+| **GitHub Actions** | Automated branch synchronization |
 
 ---
 
@@ -80,22 +93,26 @@ SVG export and thermal printing are currently disabled.
 ```text
 Bar-Code-System-CPP/
 │
-├── Backend/                  # Core application logic
+├── Backend/
 │   ├── include/
 │   └── src/
 │
-├── Frontend/                 # Qt desktop interface
+├── Frontend/
 │   ├── assets/
 │   ├── include/
 │   └── src/
 │
-├── Project-Planning/         # Increment-wise documentation
-├── scripts/                  # Build and setup scripts
+├── data/
+│   ├── Product.txt
+│   ├── Order.txt
+│   ├── OrderDetail.txt
+│   └── Bill.txt
 │
+├── Project-Planning/
+├── tests/
 ├── .github/
-│   ├── CODEOWNERS
-│   └── workflows/
 │
+├── main.cpp
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── project.json
@@ -125,8 +142,6 @@ Bar-Code-System-CPP/
 ---
 
 ## 👥 Project Team & Credits
-
-This project was collaboratively developed by the following team members:
 
 | Team Member | Roll Number | GitHub Profile |
 |---|---|---|
