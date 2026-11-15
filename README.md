@@ -28,13 +28,13 @@ Developed incrementally, BarcodeHub emphasizes modularity, code quality, and reu
 
 ## ✨ Key Features
 
-### Increment 1 — Completed
+### v1.0.0
 
 - 🏷️ Barcode generation for supported six-digit numeric product codes.
 - 📖 Barcode reading functionality.
 - 🖥️ Qt Widgets-based desktop application foundation.
 
-### Increment 2 — In Development
+### v2.0.0
 
 - 📷 Camera-based barcode scanning.
 - 📦 Product lookup and description from `Product.txt`.
