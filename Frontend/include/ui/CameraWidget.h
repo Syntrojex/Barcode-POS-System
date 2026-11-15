@@ -21,7 +21,7 @@ private slots:
 
 private:
     // OpenCV picture to Qt picture
-    static QImage toQImage(constcv::Mat &BGR);
+    static QImage toQImage(const cv::Mat &BGR);
     // backend work of decoding and scanning
     cameraScanner scanner;
     QLabel *view;
