@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)   # needed for Q_OBJECT (CameraWidget, POSWindow...)
 
+# Turn ON (-DSCANNER_ONLY=ON) to build just the scanner + CameraWidget, e.g. while
+# another module is still unfinished. Default OFF = build everything.
+option(SCANNER_ONLY "Build only the scanner and CameraWidget (to test one module)" OFF)
+
 # ---- Qt (must use the same MinGW compiler as the kit) ----
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
@@ -31,6 +35,9 @@ message(STATUS "OpenCV ${OpenCV_VERSION} found: ${OpenCV_DIR}")
 # GLOB means a teammate adding a file never has to edit this list (fewer merge conflicts).
 file(GLOB_RECURSE BACKEND_SOURCES CONFIGURE_DEPENDS Backend/src/*.cpp)
 list(FILTER BACKEND_SOURCES EXCLUDE REGEX "[/\\\\][Mm]ain\\.cpp$")   # a stray main would clash
+if(SCANNER_ONLY)
+    list(FILTER BACKEND_SOURCES INCLUDE REGEX "Backend/src/scanner/")
+endif()
 if(NOT BACKEND_SOURCES)
     message(FATAL_ERROR "No .cpp files found under Backend/src.")
 endif()
@@ -50,6 +57,9 @@ endif()
 # ---- Frontend: every .cpp/.h under Frontend except main.cpp ----
 file(GLOB_RECURSE FRONTEND_SOURCES CONFIGURE_DEPENDS Frontend/src/*.cpp Frontend/include/*.h)
 list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "[/\\\\][Mm]ain\\.cpp$")
+if(SCANNER_ONLY)
+    list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "POSWindow")
+endif()
 add_library(barcode_ui STATIC ${FRONTEND_SOURCES})
 target_include_directories(barcode_ui PUBLIC Frontend/include Frontend/include/ui)
 target_link_libraries(barcode_ui PUBLIC barcode_core)
