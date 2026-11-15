@@ -1,15 +1,16 @@
-#include "Scanner.h"
+#include "CameraScanner.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/geometry.hpp>
+#include <opencv2/videoio.hpp>
 using namespace std;
-Scanner::Scanner(int idx, int width, int height)
+CameraScanner::CameraScanner(int idx, int width, int height)
 {
     index = idx;
     this->width = width;
     this->height = height;
 }
 // Open the camera
-bool Scanner::openCamera()
+bool CameraScanner::openCamera()
 {
 #ifdef _WIN32
     camera.open(index, cv::CAP_DSHOW);
@@ -29,7 +30,7 @@ bool Scanner::openCamera()
     return true;
 }
 // locate the barcode
-bool Scanner::find(const cv::Mat &gray, cv::Rect &box) const
+bool CameraScanner::find(const cv::Mat &gray, cv::Rect &box) const
 {
     cv::Mat gx, gy, score, mask;
     cv::Sobel(gray, gx, CV_32F, 1, 0, 3);
@@ -64,7 +65,7 @@ bool Scanner::find(const cv::Mat &gray, cv::Rect &box) const
     return false;
 }
 // read each frame and locate the barcode in grayscale
-bool Scanner::frameRead(std::string &six, cv::Rect &box, const cv::Mat &frame)
+bool CameraScanner::frameRead(std::string &six, cv::Rect &box, const cv::Mat &frame)
 {
     box = cv::Rect();
     six.clear();
@@ -110,7 +111,7 @@ bool Scanner::frameRead(std::string &six, cv::Rect &box, const cv::Mat &frame)
     return decoder.decodeCropping(barcode, six);
 }
 // scanning the located barcode for the six digits
-bool Scanner::scan(std::string &sixDigits)
+bool CameraScanner::scan(std::string &sixDigits)
 {
     sixDigits.clear();
     if (!camera.isOpened() && !openCamera())
@@ -138,12 +139,12 @@ bool Scanner::scan(std::string &sixDigits)
     return false;
 }
 // store the error message
-std::string Scanner::errMessage() const
+std::string CameraScanner::errMessage() const
 {
     return errorMsg;
 }
 // close the camera
-Scanner::~Scanner()
+CameraScanner::~CameraScanner()
 {
     camera.release();
 }
