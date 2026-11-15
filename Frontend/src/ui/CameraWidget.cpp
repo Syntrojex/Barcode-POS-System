@@ -32,6 +32,7 @@ QImage CameraWidget::toQImage(const cv::Mat &BGR)
 void CameraWidget::onTick()
 {
     cv::Mat frame;
+
     if (!scanner.readFrame(frame))
     {
         timer.stop();
