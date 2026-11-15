@@ -1,7 +1,9 @@
 #include "cameraScanner.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
+#if __has_include(<opencv2/geometry.hpp>)
 #include <opencv2/geometry.hpp>
+#endif
 using namespace std;
 cameraScanner::cameraScanner(int idx, int width, int height)
 {
