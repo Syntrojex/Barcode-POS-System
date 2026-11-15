@@ -10,11 +10,11 @@ Product::Product()
     availableQuantity = 0;
 }
 
-Product::Product(int id, QString barcode, QString acronym,
-    QString name, QString unit,
-    double price, double tax,
-    double discount, int quantity,
-    QString barcodePath)
+Product::Product(int id, string barcode, string acronym,
+                 string name, string unit,
+                 double price, double tax,
+                 double discount, int quantity,
+                 string barcodePath)
 {
     productID = id;
     this->barcode = barcode;
@@ -35,22 +35,22 @@ int Product::getProductID() const
     return productID;
 }
 
-QString Product::getBarcode() const
+string Product::getBarcode() const
 {
     return barcode;
 }
 
-QString Product::getAcronym() const
+string Product::getAcronym() const
 {
     return acronym;
 }
 
-QString Product::getProductName() const
+string Product::getProductName() const
 {
     return productName;
 }
 
-QString Product::getMeasurementUnit() const
+string Product::getMeasurementUnit() const
 {
     return measurementUnit;
 }
@@ -75,7 +75,7 @@ int Product::getAvailableQuantity() const
     return availableQuantity;
 }
 
-QString Product::getBarcodeFilePath() const
+string Product::getBarcodeFilePath() const
 {
     return barcodeFilePath;
 }
@@ -85,22 +85,22 @@ void Product::setProductID(int id)
     productID = id;
 }
 
-void Product::setBarcode(QString barcode)
+void Product::setBarcode(string barcode)
 {
     this->barcode = barcode;
 }
 
-void Product::setAcronym(QString acronym)
+void Product::setAcronym(string acronym)
 {
     this->acronym = acronym;
 }
 
-void Product::setProductName(QString name)
+void Product::setProductName(string name)
 {
     productName = name;
 }
 
-void Product::setMeasurementUnit(QString unit)
+void Product::setMeasurementUnit(string unit)
 {
     measurementUnit = unit;
 }
@@ -125,7 +125,7 @@ void Product::setAvailableQuantity(int quantity)
     availableQuantity = quantity;
 }
 
-void Product::setBarcodeFilePath(QString path)
+void Product::setBarcodeFilePath(string path)
 {
     barcodeFilePath = path;
 }
