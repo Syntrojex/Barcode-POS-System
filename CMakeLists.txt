@@ -9,6 +9,11 @@ set(CMAKE_AUTOMOC ON)   # needed for Q_OBJECT (CameraWidget, POSWindow...)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
+# Use the OpenCV 4 built by scripts/build-windows.ps1 if it exists.
+if(NOT OpenCV_DIR AND EXISTS ${CMAKE_SOURCE_DIR}/build/deps/opencv)
+    set(OpenCV_DIR ${CMAKE_SOURCE_DIR}/build/deps/opencv CACHE PATH "OpenCV 4 location")
+endif()
+
 # Increment 2 needs the camera, so OpenCV 4 is required.
 find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
 message(STATUS "OpenCV ${OpenCV_VERSION} found: ${OpenCV_DIR}")
@@ -37,10 +42,10 @@ target_include_directories(barcode_ui PUBLIC Frontend/include Frontend/include/u
 target_link_libraries(barcode_ui PUBLIC barcode_core)
 
 # ---- The application ----
-if(NOT EXISTS ${CMAKE_SOURCE_DIR}/Frontend/src/main.cpp)
-    message(FATAL_ERROR "Frontend/src/main.cpp is missing. It must create QApplication and show the main window.")
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/Frontend/src/ui/main.cpp)
+    message(FATAL_ERROR "Frontend/src/ui/main.cpp is missing. It must create QApplication and show the main window.")
 endif()
-add_executable(BarcodeHub WIN32 Frontend/src/main.cpp)
+add_executable(BarcodeHub WIN32 Frontend/src/ui/main.cpp)
 target_link_libraries(BarcodeHub PRIVATE barcode_ui)
 
 # Copy the Qt/OpenCV DLLs next to the .exe so it runs by double-click.
