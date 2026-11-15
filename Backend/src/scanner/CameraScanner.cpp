@@ -1,16 +1,16 @@
-#include "CameraScanner.h"
+#include "cameraScanner.h"
 #include <opencv2/imgproc.hpp>
-#include <opencv2/geometry.hpp>
 #include <opencv2/videoio.hpp>
+#include <opencv2/geometry.hpp>
 using namespace std;
-CameraScanner::CameraScanner(int idx, int width, int height)
+cameraScanner::cameraScanner(int idx, int width, int height)
 {
     index = idx;
     this->width = width;
     this->height = height;
 }
 // Open the camera
-bool CameraScanner::openCamera()
+bool cameraScanner::openCamera()
 {
 #ifdef _WIN32
     camera.open(index, cv::CAP_DSHOW);
@@ -30,7 +30,7 @@ bool CameraScanner::openCamera()
     return true;
 }
 // locate the barcode
-bool CameraScanner::find(const cv::Mat &gray, cv::Rect &box) const
+bool cameraScanner::find(const cv::Mat &gray, cv::Rect &box) const
 {
     cv::Mat gx, gy, score, mask;
     cv::Sobel(gray, gx, CV_32F, 1, 0, 3);
@@ -65,7 +65,7 @@ bool CameraScanner::find(const cv::Mat &gray, cv::Rect &box) const
     return false;
 }
 // read each frame and locate the barcode in grayscale
-bool CameraScanner::frameRead(std::string &six, cv::Rect &box, const cv::Mat &frame)
+bool cameraScanner::frameRead(std::string &six, cv::Rect &box, const cv::Mat &frame)
 {
     box = cv::Rect();
     six.clear();
@@ -111,7 +111,7 @@ bool CameraScanner::frameRead(std::string &six, cv::Rect &box, const cv::Mat &fr
     return decoder.decodeCropping(barcode, six);
 }
 // scanning the located barcode for the six digits
-bool CameraScanner::scan(std::string &sixDigits)
+bool cameraScanner::scan(std::string &sixDigits)
 {
     sixDigits.clear();
     if (!camera.isOpened() && !openCamera())
@@ -139,12 +139,22 @@ bool CameraScanner::scan(std::string &sixDigits)
     return false;
 }
 // store the error message
-std::string CameraScanner::errMessage() const
+std::string cameraScanner::errMessage() const
 {
     return errorMsg;
 }
+// grab one frame from the camera (the GUI calls this on every timer tick)
+bool cameraScanner::readFrame(cv::Mat &frame)
+{
+    if (!camera.isOpened() || !camera.read(frame) || frame.empty())
+    {
+        errorMsg = "Camera stopped sending frames";
+        return false;
+    }
+    return true;
+}
 // close the camera
-CameraScanner::~CameraScanner()
+cameraScanner::~cameraScanner()
 {
     camera.release();
 }
