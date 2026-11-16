@@ -25,11 +25,14 @@ namespace
         {"Dashboard", "dashboard", "F1"}, {"Record Order", "cart", "F2"}, {"Orders", "orders", "F3"},
         {"Products", "products", "F4"}, {"Barcode Scanner", "barcode", "F5"}, {"Bills", "bills", "F6"},
         {"Settings", "settings", "F10"}};
+    const char *kSub[] = {"Today's performance at a glance", "Scan or search products and build the order",
+                          "Every order from this shift", "Catalog and stock levels", "Scan a barcode to look up a product",
+                          "Printable bills for paid orders", "Tax, discount and scanning preferences"};
 }
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
-    setWindowTitle("SmartPOS - BarcodeHub");
+    setWindowTitle("BarcodeHub - SmartPOS");
     setMinimumSize(1100, 700);
     resize(1360, 860);
 
@@ -110,16 +113,17 @@ QWidget *MainWindow::buildSidebar()
 {
     auto *sb = new QFrame;
     sb->setObjectName("sidebar");
-    sb->setFixedWidth(244);
+    sb->setFixedWidth(232);
     auto *v = new QVBoxLayout(sb);
-    v->setContentsMargins(10, 10, 10, 10);
-    v->setSpacing(8);
+    v->setContentsMargins(14, 18, 14, 16);
+    v->setSpacing(6);
 
     auto *brand = new QHBoxLayout;
-    brand->setContentsMargins(4, 2, 4, 2);
+    brand->setContentsMargins(4, 0, 4, 0);
+    brand->setSpacing(11);
     auto *logo = new QFrame;
     logo->setObjectName("logoBox");
-    logo->setFixedSize(38, 38);
+    logo->setFixedSize(42, 42);
     auto *ll = new QVBoxLayout(logo);
     ll->setContentsMargins(0, 0, 0, 0);
     auto *ls = new QLabel("S");
@@ -129,108 +133,58 @@ QWidget *MainWindow::buildSidebar()
     auto *bt = new QVBoxLayout;
     bt->setSpacing(0);
     bt->addWidget(W::label("SmartPOS", "brand"));
-    auto *ver = W::label("v2.4 LTS Retail");
-    ver->setStyleSheet("color:#737686; font-size:11px;");
-    bt->addWidget(ver);
+    bt->addWidget(W::label("Retail workspace", "brandSub"));
     brand->addLayout(bt);
     brand->addStretch();
-    brand->addWidget(W::badge("POS#4", "grey"));
     v->addLayout(brand);
-    v->addSpacing(4);
-
-    auto *user = W::card(sb, "userCard");
-    auto *uv = new QVBoxLayout(user);
-    uv->setContentsMargins(10, 10, 10, 10);
-    uv->setSpacing(8);
-    auto *ur = new QHBoxLayout;
-    auto *av = new QLabel("AR");
-    av->setObjectName("avatar");
-    av->setFixedSize(32, 32);
-    av->setAlignment(Qt::AlignCenter);
-    ur->addWidget(av);
-    auto *un = new QVBoxLayout;
-    un->setSpacing(0);
-    auto *nm = W::label("Alex Rivera");
-    nm->setStyleSheet("font-weight:700; font-size:13.5px;");
-    un->addWidget(nm);
-    auto *tm = W::label("Terminal #04", "muted");
-    tm->setStyleSheet("color:#434655; font-size:12px;");
-    un->addWidget(tm);
-    ur->addLayout(un);
-    ur->addStretch();
-    ur->addWidget(W::iconLabel("lock", Theme::outline, 16));
-    uv->addLayout(ur);
-    auto *rr = new QVBoxLayout;
-    rr->setSpacing(4);
-    rr->addWidget(W::label("ACTIVE ROLE", "caption"));
-    auto *seg = new QFrame;
-    seg->setObjectName("segment");
-    auto *sh = new QHBoxLayout(seg);
-    sh->setContentsMargins(2, 2, 2, 2);
-    sh->setSpacing(0);
-    auto *cashier = new QPushButton("Cashier");
-    auto *manager = new QPushButton("Manager");
-    for (auto *b : {cashier, manager})
-    {
-        b->setCheckable(true);
-        b->setCursor(Qt::PointingHandCursor);
-        b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        sh->addWidget(b);
-    }
-    manager->setChecked(true);
-    rr->addWidget(seg);
-    uv->addLayout(rr);
-    v->addWidget(user);
-    v->addSpacing(6);
+    v->addSpacing(18);
 
     for (int i = 0; i < PageCount; ++i)
     {
         auto *b = new QPushButton;
         b->setObjectName("nav");
         b->setCursor(Qt::PointingHandCursor);
-        b->setFixedHeight(40);
+        b->setFixedHeight(44);
+        b->setToolTip(QString("%1  (%2)").arg(kNav[i].text, kNav[i].key));
         auto *bh = new QHBoxLayout(b);
-        bh->setContentsMargins(12, 0, 12, 0);
-        bh->setSpacing(12);
+        bh->setContentsMargins(14, 0, 14, 0);
+        bh->setSpacing(13);
         auto *ic = new QLabel;
         ic->setObjectName("navIcon");
         ic->setFixedSize(20, 20);
-        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, Theme::onSurface, 20));
+        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, QColor("#b8c3e0"), 20));
         auto *tx = new QLabel(kNav[i].text);
-        auto *fk = new QLabel(kNav[i].key);
-        fk->setObjectName("fkey");
-        for (auto *l : {static_cast<QWidget *>(ic), static_cast<QWidget *>(tx), static_cast<QWidget *>(fk)})
+        for (QWidget *l : {static_cast<QWidget *>(ic), static_cast<QWidget *>(tx)})
             l->setAttribute(Qt::WA_TransparentForMouseEvents);
         bh->addWidget(ic);
         bh->addWidget(tx, 1);
-        bh->addWidget(fk);
         v->addWidget(b);
         m_nav << b;
         connect(b, &QPushButton::clicked, this, [this, i]
                 { goTo(i); });
     }
-    connect(cashier, &QPushButton::clicked, this, [=, this]
-            {
-        cashier->setChecked(true); manager->setChecked(false);
-        m_nav[Settings]->setProperty("locked", true); Theme::repolish(m_nav[Settings]); for (auto *c : m_nav[Settings]->findChildren<QLabel *>()) Theme::repolish(c);
-        if (m_stack->currentIndex() == Settings) goTo(Dashboard);
-        showToast("Cashier role: Settings locked"); });
-    connect(manager, &QPushButton::clicked, this, [=, this]
-            {
-        manager->setChecked(true); cashier->setChecked(false);
-        m_nav[Settings]->setProperty("locked", false); Theme::repolish(m_nav[Settings]); for (auto *c : m_nav[Settings]->findChildren<QLabel *>()) Theme::repolish(c);
-        showToast("Manager role: full access"); });
 
     v->addStretch();
-    auto *foot = new QHBoxLayout;
-    foot->setContentsMargins(6, 0, 6, 0);
-    foot->addWidget(W::dot(QColor("#16a34a")));
-    foot->addWidget(W::label("Demo • local data", "navFooter"));
-    foot->addStretch();
-    foot->addWidget(W::label("Store #102", "navFooter"));
-    v->addLayout(foot);
-    auto *exitB = W::button("Exit Terminal", "", "logout");
-    exitB->setMinimumHeight(36);
+    auto *user = W::card(sb, "userCard");
+    auto *uh = new QHBoxLayout(user);
+    uh->setContentsMargins(10, 9, 10, 9);
+    uh->setSpacing(10);
+    auto *av = new QLabel("AR");
+    av->setObjectName("avatar");
+    av->setFixedSize(34, 34);
+    av->setAlignment(Qt::AlignCenter);
+    uh->addWidget(av);
+    auto *un = new QVBoxLayout;
+    un->setSpacing(0);
+    un->addWidget(W::label("Alex Rivera", "userName"));
+    un->addWidget(W::label("Cashier • Terminal 04", "userRole"));
+    uh->addLayout(un, 1);
+    v->addWidget(user);
+    v->addSpacing(4);
+    auto *exitB = new QPushButton("  Exit");
+    exitB->setObjectName("exitBtn");
+    exitB->setIcon(Theme::icon("logout", QColor("#c9d3ee"), 16));
+    exitB->setCursor(Qt::PointingHandCursor);
     v->addWidget(exitB);
     connect(exitB, &QPushButton::clicked, this, &QWidget::close);
     return sb;
@@ -240,63 +194,45 @@ QWidget *MainWindow::buildTopBar()
 {
     auto *bar = new QFrame;
     bar->setObjectName("topbar");
-    bar->setFixedHeight(58);
+    bar->setFixedHeight(72);
     auto *h = new QHBoxLayout(bar);
-    h->setContentsMargins(16, 0, 14, 0);
-    h->setSpacing(12);
-    h->addWidget(W::badge("LIVE SHIFT", "blue"));
-    m_title = W::label("SmartPOS Retail Workspace", "topTitle");
-    h->addWidget(m_title);
-    h->addSpacing(8);
-    h->addWidget(W::iconLabel("info", Theme::outline, 15));
-    h->addWidget(W::label("Press F1-F12 for fast routing", "topHint"));
+    h->setContentsMargins(24, 0, 20, 0);
+    h->setSpacing(14);
+    auto *t = new QVBoxLayout;
+    t->setSpacing(0);
+    m_title = W::label("", "pageTitle");
+    m_subtitle = W::label("", "pageSub");
+    t->addStretch();
+    t->addWidget(m_title);
+    t->addWidget(m_subtitle);
+    t->addStretch();
+    h->addLayout(t);
     h->addStretch();
 
-    auto *reg = new QFrame;
-    reg->setObjectName("chip");
-    auto *rh = new QHBoxLayout(reg);
-    rh->setContentsMargins(12, 6, 12, 6);
-    rh->setSpacing(8);
-    rh->addWidget(W::dot(QColor("#16a34a")));
-    rh->addWidget(W::label("Register 02"));
-    rh->addWidget(W::label("|", "muted"));
-    auto *cd = W::label("Cash Drawer: Active ($350.00 Float)");
-    cd->setStyleSheet("color:#434655;");
-    rh->addWidget(cd);
-    h->addWidget(reg);
-
-    h->addWidget(W::iconLabel("wifi", Theme::tertiary, 18));
-    auto *ping = W::label("local");
-    ping->setStyleSheet("color:#006329; font-weight:700; font-size:12px;");
-    h->addWidget(ping);
-
-    auto *clock = new QVBoxLayout;
-    clock->setSpacing(0);
+    auto *chip = new QFrame;
+    chip->setObjectName("chip");
+    auto *ch = new QHBoxLayout(chip);
+    ch->setContentsMargins(14, 5, 14, 7);
+    ch->setSpacing(10);
+    ch->addWidget(W::iconLabel("clock", Theme::primary, 18));
+    auto *cl = new QVBoxLayout;
+    cl->setSpacing(0);
     m_clockTime = W::label("", "clockTime");
-    m_clockTime->setAlignment(Qt::AlignRight);
     m_clockDate = W::label("", "clockDate");
-    m_clockDate->setAlignment(Qt::AlignRight);
-    clock->addWidget(m_clockTime);
-    clock->addWidget(m_clockDate);
-    h->addLayout(clock);
-    auto *t = new QTimer(this);
+    cl->addWidget(m_clockTime);
+    cl->addWidget(m_clockDate);
+    ch->addLayout(cl);
+    h->addWidget(chip, 0, Qt::AlignVCenter);
+    auto *timer = new QTimer(this);
     auto tick = [this]
     {
         const auto now = QDateTime::currentDateTime();
         m_clockTime->setText(now.toString("HH:mm:ss"));
-        m_clockDate->setText(now.toString("dd MMM yyyy"));
+        m_clockDate->setText(now.toString("ddd, d MMM yyyy"));
     };
-    connect(t, &QTimer::timeout, this, tick);
-    t->start(1000);
+    connect(timer, &QTimer::timeout, this, tick);
+    timer->start(1000);
     tick();
-
-    auto *av = new QLabel;
-    av->setObjectName("topAvatar");
-    av->setFixedSize(34, 34);
-    av->setAlignment(Qt::AlignCenter);
-    av->setPixmap(Theme::iconPixmap("user", Qt::white, 18));
-    h->addWidget(av);
-    h->addWidget(W::iconLabel("chevron-down", Theme::outline, 14));
     return bar;
 }
 
@@ -304,17 +240,14 @@ void MainWindow::goTo(int page)
 {
     if (page < 0 || page >= PageCount)
         return;
-    if (page == Settings && m_nav[Settings]->property("locked").toBool())
-    {
-        showToast("Settings are available to the Manager role");
-        return;
-    }
     m_stack->setCurrentIndex(page);
+    m_title->setText(kNav[page].text);
+    m_subtitle->setText(kSub[page]);
     for (int i = 0; i < m_nav.size(); ++i)
     {
         m_nav[i]->setProperty("active", i == page);
         if (auto *ic = m_nav[i]->findChild<QLabel *>("navIcon"))
-            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, i == page ? QColor("white") : Theme::onSurface, 20));
+            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, i == page ? QColor("white") : QColor("#b8c3e0"), 20));
         Theme::repolish(m_nav[i]);
         for (auto *c : m_nav[i]->findChildren<QLabel *>())
             Theme::repolish(c);
@@ -370,7 +303,7 @@ void MainWindow::positionToast()
     if (!m_toast)
         return;
     const QWidget *root = centralWidget();
-    m_toast->move((root->width() - m_toast->width()) / 2 + 120, root->height() - m_toast->height() - 64);
+    m_toast->move((root->width() - m_toast->width()) / 2 + 116, root->height() - m_toast->height() - 36);
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)

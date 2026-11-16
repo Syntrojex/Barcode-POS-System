@@ -26,7 +26,7 @@ private:
     QTableWidget *m_table;
     QString m_filter = "All";
     QVector<QPushButton *> m_tabs;
-    QLabel *m_vol, *m_count, *m_hold, *m_showing;
+    QLabel *m_showing;
 };
 
 class ProductsPage : public QWidget

@@ -1,10 +1,6 @@
 @echo off
-setlocal
-set "APP=%~dp0build\portable\BarcodeHub\BarcodeHub.exe"
-if not exist "%APP%" (
-    echo Build the application first:
-    echo powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1
-    pause
-    exit /b 1
-)
-start "" "%APP%"
+rem Launches the most recent build (MinGW first, then MSVC).
+if exist "%~dp0build\qt-mingw\BarcodeHub.exe" ( start "" "%~dp0build\qt-mingw\BarcodeHub.exe" & exit /b 0 )
+if exist "%~dp0build\msvc\Release\BarcodeHub.exe" ( start "" "%~dp0build\msvc\Release\BarcodeHub.exe" & exit /b 0 )
+echo Build first: build-mingw.cmd  or  build-msvc.cmd
+pause

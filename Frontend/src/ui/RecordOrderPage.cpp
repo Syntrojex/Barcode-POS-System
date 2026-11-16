@@ -3,44 +3,37 @@
 #include "Dialogs.h"
 #include "Theme.h"
 #include "Widgets.h"
-#include <QApplication>
 #include <QDateTime>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QPainter>
-#include <QRegularExpression>
-#include <QRegularExpressionValidator>
 #include <QTableWidget>
-#include <QTimer>
 #include <QVBoxLayout>
 #include <QtMath>
 
 namespace
 {
-    constexpr int kCols = 8;
-    QWidget *twoLine(const QString &top, const QString &bottom, bool accent = false)
+    QWidget *twoLine(const QString &top, const QString &bottom)
     {
         auto *w = new QWidget;
         auto *v = new QVBoxLayout(w);
         v->setContentsMargins(4, 4, 4, 4);
         v->setSpacing(1);
         auto *t = W::label(top);
-        t->setStyleSheet(QString("font-weight:600; font-size:13.5px; %1").arg(accent ? "color:#004ac6;" : ""));
+        t->setStyleSheet("font-weight:700; font-size:13.5px;");
         t->setWordWrap(true);
-        auto *b = W::label(bottom, "muted");
-        b->setStyleSheet("color:#737686; font-size:11.5px;");
+        auto *b = W::label(bottom);
+        b->setStyleSheet("color:#8a94ab; font-size:11.5px;");
         v->addWidget(t);
         v->addWidget(b);
         return w;
     }
-    QTableWidgetItem *cell(const QString &text, Qt::Alignment a = Qt::AlignRight | Qt::AlignVCenter,
-                           const QString &color = "", bool bold = false)
+    QTableWidgetItem *cell(const QString &text, const QString &color = "", bool bold = false)
     {
         auto *i = new QTableWidgetItem(text);
-        i->setTextAlignment(a);
+        i->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         if (!color.isEmpty())
             i->setForeground(QColor(color));
         if (bold)
@@ -55,129 +48,67 @@ namespace
 
 RecordOrderPage::RecordOrderPage(QWidget *parent) : QWidget(parent)
 {
-    buildUi();
+    auto *root = W::pageLayout(this);
+    root->addWidget(buildCustomerStrip());
+    auto *body = new QHBoxLayout;
+    body->setSpacing(0);
+    body->addWidget(buildLeft(), 36);
+    body->addWidget(buildRight(), 64);
+    root->addLayout(body, 1);
+
     connect(&AppState::instance(), &AppState::scanned, this, [this](const QString &ean)
             { showCode(ean, true); });
     loadDemoDraft();
-}
-
-void RecordOrderPage::buildUi()
-{
-    setObjectName("page");
-    auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(16, 14, 16, 12);
-    root->setSpacing(12);
-    root->addWidget(buildCustomerStrip());
-
-    auto *body = new QHBoxLayout;
-    body->setSpacing(12);
-    body->addWidget(buildLeft(), 33);
-    body->addWidget(buildRight(), 67);
-    root->addLayout(body, 1);
-
-    // shortcut legend
-    auto *bar = W::card(this, "shortcutBar");
-    auto *h = new QHBoxLayout(bar);
-    h->setContentsMargins(12, 6, 12, 6);
-    h->setSpacing(14);
-    const QPair<QString, QString> keys[] = {{"F2", "Catalog"}, {"F5", "Scanner"}, {"F9", "Scan Ingest"},
-                                            {"F10", "Instant Payment"}, {"Ctrl+N", "New Draft"}};
-    for (const auto &k : keys)
-    {
-        auto *kc = W::label(k.first, "keycap");
-        h->addWidget(kc);
-        h->addWidget(W::label(k.second, "muted"));
-    }
-    h->addStretch();
-    h->addWidget(W::dot(QColor("#16a34a")));
-    auto *ready = W::label("Scanner Interface: simulated (demo)");
-    ready->setStyleSheet("color:#006329; font-weight:600;");
-    h->addWidget(ready);
-    root->addWidget(bar);
 }
 
 QWidget *RecordOrderPage::buildCustomerStrip()
 {
     auto *strip = W::card(this, "strip");
     auto *h = new QHBoxLayout(strip);
-    h->setContentsMargins(12, 10, 12, 10);
-    h->setSpacing(10);
+    h->setContentsMargins(14, 8, 14, 8);
+    h->setSpacing(12);
+    h->addWidget(W::iconTile("user", Qt::white, "#7fb0ff", "#2b5fe8", 40));
 
-    auto *ib = new QLabel;
-    ib->setFixedSize(40, 40);
-    ib->setAlignment(Qt::AlignCenter);
-    ib->setStyleSheet("background:#dce9ff; border-radius:8px;");
-    ib->setPixmap(Theme::iconPixmap("user", Theme::primary, 20));
-    h->addWidget(ib);
-
-    auto field = [&](const QString &cap, QWidget *content, int stretch = 1)
+    auto field = [&](const QString &cap, QWidget *content, int stretch)
     {
         auto *f = new QFrame;
         f->setObjectName("field");
         auto *v = new QVBoxLayout(f);
-        v->setContentsMargins(10, 5, 10, 5);
+        v->setContentsMargins(12, 5, 12, 6);
         v->setSpacing(0);
         v->addWidget(W::label(cap, "caption"));
         v->addWidget(content);
         h->addWidget(f, stretch);
-        return f;
     };
     m_customer = new QLineEdit("Marcus Vance");
     m_customer->setProperty("flat", true);
-    m_customer->setPlaceholderText("Walk-in Customer");
-    field("CUSTOMER NAME", m_customer, 3);
+    m_customer->setPlaceholderText("Walk-in customer");
+    field("CUSTOMER", m_customer, 3);
     m_contact = new QLineEdit("+1 (555) 019-2834");
     m_contact->setProperty("flat", true);
-    field("CONTACT MOBILE", m_contact, 3);
+    m_contact->setPlaceholderText("Phone (optional)");
+    field("PHONE", m_contact, 3);
 
-    auto *mem = new QWidget;
-    auto *mh = new QHBoxLayout(mem);
-    mh->setContentsMargins(0, 0, 0, 0);
-    auto *tier = W::label("Tier #8821 Gold");
-    tier->setStyleSheet("font-weight:600; font-size:14px; color:#004ac6;");
-    m_tier = W::badge("5% VIP", "green");
-    auto *toggle = new QPushButton;
-    toggle->setCheckable(true);
-    toggle->setChecked(true);
-    toggle->setProperty("kind", "flat");
-    toggle->setIcon(Theme::icon("tag", Theme::primary, 16));
-    toggle->setToolTip("Toggle loyalty discount");
-    toggle->setCursor(Qt::PointingHandCursor);
-    mh->addWidget(tier);
-    mh->addStretch();
-    mh->addWidget(m_tier);
-    mh->addWidget(toggle);
-    field("MEMBERSHIP STATUS", mem, 3);
-    connect(toggle, &QPushButton::toggled, this, [this](bool on)
+    m_vipBtn = W::button("VIP 5% off", "tab", "tag");
+    m_vipBtn->setCheckable(true);
+    m_vipBtn->setChecked(true);
+    m_vipBtn->setToolTip("Toggle the loyalty discount");
+    h->addWidget(m_vipBtn);
+    connect(m_vipBtn, &QPushButton::toggled, this, [this](bool on)
             {
         m_vip = on;
-        W::setBadge(m_tier, on ? QString("%1% VIP").arg(AppState::instance().settings().vipDiscountPercent, 0, 'g', 3) : "No discount",
-                    on ? "green" : "grey");
+        m_vipBtn->setIcon(Theme::icon("tag", on ? QColor("white") : Theme::primary, 16));
         rebuildTable(); });
+    m_vipBtn->setIcon(Theme::icon("tag", QColor("white"), 16));
 
-    auto *sess = new QWidget;
-    auto *sv = new QVBoxLayout(sess);
-    sv->setContentsMargins(0, 0, 0, 0);
+    h->addStretch(1);
+    auto *sv = new QVBoxLayout;
     sv->setSpacing(0);
-    sv->addWidget(W::label("ACTIVE SESSION", "caption"));
+    sv->addWidget(W::label("ORDER", "caption"));
     m_sessionId = W::label("#" + AppState::instance().nextOrderId(), "mono");
-    m_sessionId->setStyleSheet("font-weight:700; font-size:14px;");
+    m_sessionId->setStyleSheet("font-weight:800; font-size:14px;");
     sv->addWidget(m_sessionId);
-    h->addWidget(sess, 2);
-
-    auto *clock = new QFrame;
-    clock->setObjectName("field");
-    auto *ch = new QHBoxLayout(clock);
-    ch->setContentsMargins(10, 6, 10, 6);
-    ch->addWidget(W::iconLabel("clock", Theme::primary, 16));
-    m_sessionTime = W::label(QDateTime::currentDateTime().toString("dd MMM • HH:mm"));
-    m_sessionTime->setStyleSheet("color:#003ea8; font-weight:600;");
-    ch->addWidget(m_sessionTime);
-    h->addWidget(clock, 2);
-    auto *t = new QTimer(this);
-    connect(t, &QTimer::timeout, this, [this]
-            { m_sessionTime->setText(QDateTime::currentDateTime().toString("dd MMM • HH:mm")); });
-    t->start(15000);
+    h->addLayout(sv);
     return strip;
 }
 
@@ -186,152 +117,89 @@ QWidget *RecordOrderPage::buildLeft()
     auto *col = new QWidget;
     auto *v = new QVBoxLayout(col);
     v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(12);
+    v->setSpacing(0);
 
-    // ---- scanner card
     auto *cam = W::card(col);
     auto *cv = new QVBoxLayout(cam);
-    cv->setContentsMargins(12, 12, 12, 12);
+    cv->setContentsMargins(16, 14, 16, 14);
     cv->setSpacing(10);
-    auto *head = new QHBoxLayout;
-    head->setSpacing(8);
-    head->addWidget(W::dot(QColor("#16a34a")));
-    head->addWidget(W::label("Optical Barcode Feed", "h1"));
-    head->addStretch();
-    head->addWidget(W::badge("640p @ 30fps", "blue"));
-    head->addWidget(W::badge("AF LOCKED", "green"));
-    cv->addLayout(head);
-
+    W::headerRow(cv, "camera", "Scanner");
     m_feed = new CameraFeedWidget;
     m_feed->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     cv->addWidget(m_feed, 1);
 
     auto *btns = new QHBoxLayout;
     btns->setSpacing(8);
-    m_startCam = W::button("Start Cam", "soft", "play");
-    m_stopCam = W::button("Stop Cam", "soft", "stop");
-    auto *scan = W::button("Scan [F9]", "primary", "barcode");
-    m_startCam->setEnabled(false);
-    btns->addWidget(m_startCam, 1);
-    btns->addWidget(m_stopCam, 1);
+    m_camToggle = W::button("Stop camera", "soft", "stop");
+    auto *scan = W::button("Scan  [F9]", "primary", "barcode");
+    btns->addWidget(m_camToggle, 1);
     btns->addWidget(scan, 1);
     cv->addLayout(btns);
-    connect(m_startCam, &QPushButton::clicked, this, [this]
-            { m_feed->setRunning(true); m_startCam->setEnabled(false); m_stopCam->setEnabled(true); });
-    connect(m_stopCam, &QPushButton::clicked, this, [this]
-            { m_feed->setRunning(false); m_startCam->setEnabled(true); m_stopCam->setEnabled(false); });
+    connect(m_camToggle, &QPushButton::clicked, this, [this]
+            {
+        const bool on = !m_feed->running();
+        m_feed->setRunning(on);
+        m_camToggle->setText(on ? "Stop camera" : "Start camera");
+        m_camToggle->setIcon(Theme::icon(on ? "stop" : "play", Theme::primary, 16)); });
     connect(scan, &QPushButton::clicked, this, &RecordOrderPage::simulateScan);
-
-    auto *lr = new QHBoxLayout;
-    lr->addWidget(W::label("MANUAL EAN / BARCODE INGEST", "caption"));
-    lr->addStretch();
-    auto *ql = W::button("Quick Lookup [F4]", "");
-    ql->setObjectName("link");
-    ql->setCursor(Qt::PointingHandCursor);
-    lr->addWidget(ql);
-    cv->addLayout(lr);
-    connect(ql, &QPushButton::clicked, this, &RecordOrderPage::quickLookup);
 
     auto *mr = new QHBoxLayout;
     mr->setSpacing(8);
     m_manual = new QLineEdit;
-    m_manual->setPlaceholderText("Type 8-digit EAN (or 6-digit code) and press Enter");
+    m_manual->setPlaceholderText("Type a barcode and press Enter");
     m_manual->setMaxLength(12);
-    m_manual->setValidator(new QRegularExpressionValidator(QRegularExpression("[A-Za-z0-9-]*"), m_manual));
-    m_manual->setMinimumHeight(38);
-    auto *submit = W::button("Submit", "primary", "arrow-right");
-    submit->setMinimumHeight(38);
+    m_manual->setMinimumHeight(40);
+    m_manual->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
+    auto *browse = W::button("Browse", "soft", "products");
+    browse->setMinimumHeight(40);
     mr->addWidget(m_manual, 1);
-    mr->addWidget(submit);
+    mr->addWidget(browse);
     cv->addLayout(mr);
     connect(m_manual, &QLineEdit::returnPressed, this, [this]
             { showCode(m_manual->text(), false); });
-    connect(submit, &QPushButton::clicked, this, [this]
-            { showCode(m_manual->text(), false); });
+    connect(browse, &QPushButton::clicked, this, &RecordOrderPage::quickLookup);
     v->addWidget(cam, 5);
 
-    // ---- preview card
     auto *pc = W::card(col);
     auto *pv = new QVBoxLayout(pc);
-    pv->setContentsMargins(12, 12, 12, 12);
+    pv->setContentsMargins(16, 14, 16, 14);
     pv->setSpacing(10);
-    m_pStockBadge = W::badge("—", "grey");
-    W::headerRow(pv, "shield", "Target Detected Preview", m_pStockBadge);
+    m_pBadge = W::badge("—", "grey");
+    W::headerRow(pv, "shield", "Detected product", m_pBadge);
 
     auto *info = W::card(pc, "subCard");
     auto *ih = new QHBoxLayout(info);
-    ih->setContentsMargins(10, 10, 10, 10);
+    ih->setContentsMargins(12, 10, 12, 10);
     ih->setSpacing(12);
     m_pThumb = new QLabel;
-    m_pThumb->setFixedSize(64, 76);
+    m_pThumb->setFixedSize(60, 72);
     m_pThumb->setAlignment(Qt::AlignCenter);
-    m_pThumb->setStyleSheet("background:white; border:1px solid #dce9ff; border-radius:6px;");
     ih->addWidget(m_pThumb);
     auto *iv = new QVBoxLayout;
-    iv->setSpacing(3);
+    iv->setSpacing(2);
     auto *nr = new QHBoxLayout;
-    m_pName = W::label("No product scanned", "h1");
+    m_pName = W::label("Nothing scanned yet", "h1");
     m_pName->setWordWrap(true);
-    m_pPrice = W::label("", "h1");
-    m_pPrice->setStyleSheet("color:#004ac6; font-size:16px; font-weight:700;");
+    m_pPrice = W::label("");
+    m_pPrice->setStyleSheet("color:#2554d8; font-size:17px; font-weight:800;");
     nr->addWidget(m_pName, 1);
     nr->addWidget(m_pPrice);
     iv->addLayout(nr);
-    m_pMeta = W::label("Scan a barcode or enter an EAN to preview a product.", "muted");
+    m_pMeta = W::label("Scan a barcode or type one above.", "muted");
     m_pMeta->setWordWrap(true);
-    m_pMeta->setStyleSheet("color:#434655; font-size:12px;");
     iv->addWidget(m_pMeta);
-    iv->addStretch();
-    auto *sr = new QHBoxLayout;
     m_pStock = W::label("");
-    m_pStock->setStyleSheet("color:#006329; font-weight:700;");
-    m_pSku = W::label("");
-    m_pSku->setStyleSheet("font-weight:700;");
-    sr->addWidget(m_pStock);
-    sr->addStretch();
-    sr->addWidget(m_pSku);
-    iv->addLayout(sr);
+    m_pStock->setStyleSheet("font-weight:700;");
+    iv->addWidget(m_pStock);
     ih->addLayout(iv, 1);
     pv->addWidget(info);
 
-    auto *ar = new QHBoxLayout;
-    ar->setSpacing(8);
-    m_addBtn = W::button("Add Item to Order (Enter)", "primary", "cart");
-    m_addBtn->setMinimumHeight(40);
+    m_addBtn = W::button("Add to order", "primary", "cart");
+    m_addBtn->setMinimumHeight(42);
     m_addBtn->setEnabled(false);
-    auto *mod = W::button("Modify", "soft", "edit");
-    mod->setMinimumHeight(40);
-    ar->addWidget(m_addBtn, 3);
-    ar->addWidget(mod, 1);
-    pv->addLayout(ar);
+    pv->addWidget(m_addBtn);
     connect(m_addBtn, &QPushButton::clicked, this, [this]
             { if (m_preview) addToCart(*m_preview); });
-    connect(mod, &QPushButton::clicked, this, [this]
-            {
-        if (!m_preview) { emit toast("Nothing to modify - scan a product first"); return; }
-        bool ok = false;
-        const int q = QInputDialog::getInt(this, "Modify quantity", "Quantity to add for " + m_preview->name,
-                                           1, 1, qMax(1, m_preview->stock), 1, &ok);
-        if (ok) addToCart(*m_preview, q); });
-
-    m_notice = W::card(pc, "notice");
-    auto *nh = new QHBoxLayout(m_notice);
-    nh->setContentsMargins(10, 6, 10, 6);
-    nh->addWidget(W::iconLabel("warn", Theme::error, 16));
-    m_noticeText = W::label("");
-    m_noticeText->setWordWrap(true);
-    nh->addWidget(m_noticeText, 1);
-    m_noticeReorder = W::button("Reorder", "");
-    m_noticeReorder->setObjectName("link");
-    m_noticeReorder->setCursor(Qt::PointingHandCursor);
-    m_noticeReorder->setStyleSheet("color:#93000a; font-weight:700; text-decoration: underline; background:transparent; border:none;");
-    nh->addWidget(m_noticeReorder);
-    pv->addWidget(m_notice);
-    connect(m_noticeReorder, &QPushButton::clicked, this, [this]
-            {
-        AppState::instance().reorder(m_noticeSku);
-        emit toast("Purchase order drafted for " + m_noticeSku);
-        updateNotice(); });
     v->addWidget(pc, 3);
     return col;
 }
@@ -341,128 +209,98 @@ QWidget *RecordOrderPage::buildRight()
     auto *col = new QWidget;
     auto *v = new QVBoxLayout(col);
     v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(12);
+    v->setSpacing(0);
 
     auto *oc = W::card(col);
     auto *ov = new QVBoxLayout(oc);
-    ov->setContentsMargins(0, 12, 0, 8);
+    ov->setContentsMargins(0, 14, 0, 10);
     ov->setSpacing(6);
 
     auto *head = new QHBoxLayout;
-    head->setContentsMargins(14, 0, 14, 0);
-    head->setSpacing(8);
+    head->setContentsMargins(18, 0, 14, 0);
+    head->setSpacing(10);
     head->addWidget(W::iconLabel("orders", Theme::primary, 20));
-    head->addWidget(W::label("Current Order Draft", "h1"));
-    m_itemsBadge = W::badge("0 Items", "grey");
+    head->addWidget(W::label("Current order", "h1"));
+    m_itemsBadge = W::badge("0 items", "grey");
     head->addWidget(m_itemsBadge);
     head->addStretch();
+    auto *custom = W::button("Custom item", "flat", "plus");
     auto *clear = W::button("Clear", "flat", "trash");
-    clear->setToolTip("Discard the current draft");
+    head->addWidget(custom);
     head->addWidget(clear);
     ov->addLayout(head);
     connect(clear, &QPushButton::clicked, this, &RecordOrderPage::newDraft);
-
-    m_table = new QTableWidget(0, kCols);
-    m_table->setHorizontalHeaderLabels({"CODE", "PRODUCT DESCRIPTION", "PRICE", "QTY", "DISC.", "TAX", "SUBTOTAL", "ACTION"});
-    m_table->verticalHeader()->hide();
-    m_table->setShowGrid(false);
-    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_table->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->setFocusPolicy(Qt::NoFocus);
-    auto *hh = m_table->horizontalHeader();
-    hh->setSectionResizeMode(QHeaderView::Fixed);
-    hh->setSectionResizeMode(1, QHeaderView::Stretch);
-    hh->setHighlightSections(false);
-    m_table->setColumnWidth(0, 80);
-    m_table->setColumnWidth(2, 66);
-    m_table->setColumnWidth(3, 104);
-    m_table->setColumnWidth(4, 66);
-    m_table->setColumnWidth(5, 64);
-    m_table->setWordWrap(false);
-    m_table->setColumnWidth(6, 74);
-    m_table->setColumnWidth(7, 56);
-    m_table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    hh->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    ov->addWidget(m_table, 1);
-
-    auto *acts = new QHBoxLayout;
-    acts->setContentsMargins(12, 0, 12, 0);
-    acts->setSpacing(8);
-    auto *addCustom = W::button("Add Custom Line", "", "plus");
-    auto *inc = W::button("+1 Increase Qty", "");
-    auto *dec = W::button("−1 Decrease Qty", "");
-    auto *rem = W::button("Remove Selected", "danger", "cart");
-    acts->addWidget(addCustom);
-    acts->addWidget(inc);
-    acts->addWidget(dec);
-    acts->addStretch();
-    acts->addWidget(rem);
-    ov->addLayout(acts);
-    v->addWidget(oc, 1);
-
-    connect(addCustom, &QPushButton::clicked, this, [this]
+    connect(custom, &QPushButton::clicked, this, [this]
             {
         bool ok = false;
-        const QString name = QInputDialog::getText(this, "Add custom line", "Description:", QLineEdit::Normal, "", &ok);
+        const QString name = QInputDialog::getText(this, "Custom item", "Description:", QLineEdit::Normal, "", &ok);
         if (!ok || name.trimmed().isEmpty()) return;
-        const double price = QInputDialog::getDouble(this, "Add custom line", "Unit price ($):", 1.0, 0.01, 100000, 2, &ok);
+        const double price = QInputDialog::getDouble(this, "Custom item", "Unit price ($):", 1.0, 0.01, 100000, 2, &ok);
         if (!ok) return;
         Product p;
         p.sku = QString("CUSTOM-%1").arg(m_cart.size() + 1, 2, 10, QChar('0'));
         p.name = name.trimmed();
         p.category = "Custom";
-        p.location = "Manual entry";
         p.price = price;
         p.stock = 999;
-        m_cart.push_back({p, 1, true});
+        m_cart.push_back({p, 1});
         rebuildTable(); });
-    connect(inc, &QPushButton::clicked, this, [this]
-            { changeQty(currentRow(), +1); });
-    connect(dec, &QPushButton::clicked, this, [this]
-            { changeQty(currentRow(), -1); });
-    connect(rem, &QPushButton::clicked, this, [this]
-            { removeRow(currentRow()); });
 
-    // ---- totals
+    m_table = new QTableWidget(0, 6);
+    m_table->setHorizontalHeaderLabels({"PRODUCT", "PRICE", "QTY", "DISCOUNT", "TOTAL", ""});
+    m_table->verticalHeader()->hide();
+    m_table->setShowGrid(false);
+    m_table->setSelectionMode(QAbstractItemView::NoSelection);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_table->setFocusPolicy(Qt::NoFocus);
+    m_table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto *hh = m_table->horizontalHeader();
+    hh->setSectionResizeMode(QHeaderView::Fixed);
+    hh->setSectionResizeMode(0, QHeaderView::Stretch);
+    hh->setHighlightSections(false);
+    hh->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    m_table->setColumnWidth(1, 78);
+    m_table->setColumnWidth(2, 112);
+    m_table->setColumnWidth(3, 92);
+    m_table->setColumnWidth(4, 96);
+    m_table->setColumnWidth(5, 52);
+    m_table->setWordWrap(false);
+    ov->addWidget(m_table, 1);
+    v->addWidget(oc, 1);
+
     auto *tc = W::card(col, "totals");
     auto *th = new QHBoxLayout(tc);
-    th->setContentsMargins(16, 12, 16, 12);
-    th->setSpacing(20);
-    auto *grid = new QGridLayout;
-    grid->setVerticalSpacing(6);
-    auto row = [&](int r, const QString &k, QLabel *&val, bool muted = false)
+    th->setContentsMargins(18, 14, 18, 14);
+    th->setSpacing(18);
+    auto *grid = new QVBoxLayout;
+    grid->setSpacing(8);
+    auto row = [&](const QString &k, QLabel *&val)
     {
-        auto *kl = W::label(k, muted ? "muted" : nullptr);
+        auto *r = new QHBoxLayout;
+        r->addWidget(W::label(k, "muted"));
+        r->addStretch();
         val = W::label("$0.00");
-        val->setAlignment(Qt::AlignRight);
-        val->setStyleSheet("font-weight:700;");
-        grid->addWidget(kl, r, 0);
-        grid->addWidget(val, r, 1);
+        val->setStyleSheet("font-weight:800; font-size:14px;");
+        r->addWidget(val);
+        grid->addLayout(r);
     };
-    row(0, "Gross Subtotal:", m_gross);
-    row(1, "Loyalty Discount Applied:", m_disc);
-    row(2, "Total Tax (GST included):", m_tax);
-    row(3, "Rounding Adjustment:", m_round, true);
-    grid->setColumnStretch(0, 1);
+    row("Subtotal", m_gross);
+    row("VIP discount", m_disc);
+    row("GST included", m_tax);
+    grid->addStretch();
     th->addLayout(grid, 1);
 
     auto *tb = W::card(tc, "totalBox");
     auto *tv = new QVBoxLayout(tb);
-    tv->setContentsMargins(16, 10, 16, 10);
+    tv->setContentsMargins(18, 12, 18, 14);
     tv->setSpacing(2);
-    auto *cap = W::label("TOTAL PAYABLE NET", "caption");
-    cap->setAlignment(Qt::AlignRight);
+    auto *cap = W::label("TOTAL", "caption");
     tv->addWidget(cap);
-    m_total = W::label("$0.00", "bigTotal");
-    m_total->setAlignment(Qt::AlignRight);
+    m_total = W::label("$0.00");
+    m_total->setStyleSheet("font-size:34px; font-weight:800; color:white;");
     tv->addWidget(m_total);
-    m_tender = W::label("");
-    m_tender->setAlignment(Qt::AlignRight);
-    m_tender->setStyleSheet("color:#006329; font-weight:600;");
-    tv->addWidget(m_tender);
-    m_checkout = W::button("Checkout [F10]", "primary", "check");
-    m_checkout->setMinimumHeight(38);
+    m_checkout = W::button("Checkout  [F10]", "primary", "check");
+    m_checkout->setMinimumHeight(44);
     tv->addWidget(m_checkout);
     th->addWidget(tb, 1);
     connect(m_checkout, &QPushButton::clicked, this, &RecordOrderPage::checkout);
@@ -481,14 +319,13 @@ void RecordOrderPage::simulateScan()
 {
     if (!m_feed->running())
     {
-        emit toast("Camera is stopped - press Start Cam first");
+        emit toast("Camera is stopped - start it first");
         return;
     }
     const auto &ps = AppState::instance().products();
     if (ps.isEmpty())
         return;
-    const Product &p = ps[m_scanIndex++ % ps.size()];
-    showCode(p.ean, true);
+    showCode(ps[m_scanIndex++ % ps.size()].ean, true);
 }
 
 void RecordOrderPage::quickLookup()
@@ -497,7 +334,7 @@ void RecordOrderPage::quickLookup()
     for (const auto &p : AppState::instance().products())
         items << QString("%1  -  %2").arg(p.ean, p.name);
     bool ok = false;
-    const QString pick = QInputDialog::getItem(this, "Quick Lookup", "Find product:", items, 0, false, &ok);
+    const QString pick = QInputDialog::getItem(this, "Browse products", "Choose a product:", items, 0, false, &ok);
     if (ok)
         showCode(pick.section("  -  ", 0, 0), false);
 }
@@ -522,8 +359,6 @@ void RecordOrderPage::showCode(const QString &codeIn, bool fromScanner)
     m_manual->clear();
     if (fromScanner && AppState::instance().settings().autoAddScans)
         addToCart(*p);
-    else
-        emit toast((fromScanner ? "Scanned " : "Found ") + p->name);
 }
 
 void RecordOrderPage::setPreview(const std::optional<Product> &p)
@@ -532,43 +367,51 @@ void RecordOrderPage::setPreview(const std::optional<Product> &p)
     m_addBtn->setEnabled(p.has_value());
     if (!p)
     {
-        m_pName->setText("No product detected");
+        m_pName->setText("Nothing scanned yet");
         m_pPrice->clear();
-        m_pMeta->setText("Scan a barcode or enter an EAN to preview a product.");
+        m_pMeta->setText("Scan a barcode or type one above.");
         m_pStock->clear();
-        m_pSku->clear();
-        W::setBadge(m_pStockBadge, "—", "grey");
+        W::setBadge(m_pBadge, "—", "grey");
         m_pThumb->clear();
         return;
     }
     m_pName->setText(p->name);
     m_pPrice->setText(W::money(p->price));
-    m_pMeta->setText(QString("EAN: %1 • %2 • %3").arg(p->ean, p->category, p->location));
-    m_pStock->setText(QString("Stock: %1 in warehouse").arg(p->stock));
-    m_pSku->setText("SKU: " + p->sku);
+    m_pMeta->setText(QString("%1  •  %2  •  %3").arg(p->ean, p->category, p->sku));
     const bool low = p->stock < p->reorderLimit;
-    W::setBadge(m_pStockBadge, p->stock == 0 ? "Out of Stock" : low ? "Low Stock" : "Adequate Stock",
+    m_pStock->setText(QString("%1 in stock").arg(p->stock));
+    m_pStock->setStyleSheet(QString("font-weight:700; color:%1;").arg(low ? "#b3261e" : "#0b7a36"));
+    W::setBadge(m_pBadge, p->stock == 0 ? "Out of stock" : low ? "Low stock" : "In stock",
                 p->stock == 0 ? "red" : low ? "amber" : "green");
-    m_pStock->setStyleSheet(QString("font-weight:700; color:%1;").arg(low ? "#93000a" : "#006329"));
 
-    QPixmap pm(64, 76);
+    // little 3D "box" thumbnail
+    QPixmap pm(120, 144);
+    pm.setDevicePixelRatio(2);
     pm.fill(Qt::transparent);
     QPainter pa(&pm);
     pa.setRenderHint(QPainter::Antialiasing);
     pa.setPen(Qt::NoPen);
-    pa.setBrush(QColor("#2b3f5c"));
-    pa.drawRoundedRect(QRectF(14, 8, 36, 58), 5, 5);
-    pa.setBrush(QColor("#f4e3c1"));
-    pa.drawRoundedRect(QRectF(19, 24, 26, 26), 3, 3);
-    pa.setPen(QColor("#0b1c30"));
-    QFont f("Inter");
-    f.setPixelSize(7);
+    pa.setBrush(QColor(20, 40, 110, 40));
+    pa.drawEllipse(QRectF(6, 60, 46, 8));
+    QLinearGradient fg(10, 8, 10, 62);
+    fg.setColorAt(0, QColor("#7fb0ff"));
+    fg.setColorAt(1, QColor("#2b5fe8"));
+    pa.setBrush(fg);
+    pa.drawRoundedRect(QRectF(8, 14, 34, 46), 4, 4);
+    pa.setBrush(QColor("#1a3fae"));
+    pa.drawPolygon(QPolygonF({{42, 14}, {50, 8}, {50, 54}, {42, 60}}));
+    pa.setBrush(QColor("#a9ccff"));
+    pa.drawPolygon(QPolygonF({{8, 14}, {16, 8}, {50, 8}, {42, 14}}));
+    pa.setBrush(QColor(255, 255, 255, 230));
+    pa.drawRoundedRect(QRectF(13, 26, 24, 22), 3, 3);
+    pa.setPen(QColor("#1a3fae"));
+    QFont f = pa.font();
+    f.setPixelSize(8);
     f.setBold(true);
     pa.setFont(f);
-    pa.drawText(QRectF(19, 28, 26, 18), Qt::AlignCenter, p->name.section(' ', 0, 0).left(6).toUpper());
+    pa.drawText(QRectF(13, 26, 24, 22), Qt::AlignCenter, p->name.section(' ', 0, 0).left(5).toUpper());
     pa.end();
     m_pThumb->setPixmap(pm);
-    updateNotice();
 }
 
 void RecordOrderPage::addToCart(const Product &p, int qty)
@@ -590,18 +433,9 @@ void RecordOrderPage::addToCart(const Product &p, int qty)
             found = true;
         }
     if (!found)
-        m_cart.push_back({p, qty, false});
+        m_cart.push_back({p, qty});
     rebuildTable();
-    m_table->selectRow(found ? m_table->rowCount() - 1 : m_table->rowCount() - 1);
     emit toast(QString("Added %1 × %2").arg(qty).arg(p.name));
-}
-
-int RecordOrderPage::currentRow() const
-{
-    const int r = m_table->currentRow();
-    if (r >= 0)
-        return r;
-    return m_cart.isEmpty() ? -1 : m_cart.size() - 1;
 }
 
 void RecordOrderPage::changeQty(int row, int delta)
@@ -622,7 +456,6 @@ void RecordOrderPage::changeQty(int row, int delta)
     }
     l.qty = nq;
     rebuildTable();
-    m_table->selectRow(row);
 }
 
 void RecordOrderPage::removeRow(int row)
@@ -644,38 +477,32 @@ void RecordOrderPage::rebuildTable()
         const auto &l = m_cart[r];
         const double gross = l.p.price * l.qty;
         const double disc = gross * vipPct / 100.0;
-        const double sub = gross - disc;
-        const double tax = sub * st.taxPercent / (100.0 + st.taxPercent);
-        m_table->setRowHeight(r, 60);
-        m_table->setCellWidget(r, 0, twoLine(l.p.sku, "", true));
-        m_table->setCellWidget(r, 1, twoLine(l.p.name, QString("%1 • %2").arg(l.p.category, l.p.location)));
-        m_table->setItem(r, 2, cell(W::money(l.p.price), Qt::AlignRight | Qt::AlignVCenter, "", true));
-        auto *st2 = new QtyStepper(l.qty);
-        m_table->setCellWidget(r, 3, st2);
-        connect(st2, &QtyStepper::minus, this, [this, r]
+        m_table->setRowHeight(r, 62);
+        m_table->setCellWidget(r, 0, twoLine(l.p.name, l.p.sku + "  •  " + l.p.category));
+        m_table->setItem(r, 1, cell(W::money(l.p.price), "", true));
+        auto *stp = new QtyStepper(l.qty);
+        m_table->setCellWidget(r, 2, stp);
+        connect(stp, &QtyStepper::minus, this, [this, r]
                 { changeQty(r, -1); });
-        connect(st2, &QtyStepper::plus, this, [this, r]
+        connect(stp, &QtyStepper::plus, this, [this, r]
                 { changeQty(r, +1); });
-        m_table->setItem(r, 4, cell(disc > 0 ? W::money(-disc) : "$0.00", Qt::AlignRight | Qt::AlignVCenter,
-                                    disc > 0 ? "#006329" : "#737686"));
-        m_table->setItem(r, 5, cell(W::money(tax), Qt::AlignRight | Qt::AlignVCenter, "#737686"));
-        m_table->setItem(r, 6, cell(W::money(sub), Qt::AlignRight | Qt::AlignVCenter, "#004ac6", true));
+        m_table->setItem(r, 3, cell(disc > 0 ? W::money(-disc) : "—", disc > 0 ? "#0b7a36" : "#8a94ab"));
+        m_table->setItem(r, 4, cell(W::money(gross - disc), "#2554d8", true));
         auto *del = new QPushButton;
         del->setProperty("kind", "flat");
         del->setIcon(Theme::icon("trash", Theme::error, 18));
         del->setCursor(Qt::PointingHandCursor);
-        del->setToolTip("Remove line");
+        del->setToolTip("Remove");
         auto *wrap = new QWidget;
         auto *wl = new QHBoxLayout(wrap);
         wl->setContentsMargins(0, 0, 0, 0);
         wl->setAlignment(Qt::AlignCenter);
         wl->addWidget(del);
-        m_table->setCellWidget(r, 7, wrap);
+        m_table->setCellWidget(r, 5, wrap);
         connect(del, &QPushButton::clicked, this, [this, r]
                 { removeRow(r); });
     }
     updateTotals();
-    updateNotice();
 }
 
 void RecordOrderPage::updateTotals()
@@ -690,52 +517,19 @@ void RecordOrderPage::updateTotals()
     }
     const double disc = m_vip ? gross * st.vipDiscountPercent / 100.0 : 0;
     const double total = gross - disc;
-    const double tax = total * st.taxPercent / (100.0 + st.taxPercent);
-    W::setBadge(m_itemsBadge, QString("%1 Item%2").arg(items).arg(items == 1 ? "" : "s"), items ? "blue" : "grey");
+    W::setBadge(m_itemsBadge, QString("%1 item%2").arg(items).arg(items == 1 ? "" : "s"), items ? "blue" : "grey");
     m_gross->setText(W::money(gross));
-    m_disc->setText(W::money(-disc));
-    m_disc->setStyleSheet("font-weight:700; color:#006329;");
-    m_tax->setText(W::money(tax));
-    m_round->setText("+$0.00");
+    m_disc->setText(disc > 0 ? W::money(-disc) : "$0.00");
+    m_tax->setText(W::money(total * st.taxPercent / (100.0 + st.taxPercent)));
     m_total->setText(W::money(total));
-    m_tender->setText(items ? "Exact Cash Tender: Ready" : "Add items to begin");
     m_checkout->setEnabled(items > 0);
-}
-
-void RecordOrderPage::updateNotice()
-{
-    const auto &ai = AppState::instance();
-    QString sku, name;
-    int limit = 0;
-    auto consider = [&](const Product &p)
-    {
-        if (sku.isEmpty() && !p.sku.startsWith("CUSTOM") && p.stock < p.reorderLimit)
-        {
-            sku = p.sku;
-            name = p.name;
-            limit = p.reorderLimit;
-        }
-    };
-    if (m_preview)
-        consider(*m_preview);
-    for (const auto &l : m_cart)
-        consider(l.p);
-    m_notice->setVisible(!sku.isEmpty());
-    if (sku.isEmpty())
-        return;
-    m_noticeSku = sku;
-    m_noticeText->setText(QString("Notice: <b>%1</b> is running low (&lt; %2 units).").arg(name).arg(limit));
-    const bool done = ai.isReordered(sku);
-    m_noticeReorder->setText(done ? "Ordered ✓" : "Reorder");
-    m_noticeReorder->setEnabled(!done);
 }
 
 void RecordOrderPage::loadDemoDraft()
 {
-    // Mirrors the Stitch design so the screen is not empty on first launch.
     for (auto [sku, qty] : {std::pair<const char *, int>{"PRD-102", 2}, {"PRD-214", 1}, {"PRD-8840", 1}, {"PRD-512", 3}})
         if (auto p = AppState::instance().findByCode(sku))
-            m_cart.push_back({*p, qty, false});
+            m_cart.push_back({*p, qty});
     rebuildTable();
     setPreview(AppState::instance().findByCode("PRD-8840"));
     m_feed->setCode(m_preview ? m_preview->ean : QString());
@@ -747,14 +541,14 @@ void RecordOrderPage::newDraft()
     setPreview(std::nullopt);
     rebuildTable();
     m_sessionId->setText("#" + AppState::instance().nextOrderId());
-    emit toast("New draft started");
+    emit toast("New order started");
 }
 
 void RecordOrderPage::checkout()
 {
     if (m_cart.isEmpty())
     {
-        emit toast("The order draft is empty");
+        emit toast("The order is empty");
         return;
     }
     const auto &st = AppState::instance().settings();

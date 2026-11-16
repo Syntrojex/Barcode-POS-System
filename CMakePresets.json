@@ -9,12 +9,11 @@
     {
       "name": "qt-mingw",
       "displayName": "Qt 6 MinGW 64-bit (Default)",
-      "description": "Configure BarcodeHub using Qt 6 MinGW and Ninja",
+      "description": "Qt 6 MinGW 64-bit + Ninja (frontend only)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/qt-mingw",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "OpenCV_DIR": "C:/opencv-mingw",
         "QT_CREATOR_SKIP_VCPKG_SETUP": true,
         "QT_CREATOR_ENABLE_PACKAGE_MANAGER_SETUP": false,
         "QT_CREATOR_ENABLE_MAINTENANCE_TOOL_PROVIDER": false
@@ -23,13 +22,12 @@
     {
       "name": "vs2022",
       "displayName": "Visual Studio 2022 (MSVC)",
-      "description": "Configure BarcodeHub using Visual Studio 2022 and OpenCV MSVC",
+      "description": "Visual Studio 2022 (MSVC, frontend only)",
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build/vs2022",
       "architecture": "x64",
       "cacheVariables": {
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "OpenCV_DIR": "C:/opencv-msvc/x64/vc16/lib",
         "QT_CREATOR_SKIP_VCPKG_SETUP": true,
         "QT_CREATOR_ENABLE_PACKAGE_MANAGER_SETUP": false,
         "QT_CREATOR_ENABLE_MAINTENANCE_TOOL_PROVIDER": false

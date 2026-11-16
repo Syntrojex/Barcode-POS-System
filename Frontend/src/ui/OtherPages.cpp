@@ -13,6 +13,7 @@
 #include <QListWidget>
 #include <QTableWidget>
 #include <QTextStream>
+#include <QTime>
 #include <QVBoxLayout>
 
 namespace
@@ -59,14 +60,10 @@ namespace
     }
     QWidget *pageShell(QWidget *page, QVBoxLayout *&body)
     {
-        page->setObjectName("page");
-        auto *root = new QVBoxLayout(page);
-        root->setContentsMargins(16, 14, 16, 12);
-        root->setSpacing(12);
-        body = root;
+        body = W::pageLayout(page);
         return page;
     }
-    QFrame *kpiCard(const QString &cap, const QString &icon, QLabel *&value)
+    [[maybe_unused]] QFrame *kpiCard(const QString &cap, const QString &icon, QLabel *&value)
     {
         auto *c = W::card(nullptr);
         auto *h = new QHBoxLayout(c);
@@ -108,31 +105,20 @@ OrdersPage::OrdersPage(QWidget *parent) : QWidget(parent)
     QVBoxLayout *root;
     pageShell(this, root);
 
-    auto *kp = new QHBoxLayout;
-    kp->setSpacing(12);
-    kp->addWidget(kpiCard("TODAY'S NET VOLUME", "cash", m_vol));
-    kp->addWidget(kpiCard("ORDERS PROCESSED", "orders", m_count));
-    QLabel *regs;
-    kp->addWidget(kpiCard("ACTIVE REGISTERS", "cart", regs));
-    regs->setText("4 / 4");
-    kp->addWidget(kpiCard("PENDING / HOLD", "clock", m_hold));
-    root->addLayout(kp);
-
     auto *card = W::card(this);
     auto *v = new QVBoxLayout(card);
-    v->setContentsMargins(14, 12, 14, 8);
+    v->setContentsMargins(18, 14, 18, 10);
     v->setSpacing(10);
 
     auto *tools = new QHBoxLayout;
     tools->setSpacing(8);
     m_orderSearch = new QLineEdit;
-    m_orderSearch->setPlaceholderText("Search Order ID (#ORD-892...)");
+    m_orderSearch->setPlaceholderText("Search by order number, customer or phone…");
+    m_orderSearch->setMinimumHeight(40);
     m_orderSearch->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
-    m_custSearch = new QLineEdit;
-    m_custSearch->setPlaceholderText("Customer name / contact phone");
-    m_custSearch->addAction(Theme::icon("user", Theme::outline, 16), QLineEdit::LeadingPosition);
-    tools->addWidget(m_orderSearch, 2);
-    tools->addWidget(m_custSearch, 2);
+    m_custSearch = new QLineEdit; // kept hidden: legacy field, not shown
+    m_custSearch->hide();
+    tools->addWidget(m_orderSearch, 3);
     tools->addStretch(1);
     auto *exp = W::button("Export CSV", "soft", "export");
     tools->addWidget(exp);
@@ -163,7 +149,7 @@ OrdersPage::OrdersPage(QWidget *parent) : QWidget(parent)
     for (int c : {2, 6, 7})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
     m_table->setColumnWidth(2, 175);
-    m_table->setColumnWidth(6, 104);
+    m_table->setColumnWidth(6, 120);
     m_table->setColumnWidth(7, 150);
     v->addWidget(m_table, 1);
     m_showing = W::label("", "muted");
@@ -196,7 +182,6 @@ void OrdersPage::rebuild()
     const auto &all = AppState::instance().orders();
     QString q = m_orderSearch->text().trimmed();
     q.remove('#');
-    const QString cq = m_custSearch->text().trimmed();
     QVector<OrderRecord> rows;
     int hold = 0;
     for (const auto &o : all)
@@ -205,21 +190,18 @@ void OrdersPage::rebuild()
             ++hold;
         if (m_filter != "All" && o.status != m_filter)
             continue;
-        if (!q.isEmpty() && !o.id.contains(q, Qt::CaseInsensitive))
-            continue;
-        if (!cq.isEmpty() && !o.customer.contains(cq, Qt::CaseInsensitive) && !o.contact.contains(cq))
+        if (!q.isEmpty() && !o.id.contains(q, Qt::CaseInsensitive) && !o.customer.contains(q, Qt::CaseInsensitive) &&
+            !o.contact.contains(q))
             continue;
         rows << o;
     }
     auto &st = AppState::instance();
-    m_vol->setText(W::money(st.salesToday()));
-    m_count->setText(QString::number(st.ordersToday()));
-    m_hold->setText(QString::number(hold));
+    (void)hold;
     m_table->setRowCount(rows.size());
     for (int r = 0; r < rows.size(); ++r)
     {
         const auto &o = rows[r];
-        m_table->setRowHeight(r, 50);
+        m_table->setRowHeight(r, 56);
         m_table->setItem(r, 0, item("#" + o.id, Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
         m_table->setItem(r, 1, item(o.time.toString("yyyy-MM-dd HH:mm") + "\n" + o.shift));
         {
@@ -263,19 +245,14 @@ void OrdersPage::rebuild()
                     { Dialogs::orderDetails(this, copy); });
         }
         auto *rc = W::button("", "flat", "bills");
-        rc->setToolTip("Receipt (F6)");
-        auto *pr = W::button("", "flat", "print");
-        pr->setToolTip("Print (Ctrl+P) - demo");
+        rc->setToolTip("Receipt");
         h->addWidget(rc);
-        h->addWidget(pr);
         h->addStretch();
         connect(rc, &QPushButton::clicked, this, [this, copy]
                 { Dialogs::receipt(this, copy); });
-        connect(pr, &QPushButton::clicked, this, [this, copy]
-                { emit toast("Receipt for " + copy.id + " sent to printer (demo)"); });
         m_table->setCellWidget(r, 7, w);
     }
-    m_showing->setText(QString("Showing %1 of %2 recent orders").arg(rows.size()).arg(all.size()));
+    m_showing->setText(QString("%1 of %2 orders").arg(rows.size()).arg(all.size()));
 }
 
 // =================================================================== ProductsPage
@@ -285,7 +262,7 @@ ProductsPage::ProductsPage(QWidget *parent) : QWidget(parent)
     pageShell(this, root);
     auto *card = W::card(this);
     auto *v = new QVBoxLayout(card);
-    v->setContentsMargins(14, 12, 14, 8);
+    v->setContentsMargins(18, 14, 18, 10);
     v->setSpacing(10);
     auto *h = new QHBoxLayout;
     h->addWidget(W::iconLabel("products", Theme::primary, 20));
@@ -353,7 +330,7 @@ BillsPage::BillsPage(QWidget *parent) : QWidget(parent)
     pageShell(this, root);
     auto *card = W::card(this);
     auto *v = new QVBoxLayout(card);
-    v->setContentsMargins(14, 12, 14, 8);
+    v->setContentsMargins(18, 14, 18, 10);
     v->setSpacing(10);
     auto *h = new QHBoxLayout;
     h->addWidget(W::iconLabel("bills", Theme::primary, 20));
@@ -398,16 +375,12 @@ void BillsPage::rebuild()
         auto *h = new QHBoxLayout(w);
         h->setContentsMargins(4, 0, 4, 0);
         auto *view = W::button("View Bill", "mini");
-        auto *pr = W::button("Print", "mini");
         h->addWidget(view);
-        h->addWidget(pr);
         h->addStretch();
         m_table->setCellWidget(r, 6, w);
         const OrderRecord copy = o;
         connect(view, &QPushButton::clicked, this, [this, copy]
                 { Dialogs::receipt(this, copy); });
-        connect(pr, &QPushButton::clicked, this, [this, copy]
-                { emit toast("Bill " + copy.id + " sent to printer (demo)"); });
     }
 }
 
@@ -421,12 +394,9 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
 
     auto *cam = W::card(this);
     auto *cv = new QVBoxLayout(cam);
-    cv->setContentsMargins(14, 12, 14, 12);
+    cv->setContentsMargins(18, 14, 18, 14);
     cv->setSpacing(10);
-    auto *tb = new QHBoxLayout;
-    auto *sim = W::badge("SIMULATED FEED", "amber");
-    W::headerRow(cv, "barcode", "Barcode Scanner", sim);
-    (void)tb;
+    W::headerRow(cv, "barcode", "Barcode Scanner");
     m_feed = new CameraFeedWidget;
     m_feed->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_feed->setMinimumHeight(300);
@@ -450,15 +420,15 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
 
     auto *side = W::card(this);
     auto *sv = new QVBoxLayout(side);
-    sv->setContentsMargins(14, 12, 14, 12);
+    sv->setContentsMargins(18, 14, 18, 14);
     sv->setSpacing(10);
     W::headerRow(sv, "clock", "Recent Scans");
     m_last = W::label("No scans yet", "h2");
     sv->addWidget(m_last);
     m_history = new QListWidget;
-    m_history->setStyleSheet("QListWidget{border:1px solid #dce9ff;border-radius:8px;padding:4px;} QListWidget::item{padding:8px;border-bottom:1px solid #eff4ff;}");
+    m_history->setStyleSheet("QListWidget{border:1px solid #dbe4f7;border-radius:10px;padding:4px;} QListWidget::item{padding:9px;border-bottom:1px solid #e8eefb;}");
     sv->addWidget(m_history, 1);
-    m_send = W::button("Add Last Scan to Order", "primary", "cart");
+    m_send = W::button("Add last scan to order", "primary", "cart");
     m_send->setEnabled(false);
     sv->addWidget(m_send);
     h->addWidget(side, 4);
@@ -541,7 +511,7 @@ SettingsPage::SettingsPage(QWidget *parent) : QWidget(parent)
     form->addRow("Scanning", autoAdd);
     form->addRow("", beep);
     v->addLayout(form);
-    v->addWidget(W::label("Changes apply to new calculations immediately. Settings are kept in memory only (no backend).", "muted"));
+    v->addWidget(W::label("Changes apply to new calculations immediately. Settings are kept in memory only.", "muted"));
     v->addStretch();
     auto *h = new QHBoxLayout;
     h->addStretch();

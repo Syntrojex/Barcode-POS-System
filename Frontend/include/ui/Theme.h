@@ -8,16 +8,16 @@
 
 namespace Theme
 {
-    inline const QColor surface("#f8f9ff");
+    inline const QColor surface("#f4f7fe");
     inline const QColor surfaceLow("#eff4ff");
     inline const QColor surfaceContainer("#e5eeff");
     inline const QColor surfaceHigh("#dce9ff");
-    inline const QColor onSurface("#0b1c30");
-    inline const QColor onSurfaceVariant("#434655");
-    inline const QColor outline("#737686");
+    inline const QColor onSurface("#0f1b33");
+    inline const QColor onSurfaceVariant("#5b6781");
+    inline const QColor outline("#8a94ab");
     inline const QColor outlineVariant("#c3c6d7");
-    inline const QColor primary("#004ac6");
-    inline const QColor primaryContainer("#2563eb");
+    inline const QColor primary("#2554d8");
+    inline const QColor primaryContainer("#3f7bf6");
     inline const QColor tertiary("#006329");
     inline const QColor tertiaryFixed("#7ffc97");
     inline const QColor error("#ba1a1a");
