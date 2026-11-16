@@ -14,14 +14,14 @@
 namespace
 {
     // One KPI tile: icon, caption, big number, one supporting line.
-    QFrame *statCard(const QString &caption, const QString &icon, const QString &top, const QString &bottom,
+    QFrame *statCard(const QString &caption, const QString &icon, const QColor &accent,
                      QLabel *&value, QLabel *&sub, bool alert = false)
     {
         auto *c = W::card(nullptr, alert ? "cardAlert" : "card");
         auto *h = new QHBoxLayout(c);
         h->setContentsMargins(16, 12, 16, 12);
         h->setSpacing(14);
-        h->addWidget(W::iconTile(icon, Qt::white, top, bottom, 46));
+        h->addWidget(W::iconTile(icon, accent, 44));
         auto *v = new QVBoxLayout;
         v->setSpacing(0);
         v->addWidget(W::label(caption, "caption"));
@@ -83,10 +83,10 @@ void DashboardPage::build()
     // ---- KPI row
     auto *stats = new QHBoxLayout;
     stats->setSpacing(0);
-    stats->addWidget(statCard("SALES TODAY", "cash", "#7fb0ff", "#2b5fe8", m_sales, m_salesSub));
-    stats->addWidget(statCard("ORDERS", "orders", "#5be3a0", "#15a362", m_orders, m_ordersSub));
-    stats->addWidget(statCard("PENDING", "clock", "#ffd479", "#f09a1a", m_pending, m_pendingSub));
-    stats->addWidget(statCard("LOW STOCK", "warn", "#ff9a8f", "#d9392b", m_lowCount, m_lowSub, true));
+    stats->addWidget(statCard("SALES TODAY", "cash", QColor("#2554d8"), m_sales, m_salesSub));
+    stats->addWidget(statCard("ORDERS", "orders", QColor("#15915a"), m_orders, m_ordersSub));
+    stats->addWidget(statCard("PENDING", "clock", QColor("#d98a0b"), m_pending, m_pendingSub));
+    stats->addWidget(statCard("LOW STOCK", "warn", QColor("#d9392b"), m_lowCount, m_lowSub, true));
     root->addLayout(stats);
 
     // ---- quick actions
@@ -122,7 +122,7 @@ void DashboardPage::build()
     auto *cv = new QVBoxLayout(cc);
     cv->setContentsMargins(18, 14, 18, 12);
     cv->setSpacing(6);
-    auto *legend = new QLabel("<span style='color:#3f6fe0'>■</span> Revenue &nbsp;&nbsp; <span style='color:#f08a24'>╌</span> Target");
+    auto *legend = new QLabel("<span style='color:#2554d8'>■</span> Revenue &nbsp;&nbsp; <span style='color:#e08a2c'>╌</span> Target");
     legend->setObjectName("muted");
     W::headerRow(cv, "", "Hourly revenue", legend);
     m_chart = new RevenueChart;
@@ -146,6 +146,7 @@ void DashboardPage::build()
     m_low->setColumnWidth(1, 66);
     m_low->setColumnWidth(2, 52);
     m_low->setColumnWidth(3, 92);
+    W::alignHeaders(m_low, {1, 2}, Qt::AlignHCenter);
     lv->addWidget(m_low, 1);
     auto *lf = new QHBoxLayout;
     lf->addStretch();
@@ -212,9 +213,9 @@ void DashboardPage::refresh()
         nv->setContentsMargins(4, 4, 4, 4);
         nv->setSpacing(0);
         auto *a = W::label(p.name);
-        a->setStyleSheet("font-weight:700;");
+        a->setStyleSheet("font-weight:600;");
         auto *b = W::label(p.sku);
-        b->setStyleSheet("color:#8a94ab; font-size:11px;");
+        b->setStyleSheet("color:#7b869c; font-size:11px;");
         nv->addWidget(a);
         nv->addWidget(b);
         m_low->setCellWidget(r, 0, name);
@@ -227,7 +228,7 @@ void DashboardPage::refresh()
         m_low->setItem(r, 1, sk);
         auto *lim = new QTableWidgetItem(QString::number(p.reorderLimit));
         lim->setTextAlignment(Qt::AlignCenter);
-        lim->setForeground(QColor("#8a94ab"));
+        lim->setForeground(QColor("#7b869c"));
         m_low->setItem(r, 2, lim);
         const bool done = st.isReordered(p.sku);
         auto *btn = W::button(done ? "Ordered ✓" : "Reorder", "mini");

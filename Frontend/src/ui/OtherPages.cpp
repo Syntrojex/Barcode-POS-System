@@ -79,7 +79,7 @@ namespace
         auto *ic = new QLabel;
         ic->setFixedSize(32, 32);
         ic->setAlignment(Qt::AlignCenter);
-        ic->setStyleSheet("background:#dce9ff; border-radius:6px;");
+        ic->setStyleSheet("background:#eef3ff; border-radius:6px;");
         ic->setPixmap(Theme::iconPixmap(icon, Theme::primary, 16));
         h->addWidget(ic);
         return c;
@@ -143,14 +143,15 @@ OrdersPage::OrdersPage(QWidget *parent) : QWidget(parent)
     v->addLayout(tabs);
 
     m_table = makeTable({"ORDER ID", "DATE & TIME", "CUSTOMER", "ITEMS SUMMARY", "PAYMENT", "AMOUNT", "STATUS", "ACTIONS"});
+    W::alignHeaders(m_table, {5}, Qt::AlignRight);
     m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     for (int c : {0, 1, 4, 5})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     for (int c : {2, 6, 7})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
-    m_table->setColumnWidth(2, 175);
-    m_table->setColumnWidth(6, 120);
-    m_table->setColumnWidth(7, 150);
+    m_table->setColumnWidth(2, 160);
+    m_table->setColumnWidth(6, 104);
+    m_table->setColumnWidth(7, 124);
     v->addWidget(m_table, 1);
     m_showing = W::label("", "muted");
     v->addWidget(m_showing);
@@ -210,9 +211,9 @@ void OrdersPage::rebuild()
             cl->setContentsMargins(8, 4, 8, 4);
             cl->setSpacing(0);
             auto *n = W::label(o.customer + (o.tier == "VIP" ? "  [VIP]" : ""));
-            n->setStyleSheet("font-weight:700;");
+            n->setStyleSheet("font-weight:600;");
             auto *c = W::label(o.contact);
-            c->setStyleSheet("color:#737686; font-size:11.5px;");
+            c->setStyleSheet("color:#7b869c; font-size:11.5px;");
             cl->addWidget(n);
             cl->addWidget(c);
             m_table->setCellWidget(r, 2, cw);
@@ -277,6 +278,7 @@ ProductsPage::ProductsPage(QWidget *parent) : QWidget(parent)
     h->addWidget(m_search);
     v->addLayout(h);
     m_table = makeTable({"SKU", "EAN-8", "PRODUCT", "CATEGORY", "LOCATION", "PRICE", "STOCK", "STATUS", ""});
+    W::alignHeaders(m_table, {5, 6}, Qt::AlignRight);
     m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
     for (int c : {0, 1, 3, 4, 5, 6, 7})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
@@ -343,6 +345,7 @@ BillsPage::BillsPage(QWidget *parent) : QWidget(parent)
     h->addWidget(m_search);
     v->addLayout(h);
     m_table = makeTable({"BILL NO.", "ORDER", "DATE & TIME", "CUSTOMER", "PAYMENT", "TOTAL", "ACTIONS"});
+    W::alignHeaders(m_table, {5}, Qt::AlignRight);
     m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
     m_table->setColumnWidth(6, 160);
     v->addWidget(m_table, 1);
@@ -426,8 +429,18 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
     m_last = W::label("No scans yet", "h2");
     sv->addWidget(m_last);
     m_history = new QListWidget;
-    m_history->setStyleSheet("QListWidget{border:1px solid #dbe4f7;border-radius:10px;padding:4px;} QListWidget::item{padding:9px;border-bottom:1px solid #e8eefb;}");
     sv->addWidget(m_history, 1);
+    {
+        // empty state, shown until the first scan lands in the list
+        auto *empty = new QLabel("Scanned products will appear here", m_history);
+        empty->setObjectName("muted");
+        empty->setAlignment(Qt::AlignCenter);
+        auto *el = new QVBoxLayout(m_history);
+        el->addWidget(empty);
+        auto sync = [this, empty] { empty->setVisible(m_history->count() == 0); };
+        connect(m_history->model(), &QAbstractItemModel::rowsInserted, empty, sync);
+        connect(m_history->model(), &QAbstractItemModel::rowsRemoved, empty, sync);
+    }
     m_send = W::button("Add last scan to order", "primary", "cart");
     m_send->setEnabled(false);
     sv->addWidget(m_send);
@@ -484,35 +497,60 @@ SettingsPage::SettingsPage(QWidget *parent) : QWidget(parent)
     QVBoxLayout *root;
     pageShell(this, root);
     auto *card = W::card(this);
-    card->setMaximumWidth(620);
+    card->setMaximumWidth(760);
     auto *v = new QVBoxLayout(card);
-    v->setContentsMargins(20, 16, 20, 16);
-    v->setSpacing(14);
+    v->setContentsMargins(22, 18, 22, 18);
+    v->setSpacing(4);
     W::headerRow(v, "settings", "Terminal Settings");
     auto &s = AppState::instance().settings();
 
-    auto *form = new QFormLayout;
-    form->setHorizontalSpacing(20);
-    form->setVerticalSpacing(12);
+    // One settings row: title + hint on the left, the control on the right.
+    auto row = [&](const QString &title, const QString &hint, QWidget *control)
+    {
+        auto *r = new QHBoxLayout;
+        r->setContentsMargins(0, 12, 0, 12);
+        r->setSpacing(16);
+        auto *t = new QVBoxLayout;
+        t->setSpacing(1);
+        t->addWidget(W::label(title, "h2"));
+        t->addWidget(W::label(hint, "muted"));
+        r->addLayout(t, 1);
+        r->addWidget(control, 0, Qt::AlignVCenter);
+        v->addWidget(W::hline());
+        v->addLayout(r);
+    };
+    auto section = [&](const QString &name)
+    {
+        v->addSpacing(10);
+        v->addWidget(W::label(name, "caption"));
+    };
+
+    section("PRICING");
     auto *tax = new QDoubleSpinBox;
     tax->setSuffix(" %");
     tax->setRange(0, 40);
     tax->setValue(s.taxPercent);
+    tax->setFixedWidth(130);
     auto *vip = new QDoubleSpinBox;
     vip->setSuffix(" %");
     vip->setRange(0, 50);
     vip->setValue(s.vipDiscountPercent);
-    auto *autoAdd = new QCheckBox("Add scanned items to the order automatically");
+    vip->setFixedWidth(130);
+    row("GST rate", "Tax rate already included in product prices.", tax);
+    row("VIP loyalty discount", "Applied to the order when the VIP toggle is on.", vip);
+
+    section("SCANNING");
+    auto *autoAdd = new QCheckBox;
     autoAdd->setChecked(s.autoAddScans);
-    auto *beep = new QCheckBox("Play a beep on successful scan");
+    auto *beep = new QCheckBox;
     beep->setChecked(s.beepOnScan);
-    form->addRow("GST rate (included in price)", tax);
-    form->addRow("VIP loyalty discount", vip);
-    form->addRow("Scanning", autoAdd);
-    form->addRow("", beep);
-    v->addLayout(form);
+    row("Add scanned items automatically", "Skip the confirmation and add each scan straight to the order.", autoAdd);
+    row("Beep on successful scan", "Play a short sound when a barcode is recognised.", beep);
+
+    v->addSpacing(8);
+    v->addWidget(W::hline());
+    v->addSpacing(10);
     v->addWidget(W::label("Changes apply to new calculations immediately. Settings are kept in memory only.", "muted"));
-    v->addStretch();
     auto *h = new QHBoxLayout;
     h->addStretch();
     auto *save = W::button("Apply", "primary", "check");

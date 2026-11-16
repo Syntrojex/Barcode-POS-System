@@ -22,10 +22,10 @@ namespace
         v->setContentsMargins(4, 4, 4, 4);
         v->setSpacing(1);
         auto *t = W::label(top);
-        t->setStyleSheet("font-weight:700; font-size:13.5px;");
+        t->setStyleSheet("font-weight:600; font-size:13.5px;");
         t->setWordWrap(true);
         auto *b = W::label(bottom);
-        b->setStyleSheet("color:#8a94ab; font-size:11.5px;");
+        b->setStyleSheet("color:#7b869c; font-size:11.5px;");
         v->addWidget(t);
         v->addWidget(b);
         return w;
@@ -67,7 +67,7 @@ QWidget *RecordOrderPage::buildCustomerStrip()
     auto *h = new QHBoxLayout(strip);
     h->setContentsMargins(14, 8, 14, 8);
     h->setSpacing(12);
-    h->addWidget(W::iconTile("user", Qt::white, "#7fb0ff", "#2b5fe8", 40));
+    h->addWidget(W::iconTile("user", Theme::primary, 40));
 
     auto field = [&](const QString &cap, QWidget *content, int stretch)
     {
@@ -106,7 +106,7 @@ QWidget *RecordOrderPage::buildCustomerStrip()
     sv->setSpacing(0);
     sv->addWidget(W::label("ORDER", "caption"));
     m_sessionId = W::label("#" + AppState::instance().nextOrderId(), "mono");
-    m_sessionId->setStyleSheet("font-weight:800; font-size:14px;");
+    m_sessionId->setStyleSheet("font-weight:700; font-size:14px;");
     sv->addWidget(m_sessionId);
     h->addLayout(sv);
     return strip;
@@ -177,11 +177,12 @@ QWidget *RecordOrderPage::buildLeft()
     ih->addWidget(m_pThumb);
     auto *iv = new QVBoxLayout;
     iv->setSpacing(2);
+    iv->addStretch(1);
     auto *nr = new QHBoxLayout;
     m_pName = W::label("Nothing scanned yet", "h1");
     m_pName->setWordWrap(true);
     m_pPrice = W::label("");
-    m_pPrice->setStyleSheet("color:#2554d8; font-size:17px; font-weight:800;");
+    m_pPrice->setStyleSheet("color:#2554d8; font-size:17px; font-weight:700;");
     nr->addWidget(m_pName, 1);
     nr->addWidget(m_pPrice);
     iv->addLayout(nr);
@@ -191,8 +192,9 @@ QWidget *RecordOrderPage::buildLeft()
     m_pStock = W::label("");
     m_pStock->setStyleSheet("font-weight:700;");
     iv->addWidget(m_pStock);
+    iv->addStretch(1);
     ih->addLayout(iv, 1);
-    pv->addWidget(info);
+    pv->addWidget(info, 1);
 
     m_addBtn = W::button("Add to order", "primary", "cart");
     m_addBtn->setMinimumHeight(42);
@@ -259,11 +261,13 @@ QWidget *RecordOrderPage::buildRight()
     hh->setSectionResizeMode(0, QHeaderView::Stretch);
     hh->setHighlightSections(false);
     hh->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_table->setColumnWidth(1, 78);
-    m_table->setColumnWidth(2, 112);
+    m_table->setColumnWidth(1, 72);
+    m_table->setColumnWidth(2, 104);
     m_table->setColumnWidth(3, 92);
-    m_table->setColumnWidth(4, 96);
-    m_table->setColumnWidth(5, 52);
+    m_table->setColumnWidth(4, 84);
+    m_table->setColumnWidth(5, 46);
+    W::alignHeaders(m_table, {1, 3, 4}, Qt::AlignRight);
+    W::alignHeaders(m_table, {2}, Qt::AlignHCenter);
     m_table->setWordWrap(false);
     ov->addWidget(m_table, 1);
     v->addWidget(oc, 1);
@@ -280,7 +284,7 @@ QWidget *RecordOrderPage::buildRight()
         r->addWidget(W::label(k, "muted"));
         r->addStretch();
         val = W::label("$0.00");
-        val->setStyleSheet("font-weight:800; font-size:14px;");
+        val->setStyleSheet("font-weight:700; font-size:14px;");
         r->addWidget(val);
         grid->addLayout(r);
     };
@@ -297,7 +301,7 @@ QWidget *RecordOrderPage::buildRight()
     auto *cap = W::label("TOTAL", "caption");
     tv->addWidget(cap);
     m_total = W::label("$0.00");
-    m_total->setStyleSheet("font-size:34px; font-weight:800; color:white;");
+    m_total->setStyleSheet("font-size:32px; font-weight:700; color:white;");
     tv->addWidget(m_total);
     m_checkout = W::button("Checkout  [F10]", "primary", "check");
     m_checkout->setMinimumHeight(44);
@@ -384,32 +388,25 @@ void RecordOrderPage::setPreview(const std::optional<Product> &p)
     W::setBadge(m_pBadge, p->stock == 0 ? "Out of stock" : low ? "Low stock" : "In stock",
                 p->stock == 0 ? "red" : low ? "amber" : "green");
 
-    // little 3D "box" thumbnail
+    // flat product tile: tinted rounded square with the product's initials
     QPixmap pm(120, 144);
     pm.setDevicePixelRatio(2);
     pm.fill(Qt::transparent);
     QPainter pa(&pm);
     pa.setRenderHint(QPainter::Antialiasing);
     pa.setPen(Qt::NoPen);
-    pa.setBrush(QColor(20, 40, 110, 40));
-    pa.drawEllipse(QRectF(6, 60, 46, 8));
-    QLinearGradient fg(10, 8, 10, 62);
-    fg.setColorAt(0, QColor("#7fb0ff"));
-    fg.setColorAt(1, QColor("#2b5fe8"));
-    pa.setBrush(fg);
-    pa.drawRoundedRect(QRectF(8, 14, 34, 46), 4, 4);
-    pa.setBrush(QColor("#1a3fae"));
-    pa.drawPolygon(QPolygonF({{42, 14}, {50, 8}, {50, 54}, {42, 60}}));
-    pa.setBrush(QColor("#a9ccff"));
-    pa.drawPolygon(QPolygonF({{8, 14}, {16, 8}, {50, 8}, {42, 14}}));
-    pa.setBrush(QColor(255, 255, 255, 230));
-    pa.drawRoundedRect(QRectF(13, 26, 24, 22), 3, 3);
-    pa.setPen(QColor("#1a3fae"));
+    pa.setBrush(QColor("#e6eeff"));
+    pa.drawRoundedRect(QRectF(2, 6, 56, 56), 12, 12);
+    pa.setPen(QColor("#2554d8"));
     QFont f = pa.font();
-    f.setPixelSize(8);
+    f.setPixelSize(19);
     f.setBold(true);
     pa.setFont(f);
-    pa.drawText(QRectF(13, 26, 24, 22), Qt::AlignCenter, p->name.section(' ', 0, 0).left(5).toUpper());
+    QString initials;
+    for (const QString &w : p->name.split(' ', Qt::SkipEmptyParts))
+        if (initials.size() < 2 && w[0].isLetter())
+            initials += w[0].toUpper();
+    pa.drawText(QRectF(2, 6, 56, 56), Qt::AlignCenter, initials);
     pa.end();
     m_pThumb->setPixmap(pm);
 }

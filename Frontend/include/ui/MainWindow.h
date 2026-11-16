@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include <QVector>
 
+class QFrame;
 class QLabel;
 class QPushButton;
 class QStackedWidget;
@@ -36,11 +37,15 @@ private:
     QWidget *buildTopBar();
     void handleFKey(int n);
     void positionToast();
+    void setSidebarCollapsed(bool on); // icon-only rail on narrow windows
 
     QStackedWidget *m_stack;
     QVector<QPushButton *> m_nav;
     QLabel *m_title, *m_subtitle, *m_clockTime, *m_clockDate, *m_toast;
     QTimer *m_toastTimer;
+    QFrame *m_sidebar = nullptr;
+    QPushButton *m_exit = nullptr;
+    bool m_collapsed = false;
 
     DashboardPage *m_dashboard;
     RecordOrderPage *m_record;

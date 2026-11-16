@@ -112,6 +112,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 QWidget *MainWindow::buildSidebar()
 {
     auto *sb = new QFrame;
+    m_sidebar = sb;
     sb->setObjectName("sidebar");
     sb->setFixedWidth(232);
     auto *v = new QVBoxLayout(sb);
@@ -187,6 +188,7 @@ QWidget *MainWindow::buildSidebar()
     exitB->setCursor(Qt::PointingHandCursor);
     v->addWidget(exitB);
     connect(exitB, &QPushButton::clicked, this, &QWidget::close);
+    m_exit = exitB;
     return sb;
 }
 
@@ -303,13 +305,39 @@ void MainWindow::positionToast()
     if (!m_toast)
         return;
     const QWidget *root = centralWidget();
-    m_toast->move((root->width() - m_toast->width()) / 2 + 116, root->height() - m_toast->height() - 36);
+    const int sbw = m_sidebar ? m_sidebar->width() : 232;
+    m_toast->move((root->width() - m_toast->width()) / 2 + sbw / 2, root->height() - m_toast->height() - 36);
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)
 {
     QMainWindow::resizeEvent(e);
+    setSidebarCollapsed(width() < 1240);
     positionToast();
+}
+
+// Narrow windows get an icon-only sidebar so the page content keeps its room (tooltips still name each page).
+void MainWindow::setSidebarCollapsed(bool on)
+{
+    if (!m_sidebar || on == m_collapsed)
+        return;
+    m_collapsed = on;
+    m_sidebar->setFixedWidth(on ? 72 : 232);
+    m_sidebar->layout()->setContentsMargins(on ? 14 : 14, 18, 14, 16);
+    for (const char *name : {"brand", "brandSub", "userName", "userRole"})
+        if (auto *l = m_sidebar->findChild<QLabel *>(name))
+            l->setVisible(!on);
+    for (auto *b : m_nav)
+    {
+        b->layout()->setContentsMargins(on ? 12 : 14, 0, on ? 12 : 14, 0);
+        for (auto *l : b->findChildren<QLabel *>())
+            if (l->objectName() != "navIcon")
+                l->setVisible(!on);
+    }
+    if (auto *card = m_sidebar->findChild<QFrame *>("userCard"))
+        card->layout()->setContentsMargins(on ? 5 : 10, 9, on ? 5 : 10, 9);
+    m_exit->setText(on ? "" : "  Exit");
+    m_exit->setToolTip(on ? "Exit" : "");
 }
 
 void MainWindow::closeEvent(QCloseEvent *e)
