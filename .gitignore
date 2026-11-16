@@ -41,7 +41,6 @@ Makefile
 
 *.obj
 *.o
-*.exe
 *.dll
 *.lib
 *.a
