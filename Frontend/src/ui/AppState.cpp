@@ -1,6 +1,8 @@
 #include "AppState.h"
 #include <QtMath>
 #include <algorithm>
+#include <vector>
+#include <utility>
 
 AppState &AppState::instance()
 {
@@ -126,7 +128,7 @@ void AppState::seed()
     {
         const char *customer, *contact, *tier, *payment, *status;
         int minutesAgo;
-        std::initializer_list<std::pair<const char *, int>> items;
+        std::vector<std::pair<const char *, int>> items;
     };
     const O os[] = {
         {"Walk-in Customer", "-", "Guest", "Cash", "Paid", 1, {{"PRD-8840", 1}, {"PRD-102", 2}, {"PRD-715", 1}}},

@@ -37,7 +37,7 @@ set "BUILD_DIR=%~dp0build\qt-mingw"
 
 echo.
 echo Configuring BarcodeHub with Qt 6.11.0 MinGW 64-bit...
-"%CMAKE%" -S "%~dp0" -B "%BUILD_DIR%" -G Ninja ^
+"%CMAKE%" -S "%~dp0." -B "%BUILD_DIR%" -G Ninja ^
   -DCMAKE_BUILD_TYPE=Debug ^
   "-DCMAKE_C_COMPILER=%MINGW_ROOT%\bin\gcc.exe" ^
   "-DCMAKE_CXX_COMPILER=%MINGW_ROOT%\bin\g++.exe" ^

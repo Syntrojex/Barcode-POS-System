@@ -39,7 +39,7 @@ private:
 
     QStackedWidget *m_stack;
     QVector<QPushButton *> m_nav;
-    QLabel *m_title, *m_clockTime, *m_clockDate, *m_toast;
+    QLabel *m_title, *m_subtitle, *m_clockTime, *m_clockDate, *m_toast;
     QTimer *m_toastTimer;
 
     DashboardPage *m_dashboard;

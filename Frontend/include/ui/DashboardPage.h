@@ -6,7 +6,6 @@ class QLineEdit;
 class QTableWidget;
 class RevenueChart;
 class QPushButton;
-class QVBoxLayout;
 
 class DashboardPage : public QWidget
 {
@@ -25,13 +24,11 @@ signals:
 
 private:
     void build();
-    void setDay(bool today);
 
-    QLabel *m_sales, *m_salesDelta, *m_orders, *m_ticket, *m_lowCount;
+    QLabel *m_sales, *m_salesSub, *m_orders, *m_ordersSub, *m_pending, *m_pendingSub, *m_lowCount, *m_lowSub;
     RevenueChart *m_chart;
-    QPushButton *m_todayBtn, *m_yestBtn, *m_genPO;
-    QLabel *m_peak, *m_quota, *m_ingest;
+    QPushButton *m_genPO;
     QTableWidget *m_low, *m_recent;
-    QLabel *m_showing;
+    QLabel *m_showing, *m_lowBadge;
     QLineEdit *m_search;
 };

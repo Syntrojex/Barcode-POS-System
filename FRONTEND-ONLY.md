@@ -1,43 +1,21 @@
-# BarcodeHub frontend-only build
+# BarcodeHub - frontend only
 
-This package builds the Qt Widgets frontend only. It does not compile OpenCV or
-the `Backend/` sources; the UI uses in-memory sample data from
-`Frontend/src/ui/AppState.cpp`.
+Qt 6 Widgets only. No OpenCV and no `Backend/` code is compiled; every screen runs on
+in-memory sample data (`Frontend/src/ui/AppState.cpp`).
 
-## Recommended build on the supplied Windows installation
+## Build
 
-Double-click `build-mingw.cmd`. It explicitly configures:
+| Compiler | How |
+|---|---|
+| Qt MinGW | double-click `build-mingw.cmd` (edit the paths at the top if Qt is elsewhere), or open `CMakeLists.txt` in Qt Creator with a **MinGW 64-bit** kit |
+| MSVC | double-click `build-msvc.cmd` (edit `QT_MSVC` at the top), or open `CMakeLists.txt` in Qt Creator / Visual Studio with the **MSVC 2022 64-bit** kit |
 
-- Qt: `C:\Qt\6.11.0\mingw_64`
-- MinGW GCC/G++: `C:\Qt\Tools\mingw1310_64\bin`
-- CMake: `C:\Qt\Tools\CMake_64\bin\cmake.exe`
-- Ninja: `C:\Qt\Tools\Ninja\ninja.exe`
+Delete the `build/` folder when you switch compilers - CMake caches the compiler.
+`Run-BarcodeHub.cmd` starts the last build.
 
-The script removes ambiguity about the compiler by passing the exact GCC/G++
-executables to CMake. If one of these paths differs on your PC, edit the
-variables at the top of `build-mingw.cmd`.
+## Shortcuts
+F1 Dashboard - F2 Record Order - F3 Orders - F4 Products (Browse on Record Order) -
+F5 Scanner - F6 Bills - F9 simulated scan - F10 Settings (Checkout on Record Order) -
+Ctrl+K search - Ctrl+N new order.
 
-## Qt Creator
-
-Open this folder's `CMakeLists.txt`, then select a Kit whose Qt version is
-`Qt 6.11.0 MinGW 64-bit`, C compiler is the MinGW 64-bit `gcc.exe`, and C++
-compiler is the matching `g++.exe` from `C:\Qt\Tools\mingw1310_64\bin`.
-
-Do not reuse the previous build directory: it contained an MSVC compiler cache.
-The supplied archive intentionally excludes `build/` and `.qtcreator/` so that
-stale compiler settings are not carried into the new copy.
-
-If Qt Creator still invokes `cl.exe`, it is using an MSVC Kit. The project
-CMake code cannot override a compiler that Qt Creator explicitly passes; choose
-the MinGW Kit or use `build-mingw.cmd`.
-
-## Manual command line
-
-```bat
-"C:\Qt\Tools\CMake_64\bin\cmake.exe" -S . -B build\qt-mingw -G Ninja ^
-  -DCMAKE_C_COMPILER=C:\Qt\Tools\mingw1310_64\bin\gcc.exe ^
-  -DCMAKE_CXX_COMPILER=C:\Qt\Tools\mingw1310_64\bin\g++.exe ^
-  -DCMAKE_MAKE_PROGRAM=C:\Qt\Tools\Ninja\ninja.exe ^
-  -DCMAKE_PREFIX_PATH=C:\Qt\6.11.0\mingw_64
-"C:\Qt\Tools\CMake_64\bin\cmake.exe" --build build\qt-mingw --parallel
-```
+The old camera widget that needs the backend is parked in `Frontend/legacy-camera/` (not built).
