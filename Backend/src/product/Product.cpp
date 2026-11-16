@@ -1,131 +1,24 @@
+#include "product/Product.h"
 
-#include "Product.h"
+#include <cmath>
 
-Product::Product()
-{
-    productID = 0;
-    unitPrice = 0;
-    tax = 0;
-    discount = 0;
-    availableQuantity = 0;
-}
+bool Product::isValid(std::string* reason) const {
+    const auto fail = [reason](const char* message) {
+        if (reason) *reason = message;
+        return false;
+    };
 
-Product::Product(int id, string barcode, string acronym,
-                 string name, string unit,
-                 double price, double tax,
-                 double discount, int quantity,
-                 string barcodePath)
-{
-    productID = id;
-    this->barcode = barcode;
-    this->acronym = acronym;
-    productName = name;
-    measurementUnit = unit;
-
-    unitPrice = price;
-    this->tax = tax;
-    this->discount = discount;
-
-    availableQuantity = quantity;
-    barcodeFilePath = barcodePath;
-}
-
-int Product::getProductID() const
-{
-    return productID;
-}
-
-string Product::getBarcode() const
-{
-    return barcode;
-}
-
-string Product::getAcronym() const
-{
-    return acronym;
-}
-
-string Product::getProductName() const
-{
-    return productName;
-}
-
-string Product::getMeasurementUnit() const
-{
-    return measurementUnit;
-}
-
-double Product::getUnitPrice() const
-{
-    return unitPrice;
-}
-
-double Product::getTax() const
-{
-    return tax;
-}
-
-double Product::getDiscount() const
-{
-    return discount;
-}
-
-int Product::getAvailableQuantity() const
-{
-    return availableQuantity;
-}
-
-string Product::getBarcodeFilePath() const
-{
-    return barcodeFilePath;
-}
-
-void Product::setProductID(int id)
-{
-    productID = id;
-}
-
-void Product::setBarcode(string barcode)
-{
-    this->barcode = barcode;
-}
-
-void Product::setAcronym(string acronym)
-{
-    this->acronym = acronym;
-}
-
-void Product::setProductName(string name)
-{
-    productName = name;
-}
-
-void Product::setMeasurementUnit(string unit)
-{
-    measurementUnit = unit;
-}
-
-void Product::setUnitPrice(double price)
-{
-    unitPrice = price;
-}
-
-void Product::setTax(double tax)
-{
-    this->tax = tax;
-}
-
-void Product::setDiscount(double discount)
-{
-    this->discount = discount;
-}
-
-void Product::setAvailableQuantity(int quantity)
-{
-    availableQuantity = quantity;
-}
-
-void Product::setBarcodeFilePath(string path)
-{
-    barcodeFilePath = path;
+    if (productId <= 0) return fail("product id must be positive");
+    if (barcode.empty()) return fail("barcode is required");
+    if (acronym.empty() || acronym.size() > 8) return fail("acronym must contain 1 to 8 characters");
+    if (name.empty()) return fail("product name is required");
+    if (measurementUnit != "count" && measurementUnit != "weight")
+        return fail("measurement unit must be count or weight");
+    if (!std::isfinite(unitPrice) || unitPrice < 0.0) return fail("unit price must be non-negative");
+    if (!std::isfinite(tax) || tax < 0.0) return fail("tax must be non-negative");
+    if (!std::isfinite(discount) || discount < 0.0) return fail("discount must be non-negative");
+    if (availableQuantity < 0) return fail("available quantity must be non-negative");
+    if (barcodeFilePath.empty()) return fail("barcode file path is required");
+    if (reason) reason->clear();
+    return true;
 }
