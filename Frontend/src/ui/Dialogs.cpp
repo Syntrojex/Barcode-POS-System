@@ -64,7 +64,7 @@ namespace Dialogs
         QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
         f.setPointSize(10);
         te->setFont(f);
-        te->setStyleSheet("QPlainTextEdit{background:white;border:1px solid #dce9ff;border-radius:8px;padding:12px;}");
+        te->setStyleSheet("QPlainTextEdit{background:white;border:1px solid #e2e7f0;border-radius:10px;padding:14px;}");
         te->setMinimumSize(420, 440);
         v->addWidget(te);
         auto *h = new QHBoxLayout;
@@ -102,12 +102,19 @@ namespace Dialogs
         {
             const auto &l = o.lines[i];
             t->setItem(i, 0, new QTableWidgetItem(l.name));
-            t->setItem(i, 1, new QTableWidgetItem(QString::number(l.qty)));
-            t->setItem(i, 2, new QTableWidgetItem(W::money(l.price)));
-            t->setItem(i, 3, new QTableWidgetItem(W::money(l.price * l.qty)));
+            const QStringList nums = {QString::number(l.qty), W::money(l.price), W::money(l.price * l.qty)};
+            for (int c = 0; c < 3; ++c)
+            {
+                auto *it = new QTableWidgetItem(nums[c]);
+                it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                t->setItem(i, c + 1, it);
+            }
+            t->setRowHeight(i, 38);
         }
-        t->setMinimumSize(480, 200);
-        t->setStyleSheet("QTableWidget{border:1px solid #dce9ff;border-radius:8px;}");
+        t->setMinimumSize(560, 200);
+        t->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        t->setStyleSheet("QTableWidget{background:white;border:1px solid #e2e7f0;border-radius:10px;}");
+        W::alignHeaders(t, {1, 2, 3}, Qt::AlignRight);
         v->addWidget(t);
         v->addWidget(W::label(QString("Payment: %1      Total: %2").arg(o.payment, W::money(o.total)), "h2"));
         auto *h = new QHBoxLayout;
@@ -127,6 +134,7 @@ namespace Dialogs
     {
         QDialog d(parent);
         d.setWindowTitle("Instant Payment");
+        d.setMinimumWidth(400);
         auto *v = new QVBoxLayout(&d);
         v->setContentsMargins(22, 20, 22, 18);
         v->setSpacing(12);
