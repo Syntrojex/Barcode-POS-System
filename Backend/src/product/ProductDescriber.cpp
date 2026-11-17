@@ -1,52 +1,37 @@
-#include "ProductDescriber.h"
-
-#include "StockValidator.h"
-
+#include "product/ProductDescriber.h"
+#include "product/Money.h"
 #include <algorithm>
-#include <iomanip>
-#include <locale>
-#include <sstream>
 
-namespace
+ProductDescription ProductDescriber::describe(const Product &p) const
 {
-    std::string pkr(double v)
-    {
-        std::ostringstream out;
-        out.imbue(std::locale::classic());
-        out << "PKR " << std::fixed << std::setprecision(2) << v;
-        return out.str();
-    }
-}
-
-std::string ProductDescriber::displayName(const Product &p)
-{
-    std::string n = p.getProductName();
-    std::replace(n.begin(), n.end(), '_', ' ');
-    return n;
-}
-
-std::vector<ProductDescriber::Field> ProductDescriber::fields(const Product &p)
-{
-    const bool inStock = StockValidator::canFulfil(p, 1);
-    return {
+    ProductDescription d;
+    d.title = p.getProductName();
+    const int qty = p.getAvailableQuantity();
+    d.stockLevel = qty <= 0 ? "out" : qty <= lowStockThreshold_ ? "low" : "in-stock";
+    const std::string unit = p.getMeasurementUnitName();
+    d.fields = {
         {"Product ID", std::to_string(p.getProductID())},
         {"Barcode", p.getBarcode()},
         {"Acronym", p.getAcronym()},
-        {"Name", displayName(p)},
-        {"Measurement unit", p.getMeasurementUnit()},
-        {"Unit price", pkr(p.getUnitPrice())},
-        {"Tax per unit", pkr(p.getTax())},
-        {"Discount per unit", pkr(p.getDiscount())},
-        {"Available quantity", std::to_string(p.getAvailableQuantity())},
-        {"Stock status", inStock ? "In stock" : "Out of stock"},
+        {"Name", p.getProductName()},
+        {"Measured by", unit},
+        {"Unit price", formatPKR(p.getUnitPrice())},
+        {"Tax per unit", formatPKR(p.getTax())},
+        {"Discount per unit", formatPKR(p.getDiscount())},
+        {"You pay per unit", formatPKR(p.getUnitPrice() - p.getDiscount() + p.getTax())},
+        {"Available", std::to_string(qty) + (d.stockLevel == "out" ? " (out of stock)" : d.stockLevel == "low" ? " (low stock)" : "")},
         {"Barcode file", p.getBarcodeFilePath()},
     };
+    return d;
 }
 
-std::string ProductDescriber::text(const Product &p)
+std::string TextProductFormatter::format(const ProductDescription &d) const
 {
-    std::string out;
-    for (const auto &f : fields(p))
-        out += f.first + ": " + f.second + "\n";
+    std::size_t w = 0;
+    for (const auto &f : d.fields)
+        w = std::max(w, f.first.size());
+    std::string out = d.title + "\n" + std::string(d.title.size(), '-') + "\n";
+    for (const auto &f : d.fields)
+        out += f.first + std::string(w - f.first.size() + 2, ' ') + f.second + "\n";
     return out;
 }

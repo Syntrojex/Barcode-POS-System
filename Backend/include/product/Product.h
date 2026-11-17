@@ -1,61 +1,57 @@
-#ifndef PRODUCT_H
-#define PRODUCT_H
-
+#pragma once
+// Product domain object. Pure C++17 (no Qt, no I/O): holds product data and its own invariants only.
+// Parsing, validation, persistence, searching, stock policy and presentation live in separate classes.
 #include <string>
 
-// Plain product record (one row of Product.txt). Holds data only: parsing lives in
-// ProductRecordCodec, validation in ProductValidator, stock rules in StockValidator and
-// presentation in ProductDescriber, so this class has a single reason to change.
+enum class MeasurementUnit { Count, Weight };
+
+std::string toString(MeasurementUnit unit);                              // "count" | "weight"
+bool parseMeasurementUnit(const std::string &text, MeasurementUnit &out); // exact, lower-case
+
 class Product
 {
-private:
-    int productID;
-    std::string barcode;
-    std::string acronym;
-    std::string productName;
-    std::string measurementUnit; // "count" or "weight"
-
-    double unitPrice;  // PKR, without tax
-    double tax;        // PKR, per unit
-    double discount;   // PKR, per unit
-
-    int availableQuantity;
-    std::string barcodeFilePath;
-
 public:
-    Product();
+    Product() = default;
+    Product(int id, std::string barcode, std::string acronym, std::string name, MeasurementUnit unit,
+            double unitPrice, double tax, double discount, int availableQuantity,
+            std::string barcodeFilePath);
 
-    Product(int id, std::string barcode, std::string acronym,
-            std::string name, std::string unit,
-            double price, double tax,
-            double discount, int quantity,
-            std::string barcodePath);
+    // ---- getters (names kept compatible with the rest of the team's code) ----
+    int getProductID() const { return id_; }
+    const std::string &getBarcode() const { return barcode_; }
+    const std::string &getAcronym() const { return acronym_; }
+    const std::string &getProductName() const { return name_; }
+    MeasurementUnit getMeasurementUnit() const { return unit_; }
+    std::string getMeasurementUnitName() const { return toString(unit_); }
+    double getUnitPrice() const { return unitPrice_; }   // price without tax, PKR
+    double getTax() const { return tax_; }               // tax per unit, PKR
+    double getDiscount() const { return discount_; }     // discount per unit, PKR
+    int getAvailableQuantity() const { return availableQuantity_; }
+    const std::string &getBarcodeFilePath() const { return barcodeFilePath_; }
 
-    int getProductID() const;
-    const std::string &getBarcode() const;
-    const std::string &getAcronym() const;
-    const std::string &getProductName() const;
-    const std::string &getMeasurementUnit() const;
+    // ---- setters ----
+    void setProductID(int v) { id_ = v; }
+    void setBarcode(std::string v) { barcode_ = std::move(v); }
+    void setAcronym(std::string v) { acronym_ = std::move(v); }
+    void setProductName(std::string v) { name_ = std::move(v); }
+    void setMeasurementUnit(MeasurementUnit v) { unit_ = v; }
+    void setUnitPrice(double v) { unitPrice_ = v; }
+    void setTax(double v) { tax_ = v; }
+    void setDiscount(double v) { discount_ = v; }
+    void setAvailableQuantity(int v) { availableQuantity_ = v; }
+    void setBarcodeFilePath(std::string v) { barcodeFilePath_ = std::move(v); }
 
-    double getUnitPrice() const;
-    double getTax() const;
-    double getDiscount() const;
+    // ---- behaviour that belongs to the product itself ----
+    double netUnitPrice() const { return unitPrice_ - discount_; } // after discount, before tax
+    bool isInStock() const { return availableQuantity_ > 0; }
+    // Removes sold stock. Throws std::invalid_argument if qty < 0 or qty > available.
+    void deductStock(int qty);
 
-    int getAvailableQuantity() const;
-    const std::string &getBarcodeFilePath() const;
-
-    void setProductID(int id);
-    void setBarcode(const std::string &barcode);
-    void setAcronym(const std::string &acronym);
-    void setProductName(const std::string &name);
-    void setMeasurementUnit(const std::string &unit);
-
-    void setUnitPrice(double price);
-    void setTax(double tax);
-    void setDiscount(double discount);
-
-    void setAvailableQuantity(int quantity);
-    void setBarcodeFilePath(const std::string &path);
+private:
+    int id_ = 0;
+    std::string barcode_, acronym_, name_;
+    MeasurementUnit unit_ = MeasurementUnit::Count;
+    double unitPrice_ = 0, tax_ = 0, discount_ = 0;
+    int availableQuantity_ = 0;
+    std::string barcodeFilePath_;
 };
-
-#endif

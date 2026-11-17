@@ -12,8 +12,7 @@ int main(int argc, char *argv[])
     QFont f = app.font();
     f.setPointSizeF(9.5);
     app.setFont(f);
-    Theme::restore();   // saved light/dark choice
-    Theme::apply(app);
+    app.setStyleSheet(Theme::styleSheet());
 
     MainWindow w;
     w.show();

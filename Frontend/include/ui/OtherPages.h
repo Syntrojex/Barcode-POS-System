@@ -44,6 +44,7 @@ private:
     QLineEdit *m_search;
     QTableWidget *m_table;
     QLabel *m_count;
+    QPushButton *m_issues;
 };
 
 class BillsPage : public QWidget
@@ -68,16 +69,19 @@ public:
 signals:
     void toast(const QString &message);
     void sendToOrder(const QString &ean);
+    void described(int productId);
 
 private:
     void scanNext();
+    void show(const ProductInfo &p);
     CameraFeedWidget *m_feed;
     QListWidget *m_history;
     QLabel *m_last;
-    QPushButton *m_toggle, *m_send;
+    QPushButton *m_toggle, *m_send, *m_describe;
     QLineEdit *m_manual;
     int m_index = 3;
     QString m_lastEan;
+    int m_lastId = 0;
 };
 
 class SettingsPage : public QWidget
