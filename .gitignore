@@ -25,7 +25,6 @@ CMakeUserPresets.json
 # CMake Build Files
 # ==========================================
 
-build/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
