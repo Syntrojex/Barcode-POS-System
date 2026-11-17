@@ -176,8 +176,18 @@ if(WIN32)
         list(APPEND _apps CameraDemo)
     endif()
 
-    find_program(WINDEPLOYQT_EXECUTABLE windeployqt
-        HINTS "${Qt${QT_VERSION_MAJOR}_DIR}/../../../bin")
+    # windeployqt copies the Qt DLLs *and* the plugins (platforms/qwindows.dll ...) next to the exe.
+    # Without the plugins the exe says: Could not find the Qt platform plugin "windows".
+    if(TARGET Qt${QT_VERSION_MAJOR}::windeployqt)
+        get_target_property(WINDEPLOYQT_EXECUTABLE Qt${QT_VERSION_MAJOR}::windeployqt IMPORTED_LOCATION)
+    else()
+        find_program(WINDEPLOYQT_EXECUTABLE windeployqt
+            HINTS "${Qt${QT_VERSION_MAJOR}_DIR}/../../../bin")
+    endif()
+    if(NOT WINDEPLOYQT_EXECUTABLE)
+        message(WARNING "windeployqt not found: BarcodeHub.exe will not start from Explorer/Qt Creator")
+    endif()
+    get_filename_component(_cxx_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)   # MinGW runtime DLLs live here
 
     foreach(app ${_apps})
         add_custom_command(TARGET ${app} POST_BUILD
@@ -191,8 +201,15 @@ if(WIN32)
         endif()
         if(WINDEPLOYQT_EXECUTABLE)
             add_custom_command(TARGET ${app} POST_BUILD
-                COMMAND ${WINDEPLOYQT_EXECUTABLE} --no-translations $<TARGET_FILE:${app}>)
+                COMMAND ${WINDEPLOYQT_EXECUTABLE} --force --no-translations $<TARGET_FILE:${app}>)   # --force: replace stale DLLs of another Qt version
         endif()
+        foreach(_dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)   # MinGW runtime
+            if(EXISTS "${_cxx_bin}/${_dll}")
+                add_custom_command(TARGET ${app} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_cxx_bin}/${_dll}" $<TARGET_FILE_DIR:${app}>)
+            endif()
+        endforeach()
     endforeach()
 
     if(EXISTS ${CMAKE_SOURCE_DIR}/data)   # Product.txt, Order.txt ... next to the exe
