@@ -5,7 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BACKEND_ONLY "Build only the Qt-free backend and its tests (no GUI)" OFF)
-option(WITH_CAMERA  "Build the camera scanner + CameraWidget + POSWindow (needs OpenCV 4)" OFF)
+
+# Camera scanner (Shauzab). OFF (default for now) = build without the camera, no OpenCV needed.
+# ON = camera included (CMake stops if OpenCV 4 is missing), AUTO = camera if OpenCV 4 is found.
+set(CAMERA OFF CACHE STRING "Camera scanner: OFF | ON | AUTO")
+set_property(CACHE CAMERA PROPERTY STRINGS OFF ON AUTO)
 
 # ---------------------------------------------------------------------------
 # Windows: always use the Qt from C:/Qt, never the one from MSYS2.
@@ -33,6 +37,45 @@ if(WIN32)
         endif()
         list(APPEND CMAKE_IGNORE_PREFIX_PATH "C:/msys64" "C:/msys64/ucrt64" "C:/msys64/mingw64")
     endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Pre-flight: one clear message instead of hundreds of compiler errors.
+# If a shared header is missing, empty or old, every module that includes it fails to compile
+# and Qt Creator shows 100+ issues ('Order' is not a member of ..., No such file ...).
+# ---------------------------------------------------------------------------
+function(bh_require_header path marker)
+    set(_f "${CMAKE_SOURCE_DIR}/${path}")
+    if(NOT EXISTS "${_f}")
+        message(FATAL_ERROR "MISSING FILE: ${path}\n  -> copy / pull it into the project, then Run CMake again.")
+    endif()
+    file(SIZE "${_f}" _bytes)
+    file(READ "${_f}" _text)
+    string(FIND "${_text}" "${marker}" _pos)
+    if(_bytes EQUAL 0 OR _pos EQUAL -1)
+        message(FATAL_ERROR "WRONG / OLD FILE: ${path} (${_bytes} bytes) does not contain '${marker}'.\n  -> replace it with the current version from the team repo, then Run CMake again.")
+    endif()
+    message(STATUS "ok  ${path} (${_bytes} bytes)")
+endfunction()
+
+bh_require_header(Backend/include/order/Order.h          "namespace barcodehub::order")
+bh_require_header(Backend/include/order/Order.h          "struct Order")
+bh_require_header(Backend/include/order/OrderDetail.h    "OrderDetail")
+bh_require_header(Backend/include/order/OrderManager.h   "ProductSnapshot")
+bh_require_header(Backend/include/product/Product.h      "Product")
+bh_require_header(Backend/include/integration/ProductAdapter.h "toSnapshot")
+bh_require_header(Backend/include/billing/PaymentMethod.h "IPaymentMethod")
+
+# A second copy of a header somewhere else would silently win over the real one.
+file(GLOB_RECURSE _dup_orders "${CMAKE_SOURCE_DIR}/Backend/*/Order.h" "${CMAKE_SOURCE_DIR}/Frontend/*/Order.h")
+list(LENGTH _dup_orders _n_orders)
+if(_n_orders GREATER 1)
+    message(WARNING "More than one Order.h found:\n${_dup_orders}\nKeep only Backend/include/order/Order.h")
+endif()
+
+# Show only the first few errors of each file: the first one is the real one, the rest is noise.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-fmax-errors=5)
 endif()
 
 # ===========================================================================
@@ -78,8 +121,11 @@ target_link_libraries(integration_core PUBLIC product_core order_core)
 add_library(backend_core INTERFACE)
 target_link_libraries(backend_core INTERFACE product_core order_core billing_core common_core integration_core)
 
-# --- Camera scanner (Shauzab): needs OpenCV, so opt-in ------------------------
-if(WITH_CAMERA)
+# --- Camera scanner (Shauzab): needs OpenCV 4 --------------------------------
+# Part of the normal build: AUTO switches it on as soon as OpenCV 4 is found.
+set(CAMERA_ENABLED OFF)
+if(NOT CAMERA STREQUAL "OFF")
+    # 1) the OpenCV that scripts/build-windows.ps1 builds inside the project
     foreach(candidate
             ${CMAKE_SOURCE_DIR}/build/deps/opencv/x64/mingw/lib
             ${CMAKE_SOURCE_DIR}/build/deps/opencv)
@@ -88,8 +134,19 @@ if(WITH_CAMERA)
             break()
         endif()
     endforeach()
-    find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
+    # 2) otherwise whatever OpenCV 4 the system offers (never the one in MSYS2: see top)
+    if(CAMERA STREQUAL "ON")
+        find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
+    else()
+        find_package(OpenCV 4 QUIET COMPONENTS core imgproc imgcodecs videoio)
+    endif()
+    if(OpenCV_FOUND)
+        set(CAMERA_ENABLED ON)
+    endif()
+endif()
 
+if(CAMERA_ENABLED)
+    message(STATUS "Camera: ON  (OpenCV ${OpenCV_VERSION})")
     file(GLOB SCANNER_SOURCES CONFIGURE_DEPENDS Backend/src/scanner/*.cpp)
     add_library(scanner_core STATIC ${SCANNER_SOURCES})
     target_include_directories(scanner_core PUBLIC Backend/include/scanner ${OpenCV_INCLUDE_DIRS})
@@ -97,14 +154,20 @@ if(WITH_CAMERA)
     if(WIN32)
         target_link_libraries(scanner_core PUBLIC ole32 oleaut32 strmiids)   # DirectShow camera
     endif()
+else()
+    message(STATUS "Camera: OFF (switch on later with -DCAMERA=ON)")
 endif()
 
 # --- Backend tests (no Qt, no camera) -----------------------------------------
-add_executable(integration_test tests/integration_test.cpp)
-target_link_libraries(integration_test PRIVATE backend_core)
-
-add_executable(billing_tests tests/billing_tests.cpp)
-target_link_libraries(billing_tests PRIVATE backend_core)
+# Each test is only built when its file exists, so a missing file never stops CMake.
+foreach(_t integration_test billing_tests)
+    if(EXISTS ${CMAKE_SOURCE_DIR}/tests/${_t}.cpp)
+        add_executable(${_t} tests/${_t}.cpp)
+        target_link_libraries(${_t} PRIVATE backend_core)
+    else()
+        message(STATUS "tests/${_t}.cpp not found: ${_t} skipped")
+    endif()
+endforeach()
 
 if(EXISTS ${CMAKE_SOURCE_DIR}/tests/product_tests.cpp)
     add_executable(product_tests tests/product_tests.cpp)
@@ -117,9 +180,22 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/tests/product_tests.cpp)
     endif()
 endif()
 
+# Scanner test: draws a barcode picture and reads it back (no camera needed)
+if(CAMERA_ENABLED AND EXISTS ${CMAKE_SOURCE_DIR}/tests/scanner_tests.cpp)
+    add_executable(scanner_tests tests/scanner_tests.cpp)
+    target_link_libraries(scanner_tests PRIVATE scanner_core)
+endif()
+
 enable_testing()
-add_test(NAME integration COMMAND integration_test)
-add_test(NAME billing COMMAND billing_tests)
+if(TARGET scanner_tests)
+    add_test(NAME scanner COMMAND scanner_tests)
+endif()
+if(TARGET integration_test)
+    add_test(NAME integration COMMAND integration_test)
+endif()
+if(TARGET billing_tests)
+    add_test(NAME billing COMMAND billing_tests)
+endif()
 
 if(BACKEND_ONLY)
     message(STATUS "BACKEND_ONLY=ON: Qt frontend skipped")
@@ -143,22 +219,22 @@ file(GLOB UI_HEADERS CONFIGURE_DEPENDS Frontend/include/ui/*.h)
 # camera-only demo: it is skipped here too, it must not be compiled without OpenCV.
 list(FILTER UI_SOURCES EXCLUDE REGEX "[/\\\\][Mm]ain\\.cpp$")   # Main.cpp AND main.cpp (REGEX is case-sensitive)
 
-# These two need OpenCV, so they are only compiled when the camera is switched on.
-if(NOT WITH_CAMERA)
-    list(FILTER UI_SOURCES EXCLUDE REGEX "CameraWidget|POSWindow")
-    list(FILTER UI_HEADERS EXCLUDE REGEX "CameraWidget|POSWindow")
+# These need OpenCV, so they are only compiled when the camera is on.
+if(NOT CAMERA_ENABLED)
+    list(FILTER UI_SOURCES EXCLUDE REGEX "CameraWidget|CameraController|LiveCamera|POSWindow")
+    list(FILTER UI_HEADERS EXCLUDE REGEX "CameraWidget|CameraController|POSWindow")
 endif()
 
 add_library(barcode_ui STATIC ${UI_SOURCES} ${UI_HEADERS})
 target_include_directories(barcode_ui PUBLIC Frontend/include/ui Frontend/include)
 target_link_libraries(barcode_ui PUBLIC Qt${QT_VERSION_MAJOR}::Widgets backend_core)
-if(WITH_CAMERA)
+if(CAMERA_ENABLED)
     target_link_libraries(barcode_ui PUBLIC scanner_core)
     target_compile_definitions(barcode_ui PUBLIC WITH_CAMERA)   # lets the UI use #ifdef WITH_CAMERA
 endif()
 
 # --- Stand-alone camera test window ------------------------------------------
-if(WITH_CAMERA AND EXISTS ${CMAKE_SOURCE_DIR}/tests/camera_demo.cpp)
+if(CAMERA_ENABLED AND EXISTS ${CMAKE_SOURCE_DIR}/tests/camera_demo.cpp)
     add_executable(CameraDemo WIN32 tests/camera_demo.cpp)
     target_link_libraries(CameraDemo PRIVATE barcode_ui)
 endif()
@@ -208,7 +284,7 @@ endif()
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 $<TARGET_RUNTIME_DLLS:${app}> $<TARGET_FILE_DIR:${app}>
             COMMAND_EXPAND_LISTS VERBATIM)
-        if(WITH_CAMERA AND EXISTS ${OpenCV_DIR}/../bin)
+        if(CAMERA_ENABLED AND EXISTS ${OpenCV_DIR}/../bin)
             add_custom_command(TARGET ${app} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory
                     ${OpenCV_DIR}/../bin $<TARGET_FILE_DIR:${app}>)
