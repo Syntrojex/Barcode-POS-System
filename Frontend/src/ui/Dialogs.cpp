@@ -5,7 +5,12 @@
 #include <QDialog>
 #include <QDoubleSpinBox>
 #include <QFontDatabase>
+#include <QFormLayout>
+#include <QLabel>
+#include <QFileInfo>
 #include <QHBoxLayout>
+#include <QListWidget>
+#include <QPixmap>
 #include <QPlainTextEdit>
 #include <QTableWidget>
 #include <QHeaderView>
@@ -27,21 +32,19 @@ namespace Dialogs
         t += two("Date", o.time.toString("yyyy-MM-dd HH:mm")) + "\n";
         t += two("Cashier", "Alex Rivera") + "\n";
         t += two("Customer", o.customer) + "\n" + rule + "\n";
-        double gross = 0;
         for (const auto &l : o.lines)
         {
             const double sub = l.price * l.qty;
-            gross += sub;
             QString name = l.name;
             if (name.size() > w - 12)
                 name = name.left(w - 13) + "…";
             t += two(QString("%1 x %2").arg(l.qty).arg(name), W::money(sub)) + "\n";
         }
         t += rule + "\n";
-        t += two("Gross subtotal", W::money(gross)) + "\n";
+        t += two("Subtotal", W::money(o.subtotal)) + "\n";
         if (o.discount > 0)
-            t += two("Loyalty discount", W::money(-o.discount)) + "\n";
-        t += two("GST included", W::money(o.total * 8.0 / 108.0)) + "\n";
+            t += two("Discount", W::money(-o.discount)) + "\n";
+        t += two("Tax", W::money(o.tax)) + "\n";
         t += two("TOTAL", W::money(o.total)) + "\n" + rule + "\n";
         t += two("Payment", o.payment) + "\n";
         if (o.tendered > 0)
@@ -64,7 +67,7 @@ namespace Dialogs
         QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
         f.setPointSize(10);
         te->setFont(f);
-        te->setObjectName("paper");
+        te->setStyleSheet("QPlainTextEdit{background:white;border:1px solid #dce9ff;border-radius:8px;padding:12px;}");
         te->setMinimumSize(420, 440);
         v->addWidget(te);
         auto *h = new QHBoxLayout;
@@ -102,19 +105,12 @@ namespace Dialogs
         {
             const auto &l = o.lines[i];
             t->setItem(i, 0, new QTableWidgetItem(l.name));
-            const QStringList nums = {QString::number(l.qty), W::money(l.price), W::money(l.price * l.qty)};
-            for (int c = 0; c < 3; ++c)
-            {
-                auto *it = new QTableWidgetItem(nums[c]);
-                it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                t->setItem(i, c + 1, it);
-            }
-            t->setRowHeight(i, 38);
+            t->setItem(i, 1, new QTableWidgetItem(QString::number(l.qty)));
+            t->setItem(i, 2, new QTableWidgetItem(W::money(l.price)));
+            t->setItem(i, 3, new QTableWidgetItem(W::money(l.price * l.qty)));
         }
-        t->setMinimumSize(560, 200);
-        t->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        t->setObjectName("boxedTable");
-        W::alignHeaders(t, {1, 2, 3}, Qt::AlignRight);
+        t->setMinimumSize(480, 200);
+        t->setStyleSheet("QTableWidget{border:1px solid #dce9ff;border-radius:8px;}");
         v->addWidget(t);
         v->addWidget(W::label(QString("Payment: %1      Total: %2").arg(o.payment, W::money(o.total)), "h2"));
         auto *h = new QHBoxLayout;
@@ -130,11 +126,74 @@ namespace Dialogs
         d.exec();
     }
 
+    void productDescription(QWidget *parent, int productId)
+    {
+        const ProductDescriptionView pd = AppState::instance().describe(productId);
+        if (pd.title.isEmpty())
+            return;
+        QDialog d(parent);
+        d.setWindowTitle("Product description");
+        auto *v = new QVBoxLayout(&d);
+        v->setContentsMargins(22, 18, 22, 16);
+        v->setSpacing(10);
+        auto *top = new QHBoxLayout;
+        top->addWidget(W::label(pd.title, "h1"));
+        const bool out = pd.level == "out", low = pd.level == "low";
+        top->addWidget(W::badge(out ? "Out of stock" : low ? "Low stock" : "In stock", out ? "red" : low ? "amber" : "green"));
+        top->addStretch();
+        v->addLayout(top);
+        auto *body = new QHBoxLayout;
+        auto *form = new QFormLayout;
+        form->setHorizontalSpacing(24);
+        form->setVerticalSpacing(8);
+        for (const auto &f : pd.fields)
+            form->addRow(W::label(f.first.toUpper(), "caption"), W::label(f.second, "h2"));
+        body->addLayout(form, 1);
+        QPixmap px(pd.imagePath);
+        if (!px.isNull())
+        {
+            auto *img = new QLabel;
+            img->setPixmap(px.scaledToWidth(200, Qt::SmoothTransformation));
+            body->addWidget(img, 0, Qt::AlignTop);
+        }
+        v->addLayout(body);
+        auto *h = new QHBoxLayout;
+        h->addStretch();
+        auto *close = W::button("Close", "primary");
+        h->addWidget(close);
+        v->addLayout(h);
+        QObject::connect(close, &QPushButton::clicked, &d, &QDialog::accept);
+        d.exec();
+    }
+
+    void loadIssues(QWidget *parent)
+    {
+        auto &st = AppState::instance();
+        QDialog d(parent);
+        d.setWindowTitle("Product.txt - data check");
+        auto *v = new QVBoxLayout(&d);
+        v->setContentsMargins(20, 16, 20, 14);
+        v->setSpacing(10);
+        v->addWidget(W::label("Product data check", "h1"));
+        v->addWidget(W::label(st.productFile().isEmpty() ? "Product.txt was not found." : st.productFile(), "muted"));
+        auto *list = new QListWidget;
+        const QStringList issues = st.productIssues();
+        list->addItems(issues.isEmpty() ? QStringList{"No problems found."} : issues);
+        list->setMinimumSize(560, 260);
+        v->addWidget(list);
+        auto *close = W::button("Close", "primary");
+        auto *h = new QHBoxLayout;
+        h->addStretch();
+        h->addWidget(close);
+        v->addLayout(h);
+        QObject::connect(close, &QPushButton::clicked, &d, &QDialog::accept);
+        d.exec();
+    }
+
     bool payment(QWidget *parent, double total, QString &mode, double &tendered)
     {
         QDialog d(parent);
         d.setWindowTitle("Instant Payment");
-        d.setMinimumWidth(400);
         auto *v = new QVBoxLayout(&d);
         v->setContentsMargins(22, 20, 22, 18);
         v->setSpacing(12);
@@ -162,10 +221,10 @@ namespace Dialogs
         th->setContentsMargins(0, 0, 0, 0);
         th->addWidget(W::label("Cash tendered", "muted"));
         auto *spin = new QDoubleSpinBox;
-        spin->setPrefix("$ ");
+        spin->setPrefix("PKR ");
         spin->setDecimals(2);
-        spin->setRange(0, 100000);
-        spin->setValue(qCeil(total));
+        spin->setRange(0, 10000000);
+        spin->setValue(qCeil(total / 10.0) * 10.0);
         spin->setMinimumWidth(130);
         th->addStretch();
         th->addWidget(spin);
@@ -188,7 +247,7 @@ namespace Dialogs
             change->setVisible(cash);
             const double c = spin->value() - total;
             change->setText(c >= -0.005 ? "Change due: " + W::money(c) : "Short by " + W::money(-c));
-            change->setStyleSheet(QString("color:%1;").arg((c >= -0.005 ? Theme::successText() : Theme::dangerText()).name()));
+            change->setStyleSheet(c >= -0.005 ? "color:#006329;" : "color:#ba1a1a;");
             ok->setEnabled(!cash || c >= -0.005);
         };
         QObject::connect(group, &QButtonGroup::idClicked, &d, [&](int)

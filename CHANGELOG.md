@@ -19,15 +19,6 @@ All notable changes to **BarcodeHub** are documented in this file.
 - Save generated bills in `Bill.txt`.
 - Support payment modes: cash, card, and wallet.
 
-### Added — Product Management (Farzam Zeeshan)
-
-- Pure C++17 product module (`Backend/*/product`, no Qt or OpenCV): `Product`, `ProductRecordCodec`
-  (one-line parse/format), `ProductValidator` (pluggable rules), `StockValidator`,
-  `ProductDescriber`, `ProductManager` (load/save `Product.txt`, search by barcode and ID,
-  stock deduction).
-- Unit tests (`product_tests`, run with `ctest`) and sample data in `tests/data/`.
-- Dark mode: moon/sun button in the top bar or `Ctrl+D`; the choice is remembered.
-
 ### Development Notes
 
 - Increment 2 extends the existing barcode generator and reader from Increment 1.

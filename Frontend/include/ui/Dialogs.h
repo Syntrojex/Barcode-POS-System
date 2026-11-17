@@ -12,6 +12,10 @@ namespace Dialogs
     void receipt(QWidget *parent, const OrderRecord &order);
     // Order summary with line items.
     void orderDetails(QWidget *parent, const OrderRecord &order);
+    // Product description (name, barcode, unit, price, tax, discount, stock, barcode image).
+    void productDescription(QWidget *parent, int productId);
+    // Lists the lines of Product.txt that were rejected or flagged while loading.
+    void loadIssues(QWidget *parent);
     // Text receipt body (also used for the bill preview).
     QString receiptText(const OrderRecord &order);
 }

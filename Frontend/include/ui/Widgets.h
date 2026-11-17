@@ -9,9 +9,8 @@
 
 class QHBoxLayout;
 class QVBoxLayout;
-class QTableWidget;
 
-// Flat white panel: 1px border, 12px radius and a very soft shadow (pure painting, cheap).
+// Raised panel: soft layered shadow, top-lit gradient and a highlight edge (pure painting, cheap).
 // Its contents margins keep children inside the visible body, so layouts need no changes.
 class Card : public QFrame
 {
@@ -23,9 +22,7 @@ protected:
     void resizeEvent(QResizeEvent *) override;
 
 private:
-    void rebuildShadow();
     QPixmap m_shadow;
-    bool m_shadowDark = false; // mode the cached shadow was drawn for
     bool m_alert;
 };
 
@@ -33,10 +30,9 @@ namespace W
 {
     // Re-usable page layout: consistent outer margins, no gaps (cards carry their own shadow space).
     QVBoxLayout *pageLayout(QWidget *page);
-    // Rounded tile with a light tint of `accent` behind an `accent` icon (stat cards, customer strip).
-    QLabel *iconTile(const QString &icon, const QColor &accent, int size = 38);
-    // Align the header text of the given columns (e.g. right-align numeric columns over their values).
-    void alignHeaders(QTableWidget *t, const QList<int> &cols, Qt::Alignment a);
+    // Round gradient icon tile used in stat cards.
+    QLabel *iconTile(const QString &icon, const QColor &fg, const QString &gradTop, const QString &gradBottom,
+                     int size = 38);
     QFrame *card(QWidget *parent = nullptr, const char *objectName = "card");
     QLabel *label(const QString &text, const char *objectName = nullptr, QWidget *parent = nullptr);
     QLabel *badge(const QString &text, const QString &kind, QWidget *parent = nullptr);
@@ -64,7 +60,7 @@ public:
     void setRunning(bool on);
     void setCode(const QString &code); // barcode digits shown in the viewfinder
     QSize sizeHint() const override { return {420, 236}; }
-    QSize minimumSizeHint() const override { return {260, 96}; }
+    QSize minimumSizeHint() const override { return {260, 150}; }
 
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -76,7 +72,7 @@ private:
     QTimer m_timer;
 };
 
-// Bar chart: hourly revenue as flat rounded columns against a dashed target line.
+// 3D bar chart: hourly revenue as extruded columns against a dashed target line.
 class RevenueChart : public QWidget
 {
     Q_OBJECT
