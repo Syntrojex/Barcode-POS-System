@@ -1,6 +1,6 @@
-#include "product/ProductValidator.h"
-#include "product/Ean8.h"
+#include "ProductValidation.h"
 
+// ======================= Product rules =======================
 void ProductIdRule::check(const Product &p, ValidationReport &r) const
 {
     if (p.getProductID() <= 0)
@@ -63,6 +63,7 @@ void BarcodePathRule::check(const Product &p, ValidationReport &r) const
         r.errors.push_back("barcode file path is empty");
 }
 
+// ======================= ProductValidator =======================
 ProductValidator ProductValidator::standard()
 {
     ProductValidator v;
@@ -88,4 +89,36 @@ ValidationReport ProductValidator::validate(const Product &product) const
     for (const auto &rule : rules_)
         rule->check(product, report);
     return report;
+}
+
+// ======================= StockValidator =======================
+StockCheck StockValidator::check(const Product &p, int requested) const
+{
+    StockCheck c;
+    c.requested = requested;
+    c.available = p.getAvailableQuantity();
+    if (requested <= 0)
+    {
+        c.status = StockStatus::InvalidQuantity;
+        c.message = "quantity must be at least 1";
+    }
+    else if (c.available <= 0)
+    {
+        c.status = StockStatus::OutOfStock;
+        c.message = p.getProductName() + " is out of stock";
+    }
+    else if (!policy_->allows(requested, c.available))
+    {
+        c.status = StockStatus::InsufficientStock;
+        c.message = "only " + std::to_string(c.available) + " of " + p.getProductName() + " available (" +
+                    policy_->describe() + ")";
+    }
+    return c;
+}
+
+StockCheck StockValidator::checkAdd(const Product &p, int alreadyInOrder, int toAdd) const
+{
+    if (toAdd <= 0)
+        return check(p, toAdd);
+    return check(p, alreadyInOrder + toAdd);
 }
