@@ -31,15 +31,15 @@ signals:
 private:
     struct CartLine
     {
-        Product p;
+        ProductInfo p;
         int qty = 1;
     };
 
     QWidget *buildCustomerStrip();
     QWidget *buildLeft();
     QWidget *buildRight();
-    void setPreview(const std::optional<Product> &p);
-    void addToCart(const Product &p, int qty = 1);
+    void setPreview(const std::optional<ProductInfo> &p);
+    void addToCart(const ProductInfo &p, int qty = 1);
     void changeQty(int row, int delta);
     void removeRow(int row);
     void rebuildTable();
@@ -47,7 +47,7 @@ private:
     void loadDemoDraft();
 
     QVector<CartLine> m_cart;
-    std::optional<Product> m_preview;
+    std::optional<ProductInfo> m_preview;
     int m_scanIndex = 0;
     bool m_vip = true;
 
@@ -56,7 +56,7 @@ private:
     QPushButton *m_vipBtn;
 
     CameraFeedWidget *m_feed;
-    QPushButton *m_camToggle, *m_addBtn;
+    QPushButton *m_camToggle, *m_addBtn, *m_descBtn;
     QLabel *m_pName, *m_pPrice, *m_pMeta, *m_pStock, *m_pThumb, *m_pBadge;
 
     QTableWidget *m_table;

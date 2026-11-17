@@ -102,9 +102,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto *k = new QShortcut(QKeySequence("Ctrl+K"), this);
     connect(k, &QShortcut::activated, this, [this]
             { goTo(Dashboard); m_dashboard->focusLookup(); });
-    auto *dm = new QShortcut(QKeySequence("Ctrl+D"), this);
-    dm->setContext(Qt::ApplicationShortcut);
-    connect(dm, &QShortcut::activated, this, [] { Theme::setDark(!Theme::isDark()); });
     auto *nd = new QShortcut(QKeySequence("Ctrl+N"), this);
     connect(nd, &QShortcut::activated, this, [this]
             { goTo(RecordOrder); m_record->newDraft(); });
@@ -115,7 +112,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 QWidget *MainWindow::buildSidebar()
 {
     auto *sb = new QFrame;
-    m_sidebar = sb;
     sb->setObjectName("sidebar");
     sb->setFixedWidth(232);
     auto *v = new QVBoxLayout(sb);
@@ -191,7 +187,6 @@ QWidget *MainWindow::buildSidebar()
     exitB->setCursor(Qt::PointingHandCursor);
     v->addWidget(exitB);
     connect(exitB, &QPushButton::clicked, this, &QWidget::close);
-    m_exit = exitB;
     return sb;
 }
 
@@ -213,21 +208,6 @@ QWidget *MainWindow::buildTopBar()
     t->addStretch();
     h->addLayout(t);
     h->addStretch();
-
-    // light / dark switch (also Ctrl+D)
-    auto *themeBtn = W::button("", "");
-    themeBtn->setObjectName("themeToggle");
-    auto syncThemeBtn = [themeBtn]
-    {
-        const bool dark = Theme::isDark();
-        themeBtn->setIcon(Theme::icon(dark ? "sun" : "moon", dark ? Theme::palette().warnText : Theme::onSurfaceVariant, 18));
-        themeBtn->setIconSize({18, 18});
-        themeBtn->setToolTip(dark ? "Switch to light mode  (Ctrl+D)" : "Switch to dark mode  (Ctrl+D)");
-    };
-    syncThemeBtn();
-    connect(themeBtn, &QPushButton::clicked, this, [] { Theme::setDark(!Theme::isDark()); });
-    connect(&Theme::notifier(), &ThemeNotifier::changed, themeBtn, syncThemeBtn);
-    h->addWidget(themeBtn, 0, Qt::AlignVCenter);
 
     auto *chip = new QFrame;
     chip->setObjectName("chip");
@@ -323,39 +303,13 @@ void MainWindow::positionToast()
     if (!m_toast)
         return;
     const QWidget *root = centralWidget();
-    const int sbw = m_sidebar ? m_sidebar->width() : 232;
-    m_toast->move((root->width() - m_toast->width()) / 2 + sbw / 2, root->height() - m_toast->height() - 36);
+    m_toast->move((root->width() - m_toast->width()) / 2 + 116, root->height() - m_toast->height() - 36);
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)
 {
     QMainWindow::resizeEvent(e);
-    setSidebarCollapsed(width() < 1240);
     positionToast();
-}
-
-// Narrow windows get an icon-only sidebar so the page content keeps its room (tooltips still name each page).
-void MainWindow::setSidebarCollapsed(bool on)
-{
-    if (!m_sidebar || on == m_collapsed)
-        return;
-    m_collapsed = on;
-    m_sidebar->setFixedWidth(on ? 72 : 232);
-    m_sidebar->layout()->setContentsMargins(on ? 14 : 14, 18, 14, 16);
-    for (const char *name : {"brand", "brandSub", "userName", "userRole"})
-        if (auto *l = m_sidebar->findChild<QLabel *>(name))
-            l->setVisible(!on);
-    for (auto *b : m_nav)
-    {
-        b->layout()->setContentsMargins(on ? 12 : 14, 0, on ? 12 : 14, 0);
-        for (auto *l : b->findChildren<QLabel *>())
-            if (l->objectName() != "navIcon")
-                l->setVisible(!on);
-    }
-    if (auto *card = m_sidebar->findChild<QFrame *>("userCard"))
-        card->layout()->setContentsMargins(on ? 5 : 10, 9, on ? 5 : 10, 9);
-    m_exit->setText(on ? "" : "  Exit");
-    m_exit->setToolTip(on ? "Exit" : "");
 }
 
 void MainWindow::closeEvent(QCloseEvent *e)

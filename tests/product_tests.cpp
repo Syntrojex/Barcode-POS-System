@@ -1,203 +1,112 @@
-// Dependency-free unit tests for the Product module (no Qt, no OpenCV, no test framework).
-#include "Product.h"
-#include "ProductDescriber.h"
-#include "ProductManager.h"
-#include "ProductRecordCodec.h"
-#include "ProductValidator.h"
-#include "StockValidator.h"
-
+// Unit tests for the product module. Plain C++17, no framework: run `product_tests` or `ctest`.
+#include "product/Money.h"
+#include "product/ProductDescriber.h"
+#include "product/ProductFileLoader.h"
+#include "product/ProductFileWriter.h"
+#include "product/ProductManager.h"
+#include "product/StockValidator.h"
 #include <cstdio>
-#include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 
-static int failures = 0, total = 0;
-#define CHECK(cond)                                                                   \
-    do                                                                                \
-    {                                                                                 \
-        ++total;                                                                      \
-        if (!(cond))                                                                  \
-        {                                                                             \
-            ++failures;                                                               \
-            std::cout << "FAIL " << __FILE__ << ":" << __LINE__ << "  " #cond "\n";   \
-        }                                                                             \
+static int failures = 0;
+#define CHECK(cond)                                                                  \
+    do                                                                               \
+    {                                                                                \
+        if (cond) std::cout << "PASS " << #cond << "\n";                             \
+        else { std::cout << "FAIL " << #cond << "  (line " << __LINE__ << ")\n"; ++failures; } \
     } while (0)
 
-static const char *kGood = "1 40000019 MILK Whole_Milk_1L count 280.00 14.00 10.00 40 img/milk.png#";
+static const char *kGood = "1 40001029 OLPMILK Olpers Full Cream Milk 1L count 340.00 0.00 10.00 42 data/barcodes/40001029.png#";
 
-static Product sample(int id = 1, const std::string &bc = "40000019")
+static ProductLoadResult loadText(const std::string &text)
 {
-    return Product(id, bc, "MILK", "Whole_Milk", "count", 280, 14, 10, 40, "img/milk.png");
+    std::istringstream in(text);
+    return ProductFileLoader().loadFrom(in);
 }
 
-static void codecTests()
+int main()
 {
-    auto r = ProductRecordCodec::parse(kGood);
-    CHECK(r.ok);
-    CHECK(r.product.getProductID() == 1);
-    CHECK(r.product.getBarcode() == "40000019");
-    CHECK(r.product.getUnitPrice() == 280.0);
-    CHECK(r.product.getAvailableQuantity() == 40);
-    CHECK(r.product.getBarcodeFilePath() == "img/milk.png");
+    // ---- parser
+    ProductParser parser;
+    auto p = parser.parseLine(kGood);
+    CHECK(p.ok());
+    CHECK(p.product->getProductName() == "Olpers Full Cream Milk 1L");   // multi-word name
+    CHECK(p.product->getAvailableQuantity() == 42 && p.product->getMeasurementUnit() == MeasurementUnit::Count);
+    CHECK(!parser.parseLine("1 40001029 OLP Milk count 340 0 10 42 a.png").ok());          // no '#'
+    CHECK(!parser.parseLine("1 40001029 OLP Milk each 340 0 10 42 a.png#").ok());          // bad unit
+    CHECK(!parser.parseLine("1 40001029 OLP Milk count abc 0 10 42 a.png#").ok());         // bad number
+    CHECK(!parser.parseLine("1 40001029 OLP count 340 0 10 42 a.png#").ok());              // too few fields
 
-    CHECK(ProductRecordCodec::parse(std::string(kGood) + "\r").ok);               // CRLF file
-    CHECK(ProductRecordCodec::parse(std::string("  ") + kGood + "  ").ok);        // stray spaces
-    CHECK(!ProductRecordCodec::parse("1 40000019 MILK Milk count 1 1 1 4 p.png").ok); // no '#'
-    CHECK(!ProductRecordCodec::parse("1 40000019 MILK Milk count 1 1 1 4#").ok);      // 9 fields
-    CHECK(!ProductRecordCodec::parse("1 4 M N count 1 1 1 4 p.png extra#").ok);       // 11 fields
-    CHECK(!ProductRecordCodec::parse("x 4 M N count 1 1 1 4 p.png#").ok);             // bad id
-    CHECK(!ProductRecordCodec::parse("1 4 M N count 12abc 1 1 4 p.png#").ok);         // bad price
-    CHECK(!ProductRecordCodec::parse("1 4 M N count 1,5 1 1 4 p.png#").ok);           // comma decimal
-    CHECK(!ProductRecordCodec::parse("1 4 M N count 1 1 1 4.5 p.png#").ok);           // fractional qty
-    CHECK(!ProductRecordCodec::parse("").ok);
+    // ---- validation + loader
+    CHECK(loadText(std::string(kGood) + "\n").products.size() == 1);
+    CHECK(loadText("1 40001029 TOOLONGACRO Milk count 340 0 10 42 a.png#\n").products.empty());   // acronym > 8
+    CHECK(loadText("1 4000 OLP Milk count 340 0 10 42 a.png#\n").products.empty());              // barcode not 8 digits
+    CHECK(loadText("1 40001029 OLP Milk count -5 0 0 42 a.png#\n").products.empty());            // negative price
+    CHECK(loadText("1 40001029 OLP Milk count 100 0 150 42 a.png#\n").products.empty());         // discount > price
+    CHECK(loadText("0 40001029 OLP Milk count 100 0 0 42 a.png#\n").products.empty());           // id 0
+    auto dup = loadText(std::string(kGood) + "\n2 40001029 OTHER Other count 10 0 0 1 b.png#\n");
+    CHECK(dup.products.size() == 1 && dup.errorCount() == 1);                                   // duplicate barcode
+    auto mixed = loadText(std::string(kGood) + "\ngarbage line\n\n3 40002149 BRD Bread count 260 18 0 5 b.png#\n");
+    CHECK(mixed.products.size() == 2 && mixed.rejectedLines == 1);                              // good lines survive
+    CHECK(loadText("1 40001020 OLP Milk count 100 0 0 5 a.png#\n").warningCount() == 1);       // bad check digit = warning only
+    CHECK(!ProductFileLoader().load("no/such/file.txt").fileOpened);
 
-    // format() is the inverse of parse()
-    auto again = ProductRecordCodec::parse(ProductRecordCodec::format(r.product));
-    CHECK(again.ok);
-    CHECK(ProductRecordCodec::format(again.product) == ProductRecordCodec::format(r.product));
-}
+    // ---- open/closed: a new rule is added without editing the validator
+    struct NoMilkRule : IProductRule
+    {
+        void check(const Product &pr, ValidationReport &r) const override
+        {
+            if (pr.getProductName().find("Milk") != std::string::npos) r.errors.push_back("milk not allowed");
+        }
+    };
+    auto v = ProductValidator::standard();
+    v.addRule(std::make_unique<NoMilkRule>());
+    CHECK(!v.validate(*p.product).ok());
 
-static void validatorTests()
-{
-    auto v = ProductValidator::withDefaultRules();
-    CHECK(v.isValid(sample()));
+    // ---- manager: search + stock
+    ProductManager pm;
+    CHECK(pm.loadProducts("data/Product.txt"));
+    CHECK(pm.getProductCount() == 14);
+    CHECK(pm.searchByBarcode("40001029") && pm.searchByBarcode("40001029")->getProductID() == 1);
+    CHECK(pm.searchByBarcode("12345678") == nullptr);
+    CHECK(pm.searchByID(5) && pm.searchByID(5)->getAcronym() == "BASMATI");
+    CHECK(pm.searchByID(99) == nullptr);
+    CHECK(pm.searchByCode("olpmilk") && pm.searchByCode("7") && pm.searchByCode("40001029"));
+    CHECK(pm.searchByText("tea").size() == 1);
+    CHECK(pm.deductStock(1, 2) && pm.searchByID(1)->getAvailableQuantity() == 40);
+    CHECK(!pm.deductStock(1, 9999) && pm.searchByID(1)->getAvailableQuantity() == 40);
 
-    auto bad = [&](auto mutate)
-    { Product p = sample(); mutate(p); return !v.isValid(p); };
-    CHECK(bad([](Product &p) { p.setProductID(0); }));
-    CHECK(bad([](Product &p) { p.setBarcode(""); }));
-    CHECK(bad([](Product &p) { p.setAcronym(""); }));
-    CHECK(bad([](Product &p) { p.setAcronym("TOOLONGAC"); })); // 9 chars
-    CHECK(!bad([](Product &p) { p.setAcronym("EIGHTCHR"); })); // exactly 8 is allowed
-    CHECK(bad([](Product &p) { p.setProductName(""); }));
-    CHECK(bad([](Product &p) { p.setMeasurementUnit("litre"); }));
-    CHECK(bad([](Product &p) { p.setUnitPrice(-1); }));
-    CHECK(bad([](Product &p) { p.setTax(-1); }));
-    CHECK(bad([](Product &p) { p.setDiscount(-1); }));
-    CHECK(bad([](Product &p) { p.setDiscount(500); })); // discount > price
-    CHECK(bad([](Product &p) { p.setAvailableQuantity(-1); }));
-    CHECK(bad([](Product &p) { p.setBarcodeFilePath(""); }));
-    CHECK(!bad([](Product &p) { p.setAvailableQuantity(0); })); // zero stock is valid data
+    // ---- stock validator + swappable policy
+    const Product eggs = *pm.searchByID(7); // 4 in stock
+    StockValidator sv;
+    CHECK(sv.check(eggs, 4).ok());
+    CHECK(sv.check(eggs, 5).status == StockStatus::InsufficientStock);
+    CHECK(sv.checkAdd(eggs, 3, 1).ok() && !sv.checkAdd(eggs, 4, 1).ok());
+    CHECK(sv.check(eggs, 0).status == StockStatus::InvalidQuantity);
+    CHECK(sv.check(*pm.searchByID(11), 1).status == StockStatus::OutOfStock);
+    StockValidator strict(std::make_shared<StrictlyBelowAvailablePolicy>());
+    CHECK(!strict.check(eggs, 4).ok() && strict.check(eggs, 3).ok());
 
-    // every violation is reported, not just the first
-    Product worst(0, "", "", "", "x", -1, -1, -1, -1, "");
-    CHECK(v.validate(worst).size() >= 7);
+    // ---- description (what) + formatter (how)
+    ProductDescriber d(10);
+    CHECK(d.describe(eggs).stockLevel == "low" && d.describe(*pm.searchByID(11)).stockLevel == "out");
+    const std::string text = TextProductFormatter().format(d.describe(eggs));
+    CHECK(text.find("Farm Fresh Eggs Dozen") != std::string::npos && text.find("PKR 390.00") != std::string::npos);
+    CHECK(formatPKR(1234567.5) == "PKR 1,234,567.50" && formatPKR(0) == "PKR 0.00");
 
-    // open/closed: a new rule plugs in without touching ProductValidator
-    CHECK(v.isValid(sample()));
-    v.addRule(std::make_unique<BarcodeDigitsRule>(8));
-    CHECK(v.isValid(sample()));
-    CHECK(!v.isValid(sample(1, "1234")));
-    CHECK(!v.isValid(sample(1, "4000001x")));
-}
+    // ---- writer round trip
+    const std::string tmp = "product_roundtrip.txt";
+    ProductManager a, b;
+    a.loadProducts("data/Product.txt");
+    a.deductStock(1, 2);
+    ProductFileWriter w;
+    CHECK(w.save(tmp, a.getAllProducts()));
+    CHECK(b.loadProducts(tmp) && b.getProductCount() == a.getProductCount() &&
+          b.searchByID(1)->getAvailableQuantity() == 40);
+    std::remove(tmp.c_str());
 
-static void stockTests()
-{
-    Product p = sample(); // 40 available
-    CHECK(StockValidator::check(p, 1) == StockStatus::Ok);
-    CHECK(StockValidator::check(p, 40) == StockStatus::Ok);
-    CHECK(StockValidator::check(p, 41) == StockStatus::Insufficient);
-    CHECK(StockValidator::check(p, 0) == StockStatus::InvalidQuantity);
-    CHECK(StockValidator::check(p, -3) == StockStatus::InvalidQuantity);
-    p.setAvailableQuantity(0);
-    CHECK(StockValidator::check(p, 1) == StockStatus::OutOfStock);
-    CHECK(!StockValidator::canFulfil(p, 1));
-    p.setAvailableQuantity(3);
-    CHECK(StockValidator::message(p, 5) == "Only 3 available (requested 5)");
-}
-
-static void describerTests()
-{
-    const auto f = ProductDescriber::fields(sample());
-    CHECK(f.size() == 11);
-    CHECK(ProductDescriber::displayName(sample()) == "Whole Milk");
-    const std::string t = ProductDescriber::text(sample());
-    CHECK(t.find("Unit price: PKR 280.00") != std::string::npos);
-    CHECK(t.find("Stock status: In stock") != std::string::npos);
-    Product empty = sample();
-    empty.setAvailableQuantity(0);
-    CHECK(ProductDescriber::text(empty).find("Out of stock") != std::string::npos);
-}
-
-static void managerTests(const std::string &sampleFile)
-{
-    ProductManager m;
-    CHECK(m.loadProducts(sampleFile));
-    CHECK(m.getProductCount() == 4);
-    CHECK(m.lastErrors().empty());
-
-    const Product *byBc = m.searchByBarcode("40000026");
-    CHECK(byBc && byBc->getAcronym() == "BREAD");
-    const Product *byId = m.searchByID(3);
-    CHECK(byId && byId->getMeasurementUnit() == "weight");
-    CHECK(m.searchByBarcode("99999999") == nullptr);
-    CHECK(m.searchByID(99) == nullptr);
-
-    // stock
-    CHECK(m.deductStock(1, 5) == StockStatus::Ok);
-    CHECK(m.searchByID(1)->getAvailableQuantity() == 35);
-    CHECK(m.deductStock(1, 36) == StockStatus::Insufficient);
-    CHECK(m.searchByID(1)->getAvailableQuantity() == 35); // unchanged on refusal
-    CHECK(m.deductStock(4, 1) == StockStatus::OutOfStock);
-    CHECK(m.deductStock(77, 1) == StockStatus::UnknownProduct);
-
-    // save -> load round trip keeps the updated stock
-    const std::string out = "product_roundtrip.tmp.txt";
-    CHECK(m.saveProducts(out));
-    ProductManager m2;
-    CHECK(m2.loadProducts(out));
-    CHECK(m2.getProductCount() == 4);
-    CHECK(m2.searchByID(1)->getAvailableQuantity() == 35);
-    std::remove(out.c_str());
-
-    // duplicate id / barcode and invalid data are refused, and ALL problems are reported
-    std::istringstream badFile(
-        "1 40000019 MILK Milk count 10 1 0 5 a.png#\n"
-        "1 40000026 BREAD Bread count 10 1 0 5 b.png#\n"   // duplicate id
-        "2 40000019 EGGS Eggs count 10 1 0 5 c.png#\n"     // duplicate barcode
-        "3 40000040 TOOLONGAC Rice weight 10 1 0 5 d.png#\n" // acronym too long
-        "4 40000057 OIL Oil count 10 1 0 5 e.png\n");      // missing '#'
-    ProductManager m3;
-    CHECK(!m3.loadProducts(badFile));
-    CHECK(m3.lastErrors().size() == 4);
-    CHECK(m3.getProductCount() == 0);
-
-    // a failed reload leaves the previous catalogue intact
-    std::istringstream bad2("garbage#\n");
-    CHECK(!m.loadProducts(bad2));
-    CHECK(m.getProductCount() == 4);
-    CHECK(m.searchByBarcode("40000019") != nullptr);
-
-    // missing file
-    CHECK(!m.loadProducts("does/not/exist.txt"));
-    CHECK(!m.lastErrors().empty());
-
-    // blank lines and CRLF are tolerated; empty file is a valid empty catalogue
-    std::istringstream crlf(std::string(kGood) + "\r\n\r\n");
-    ProductManager m4;
-    CHECK(m4.loadProducts(crlf));
-    CHECK(m4.getProductCount() == 1);
-    std::istringstream empty("");
-    CHECK(m4.loadProducts(empty));
-    CHECK(m4.getProductCount() == 0);
-
-    // addProduct + clear
-    ProductManager m5;
-    CHECK(m5.addProduct(sample(1, "111")));
-    CHECK(!m5.addProduct(sample(1, "222")));
-    CHECK(!m5.addProduct(sample(2, "111")));
-    m5.clearProducts();
-    CHECK(m5.searchByID(1) == nullptr && m5.getProductCount() == 0);
-}
-
-int main(int argc, char **argv)
-{
-    const std::string sampleFile = argc > 1 ? argv[1] : "tests/data/Product.sample.txt";
-    codecTests();
-    validatorTests();
-    stockTests();
-    describerTests();
-    managerTests(sampleFile);
-    std::cout << (total - failures) << "/" << total << " checks passed\n";
-    return failures == 0 ? 0 : 1;
+    std::cout << (failures ? "FAILED" : "ALL OK") << " (" << failures << " failures)\n";
+    return failures ? 1 : 0;
 }

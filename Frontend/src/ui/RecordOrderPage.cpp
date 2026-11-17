@@ -22,11 +22,10 @@ namespace
         v->setContentsMargins(4, 4, 4, 4);
         v->setSpacing(1);
         auto *t = W::label(top);
-        t->setStyleSheet("font-weight:600; font-size:13.5px;");
+        t->setStyleSheet("font-weight:700; font-size:13.5px;");
         t->setWordWrap(true);
         auto *b = W::label(bottom);
-        b->setObjectName("subtle");
-        b->setStyleSheet("font-size:11.5px;");
+        b->setStyleSheet("color:#8a94ab; font-size:11.5px;");
         v->addWidget(t);
         v->addWidget(b);
         return w;
@@ -60,9 +59,6 @@ RecordOrderPage::RecordOrderPage(QWidget *parent) : QWidget(parent)
     connect(&AppState::instance(), &AppState::scanned, this, [this](const QString &ean)
             { showCode(ean, true); });
     loadDemoDraft();
-    // cell colours and the thumbnail are painted in code, so redraw them when the mode flips
-    connect(&Theme::notifier(), &ThemeNotifier::changed, this, [this]
-            { rebuildTable(); setPreview(m_preview); });
 }
 
 QWidget *RecordOrderPage::buildCustomerStrip()
@@ -71,7 +67,7 @@ QWidget *RecordOrderPage::buildCustomerStrip()
     auto *h = new QHBoxLayout(strip);
     h->setContentsMargins(14, 8, 14, 8);
     h->setSpacing(12);
-    h->addWidget(W::iconTile("user", Theme::primary, 40));
+    h->addWidget(W::iconTile("user", Qt::white, "#7fb0ff", "#2b5fe8", 40));
 
     auto field = [&](const QString &cap, QWidget *content, int stretch)
     {
@@ -93,10 +89,10 @@ QWidget *RecordOrderPage::buildCustomerStrip()
     m_contact->setPlaceholderText("Phone (optional)");
     field("PHONE", m_contact, 3);
 
-    m_vipBtn = W::button("VIP 5% off", "tab", "tag");
+    m_vipBtn = W::button("VIP customer", "tab", "tag");
     m_vipBtn->setCheckable(true);
     m_vipBtn->setChecked(true);
-    m_vipBtn->setToolTip("Toggle the loyalty discount");
+    m_vipBtn->setToolTip("Mark the customer as VIP (label only; discounts come from Product.txt)");
     h->addWidget(m_vipBtn);
     connect(m_vipBtn, &QPushButton::toggled, this, [this](bool on)
             {
@@ -110,7 +106,7 @@ QWidget *RecordOrderPage::buildCustomerStrip()
     sv->setSpacing(0);
     sv->addWidget(W::label("ORDER", "caption"));
     m_sessionId = W::label("#" + AppState::instance().nextOrderId(), "mono");
-    m_sessionId->setStyleSheet("font-weight:700; font-size:14px;");
+    m_sessionId->setStyleSheet("font-weight:800; font-size:14px;");
     sv->addWidget(m_sessionId);
     h->addLayout(sv);
     return strip;
@@ -181,11 +177,11 @@ QWidget *RecordOrderPage::buildLeft()
     ih->addWidget(m_pThumb);
     auto *iv = new QVBoxLayout;
     iv->setSpacing(2);
-    iv->addStretch(1);
     auto *nr = new QHBoxLayout;
     m_pName = W::label("Nothing scanned yet", "h1");
     m_pName->setWordWrap(true);
-    m_pPrice = W::label("", "price");
+    m_pPrice = W::label("");
+    m_pPrice->setStyleSheet("color:#2554d8; font-size:17px; font-weight:800;");
     nr->addWidget(m_pName, 1);
     nr->addWidget(m_pPrice);
     iv->addLayout(nr);
@@ -195,14 +191,18 @@ QWidget *RecordOrderPage::buildLeft()
     m_pStock = W::label("");
     m_pStock->setStyleSheet("font-weight:700;");
     iv->addWidget(m_pStock);
-    iv->addStretch(1);
     ih->addLayout(iv, 1);
-    pv->addWidget(info, 1);
+    pv->addWidget(info);
 
     m_addBtn = W::button("Add to order", "primary", "cart");
     m_addBtn->setMinimumHeight(42);
     m_addBtn->setEnabled(false);
+    m_descBtn = W::button("Description", "soft", "search");
+    m_descBtn->setEnabled(false);
+    pv->addWidget(m_descBtn);
     pv->addWidget(m_addBtn);
+    connect(m_descBtn, &QPushButton::clicked, this, [this]
+            { if (m_preview && m_preview->id > 0) Dialogs::productDescription(this, m_preview->id); });
     connect(m_addBtn, &QPushButton::clicked, this, [this]
             { if (m_preview) addToCart(*m_preview); });
     v->addWidget(pc, 3);
@@ -240,14 +240,14 @@ QWidget *RecordOrderPage::buildRight()
         bool ok = false;
         const QString name = QInputDialog::getText(this, "Custom item", "Description:", QLineEdit::Normal, "", &ok);
         if (!ok || name.trimmed().isEmpty()) return;
-        const double price = QInputDialog::getDouble(this, "Custom item", "Unit price ($):", 1.0, 0.01, 100000, 2, &ok);
+        const double price = QInputDialog::getDouble(this, "Custom item", "Unit price (PKR):", 1.0, 0.01, 100000, 2, &ok);
         if (!ok) return;
-        Product p;
+        ProductInfo p;
         p.sku = QString("CUSTOM-%1").arg(m_cart.size() + 1, 2, 10, QChar('0'));
         p.name = name.trimmed();
-        p.category = "Custom";
         p.price = price;
-        p.stock = 999;
+        p.unit = "count";
+        p.stock = 999999;
         m_cart.push_back({p, 1});
         rebuildTable(); });
 
@@ -264,13 +264,11 @@ QWidget *RecordOrderPage::buildRight()
     hh->setSectionResizeMode(0, QHeaderView::Stretch);
     hh->setHighlightSections(false);
     hh->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_table->setColumnWidth(1, 72);
-    m_table->setColumnWidth(2, 104);
+    m_table->setColumnWidth(1, 78);
+    m_table->setColumnWidth(2, 112);
     m_table->setColumnWidth(3, 92);
-    m_table->setColumnWidth(4, 84);
-    m_table->setColumnWidth(5, 46);
-    W::alignHeaders(m_table, {1, 3, 4}, Qt::AlignRight);
-    W::alignHeaders(m_table, {2}, Qt::AlignHCenter);
+    m_table->setColumnWidth(4, 96);
+    m_table->setColumnWidth(5, 52);
     m_table->setWordWrap(false);
     ov->addWidget(m_table, 1);
     v->addWidget(oc, 1);
@@ -286,14 +284,14 @@ QWidget *RecordOrderPage::buildRight()
         auto *r = new QHBoxLayout;
         r->addWidget(W::label(k, "muted"));
         r->addStretch();
-        val = W::label("$0.00");
-        val->setStyleSheet("font-weight:700; font-size:14px;");
+        val = W::label("PKR 0.00");
+        val->setStyleSheet("font-weight:800; font-size:14px;");
         r->addWidget(val);
         grid->addLayout(r);
     };
     row("Subtotal", m_gross);
-    row("VIP discount", m_disc);
-    row("GST included", m_tax);
+    row("Discount", m_disc);
+    row("Tax", m_tax);
     grid->addStretch();
     th->addLayout(grid, 1);
 
@@ -303,8 +301,8 @@ QWidget *RecordOrderPage::buildRight()
     tv->setSpacing(2);
     auto *cap = W::label("TOTAL", "caption");
     tv->addWidget(cap);
-    m_total = W::label("$0.00");
-    m_total->setStyleSheet("font-size:32px; font-weight:700; color:white;");
+    m_total = W::label("PKR 0.00");
+    m_total->setStyleSheet("font-size:34px; font-weight:800; color:white;");
     tv->addWidget(m_total);
     m_checkout = W::button("Checkout  [F10]", "primary", "check");
     m_checkout->setMinimumHeight(44);
@@ -368,10 +366,11 @@ void RecordOrderPage::showCode(const QString &codeIn, bool fromScanner)
         addToCart(*p);
 }
 
-void RecordOrderPage::setPreview(const std::optional<Product> &p)
+void RecordOrderPage::setPreview(const std::optional<ProductInfo> &p)
 {
     m_preview = p;
-    m_addBtn->setEnabled(p.has_value());
+    m_addBtn->setEnabled(p.has_value() && p->stock > 0);
+    m_descBtn->setEnabled(p.has_value() && p->id > 0);
     if (!p)
     {
         m_pName->setText("Nothing scanned yet");
@@ -384,46 +383,53 @@ void RecordOrderPage::setPreview(const std::optional<Product> &p)
     }
     m_pName->setText(p->name);
     m_pPrice->setText(W::money(p->price));
-    m_pMeta->setText(QString("%1  •  %2  •  %3").arg(p->ean, p->category, p->sku));
-    const bool low = p->stock < p->reorderLimit;
+    m_pMeta->setText(QString("%1  •  %2  •  tax %3  •  disc %4").arg(p->ean, p->unit, W::money(p->tax), W::money(p->discount)));
+    const bool low = p->stock <= AppState::instance().settings().lowStockThreshold;
     m_pStock->setText(QString("%1 in stock").arg(p->stock));
-    m_pStock->setStyleSheet(QString("font-weight:700; color:%1;")
-                                .arg((low ? Theme::dangerText() : Theme::successText()).name()));
+    m_pStock->setStyleSheet(QString("font-weight:700; color:%1;").arg(low ? "#b3261e" : "#0b7a36"));
     W::setBadge(m_pBadge, p->stock == 0 ? "Out of stock" : low ? "Low stock" : "In stock",
                 p->stock == 0 ? "red" : low ? "amber" : "green");
 
-    // flat product tile: tinted rounded square with the product's initials
+    // little 3D "box" thumbnail
     QPixmap pm(120, 144);
     pm.setDevicePixelRatio(2);
     pm.fill(Qt::transparent);
     QPainter pa(&pm);
     pa.setRenderHint(QPainter::Antialiasing);
     pa.setPen(Qt::NoPen);
-    pa.setBrush(Theme::palette().thumbBg);
-    pa.drawRoundedRect(QRectF(2, 6, 56, 56), 12, 12);
-    pa.setPen(Theme::accentText());
+    pa.setBrush(QColor(20, 40, 110, 40));
+    pa.drawEllipse(QRectF(6, 60, 46, 8));
+    QLinearGradient fg(10, 8, 10, 62);
+    fg.setColorAt(0, QColor("#7fb0ff"));
+    fg.setColorAt(1, QColor("#2b5fe8"));
+    pa.setBrush(fg);
+    pa.drawRoundedRect(QRectF(8, 14, 34, 46), 4, 4);
+    pa.setBrush(QColor("#1a3fae"));
+    pa.drawPolygon(QPolygonF({{42, 14}, {50, 8}, {50, 54}, {42, 60}}));
+    pa.setBrush(QColor("#a9ccff"));
+    pa.drawPolygon(QPolygonF({{8, 14}, {16, 8}, {50, 8}, {42, 14}}));
+    pa.setBrush(QColor(255, 255, 255, 230));
+    pa.drawRoundedRect(QRectF(13, 26, 24, 22), 3, 3);
+    pa.setPen(QColor("#1a3fae"));
     QFont f = pa.font();
-    f.setPixelSize(19);
+    f.setPixelSize(8);
     f.setBold(true);
     pa.setFont(f);
-    QString initials;
-    for (const QString &w : p->name.split(' ', Qt::SkipEmptyParts))
-        if (initials.size() < 2 && w[0].isLetter())
-            initials += w[0].toUpper();
-    pa.drawText(QRectF(2, 6, 56, 56), Qt::AlignCenter, initials);
+    pa.drawText(QRectF(13, 26, 24, 22), Qt::AlignCenter, p->name.section(' ', 0, 0).left(5).toUpper());
     pa.end();
     m_pThumb->setPixmap(pm);
 }
 
-void RecordOrderPage::addToCart(const Product &p, int qty)
+void RecordOrderPage::addToCart(const ProductInfo &p, int qty)
 {
     int have = 0;
     for (const auto &l : m_cart)
         if (l.p.sku == p.sku)
             have = l.qty;
-    if (have + qty > p.stock)
+    const QString problem = AppState::instance().stockProblem(p.id, have, qty);
+    if (!problem.isEmpty())
     {
-        emit toast(QString("Only %1 in stock for %2").arg(p.stock).arg(p.name));
+        emit toast(problem);
         return;
     }
     bool found = false;
@@ -450,9 +456,10 @@ void RecordOrderPage::changeQty(int row, int delta)
         removeRow(row);
         return;
     }
-    if (nq > l.p.stock)
+    const QString problem = AppState::instance().stockProblem(l.p.id, l.qty, delta);
+    if (delta > 0 && !problem.isEmpty())
     {
-        emit toast(QString("Only %1 in stock for %2").arg(l.p.stock).arg(l.p.name));
+        emit toast(problem);
         return;
     }
     l.qty = nq;
@@ -469,17 +476,16 @@ void RecordOrderPage::removeRow(int row)
 
 void RecordOrderPage::rebuildTable()
 {
-    const auto &st = AppState::instance().settings();
-    const double vipPct = m_vip ? st.vipDiscountPercent : 0;
     m_table->setRowCount(0);
     m_table->setRowCount(m_cart.size());
     for (int r = 0; r < m_cart.size(); ++r)
     {
         const auto &l = m_cart[r];
         const double gross = l.p.price * l.qty;
-        const double disc = gross * vipPct / 100.0;
+        const double disc = l.p.discount * l.qty;
+        const double tax = l.p.tax * l.qty;
         m_table->setRowHeight(r, 62);
-        m_table->setCellWidget(r, 0, twoLine(l.p.name, l.p.sku + "  •  " + l.p.category));
+        m_table->setCellWidget(r, 0, twoLine(l.p.name, l.p.sku + "  •  " + l.p.unit));
         m_table->setItem(r, 1, cell(W::money(l.p.price), "", true));
         auto *stp = new QtyStepper(l.qty);
         m_table->setCellWidget(r, 2, stp);
@@ -487,8 +493,8 @@ void RecordOrderPage::rebuildTable()
                 { changeQty(r, -1); });
         connect(stp, &QtyStepper::plus, this, [this, r]
                 { changeQty(r, +1); });
-        m_table->setItem(r, 3, cell(disc > 0 ? W::money(-disc) : "—", (disc > 0 ? Theme::successText() : Theme::subtleText()).name()));
-        m_table->setItem(r, 4, cell(W::money(gross - disc), Theme::accentText().name(), true));
+        m_table->setItem(r, 3, cell(disc > 0 ? W::money(-disc) : "—", disc > 0 ? "#0b7a36" : "#8a94ab"));
+        m_table->setItem(r, 4, cell(W::money(gross - disc + tax), "#2554d8", true));
         auto *del = new QPushButton;
         del->setProperty("kind", "flat");
         del->setIcon(Theme::icon("trash", Theme::error, 18));
@@ -508,32 +514,29 @@ void RecordOrderPage::rebuildTable()
 
 void RecordOrderPage::updateTotals()
 {
-    const auto &st = AppState::instance().settings();
-    double gross = 0;
+    double gross = 0, disc = 0, tax = 0;
     int items = 0;
     for (const auto &l : m_cart)
     {
         gross += l.p.price * l.qty;
+        disc += l.p.discount * l.qty;
+        tax += l.p.tax * l.qty;
         items += l.qty;
     }
-    const double disc = m_vip ? gross * st.vipDiscountPercent / 100.0 : 0;
-    const double total = gross - disc;
+    const double total = gross - disc + tax;
     W::setBadge(m_itemsBadge, QString("%1 item%2").arg(items).arg(items == 1 ? "" : "s"), items ? "blue" : "grey");
     m_gross->setText(W::money(gross));
-    m_disc->setText(disc > 0 ? W::money(-disc) : "$0.00");
-    m_tax->setText(W::money(total * st.taxPercent / (100.0 + st.taxPercent)));
+    m_disc->setText(disc > 0 ? W::money(-disc) : "PKR 0.00");
+    m_tax->setText(W::money(tax));
     m_total->setText(W::money(total));
     m_checkout->setEnabled(items > 0);
 }
 
 void RecordOrderPage::loadDemoDraft()
 {
-    for (auto [sku, qty] : {std::pair<const char *, int>{"PRD-102", 2}, {"PRD-214", 1}, {"PRD-8840", 1}, {"PRD-512", 3}})
-        if (auto p = AppState::instance().findByCode(sku))
-            m_cart.push_back({*p, qty});
+    // Start with an empty order; products come from Product.txt.
     rebuildTable();
-    setPreview(AppState::instance().findByCode("PRD-8840"));
-    m_feed->setCode(m_preview ? m_preview->ean : QString());
+    setPreview(std::nullopt);
 }
 
 void RecordOrderPage::newDraft()
@@ -552,16 +555,10 @@ void RecordOrderPage::checkout()
         emit toast("The order is empty");
         return;
     }
-    const auto &st = AppState::instance().settings();
-    double gross = 0;
     OrderRecord o;
     for (const auto &l : m_cart)
-    {
-        gross += l.p.price * l.qty;
-        o.lines.push_back({l.p.name, l.qty, l.p.price});
-    }
-    o.discount = m_vip ? gross * st.vipDiscountPercent / 100.0 : 0;
-    o.total = gross - o.discount;
+        o.lines.push_back({l.p.name, l.p.sku, l.qty, l.p.price, l.p.tax, l.p.discount});
+    o.recompute();
 
     QString mode;
     double tendered = 0;

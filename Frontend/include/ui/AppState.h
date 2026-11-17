@@ -1,56 +1,65 @@
 #pragma once
-// In-memory, frontend-only data used by every screen.
-// There is NO backend here: products, orders and bills live in RAM with seeded sample data.
-// When a real backend exists, replace the bodies of this class and keep the signals.
+// GUI-side application state. Products come from the pure-C++ product module (Product.txt);
+// orders are kept in memory (the Order/Bill modules belong to teammates and plug in here later).
+// ProductInfo is a Qt-friendly view of the backend Product - the GUI never touches std::string.
+#include "product/ProductDescriber.h"
+#include "product/ProductManager.h"
+#include "product/StockValidator.h"
 #include <QDateTime>
 #include <QObject>
+#include <QPair>
 #include <QSet>
 #include <QString>
 #include <QVector>
 #include <optional>
 
-struct Product
+struct ProductInfo
 {
-    QString sku;      // e.g. PRD-8840
-    QString ean;      // 8-digit EAN-8 (valid check digit)
+    int id = 0; // 0 = custom (manual) line, not in the catalogue
+    QString sku;   // acronym (max 8 chars)
+    QString ean;   // barcode
     QString name;
-    QString category; // e.g. Dairy
-    QString location; // e.g. Fridge 02
-    double price = 0;
+    QString unit;  // "count" | "weight"
+    double price = 0;    // unit price, no tax
+    double tax = 0;      // tax per unit (PKR)
+    double discount = 0; // discount per unit (PKR)
     int stock = 0;
-    int reorderLimit = 0;
+    QString imagePath;   // resolved barcode image (may not exist)
+    static ProductInfo from(const Product &p, const QString &rootDir);
+};
+
+struct ProductDescriptionView
+{
+    QString title, level; // level: in-stock | low | out
+    QVector<QPair<QString, QString>> fields;
+    QString imagePath;
 };
 
 struct ReceiptLine
 {
-    QString name;
+    QString name, acronym;
     int qty = 1;
-    double price = 0;
+    double price = 0;    // unit price, no tax
+    double tax = 0;      // per unit
+    double discount = 0; // per unit
 };
 
 struct OrderRecord
 {
     QString id;
     QDateTime time;
-    QString customer, contact, tier, payment, status, shift;
+    QString customer, contact, tier, payment, merchant, status, shift;
     QVector<ReceiptLine> lines;
-    double discount = 0;
-    double total = 0;    // amount payable (tax included)
-    double tendered = 0; // cash handed over (cash payments)
-    int itemCount() const
-    {
-        int n = 0;
-        for (const auto &l : lines)
-            n += l.qty;
-        return n;
-    }
+    double subtotal = 0, discount = 0, tax = 0, total = 0; // total = subtotal - discount + tax
+    double tendered = 0;
+    int itemCount() const;
+    void recompute();
     QString summary() const; // "3 items  Milk, Bread, +1"
 };
 
 struct Settings
 {
-    double taxPercent = 8.0;
-    double vipDiscountPercent = 5.0;
+    int lowStockThreshold = 10;
     bool autoAddScans = false;
     bool beepOnScan = true;
 };
@@ -61,40 +70,50 @@ class AppState : public QObject
 public:
     static AppState &instance();
 
-    // ---- products ----
-    const QVector<Product> &products() const { return m_products; }
-    std::optional<Product> findByCode(const QString &code) const; // EAN-8, 6-digit prefix or SKU
-    QVector<Product> lowStock() const;                            // stock below reorder limit
-    bool isReordered(const QString &sku) const { return m_reordered.contains(sku); }
-    void reorder(const QString &sku);
+    // ---- products (backed by Product.txt) ----
+    bool loadProducts(const QString &path);
+    QString productFile() const { return QString::fromStdString(m_manager.filePath()); }
+    QStringList productIssues() const; // "line 4: acronym ... " (errors and warnings)
+    int productErrorCount() const { return m_manager.lastLoad().errorCount(); }
+    const QVector<ProductInfo> &products() const { return m_products; }
+    std::optional<ProductInfo> findByCode(const QString &code) const; // barcode, id or acronym
+    QVector<ProductInfo> searchText(const QString &query) const;
+    ProductDescriptionView describe(int productId) const;
+    // Empty when `toAdd` more units may be added; otherwise the reason (from the StockValidator).
+    QString stockProblem(int productId, int alreadyInOrder, int toAdd) const;
+    QVector<ProductInfo> lowStock() const;
+    bool isReordered(int productId) const { return m_reordered.contains(productId); }
+    void reorder(int productId);
     void reorderAllLow();
-    static QString ean8(const QString &seven); // appends the check digit
+    static QString locateDataDir();
 
     // ---- orders ----
     const QVector<OrderRecord> &orders() const { return m_orders; } // newest first
     QString nextOrderId();
-    void addOrder(const OrderRecord &o); // also decrements stock
+    void addOrder(const OrderRecord &o); // deducts stock and saves Product.txt
     double salesToday() const { return m_baseSales + m_sessionSales; }
     int ordersToday() const { return m_baseOrders + m_sessionOrders; }
 
-    // ---- settings ----
     Settings &settings() { return m_settings; }
-
-    // ---- scanner hand-off (Barcode Scanner page -> Record Order page) ----
-    void emitScan(const QString &ean) { emit scanned(ean); }
+    void emitChanged() { emit changed(); }
+    void emitScan(const QString &code) { emit scanned(code); }
 
 signals:
     void changed();
-    void scanned(const QString &ean);
+    void scanned(const QString &code);
 
 private:
     AppState();
-    void seed();
-    QVector<Product> m_products;
+    void refreshCache();
+    void seedOrders();
+    ProductManager m_manager;
+    StockValidator m_stock;
+    QVector<ProductInfo> m_products;
+    QString m_root;
     QVector<OrderRecord> m_orders;
-    QSet<QString> m_reordered;
+    QSet<int> m_reordered;
     Settings m_settings;
     int m_nextOrderNo = 89211;
-    double m_baseSales = 3842.50, m_sessionSales = 0;
+    double m_baseSales = 184250.0, m_sessionSales = 0;
     int m_baseOrders = 148, m_sessionOrders = 0;
 };

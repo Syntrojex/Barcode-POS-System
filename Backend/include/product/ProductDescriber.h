@@ -1,23 +1,40 @@
-#ifndef PRODUCT_DESCRIBER_H
-#define PRODUCT_DESCRIBER_H
-
-#include "Product.h"
-
+#pragma once
+// "Show product description". Two responsibilities, two classes:
+//   ProductDescriber        - decides WHAT to show (an ordered list of label/value fields)
+//   IProductFormatter       - decides HOW to show it. Add a new format (HTML, JSON, ...) by adding a
+//                             formatter; nothing existing is modified (open/closed).
+#include "product/Product.h"
 #include <string>
 #include <utility>
 #include <vector>
 
-// Turns a Product into cashier-readable specifications (barcode scan result, Description button).
-// Returns plain data, so the Qt GUI can lay it out as a table and a console can print it as text.
+struct ProductDescription
+{
+    std::string title; // product name
+    std::vector<std::pair<std::string, std::string>> fields;
+    std::string stockLevel; // "in-stock" | "low" | "out"  (for colouring in a GUI)
+};
+
 class ProductDescriber
 {
 public:
-    using Field = std::pair<std::string, std::string>; // label, value
+    explicit ProductDescriber(int lowStockThreshold = 10) : lowStockThreshold_(lowStockThreshold) {}
+    ProductDescription describe(const Product &product) const;
+    bool isLowStock(const Product &p) const { return p.getAvailableQuantity() <= lowStockThreshold_; }
 
-    static std::vector<Field> fields(const Product &p);
-    static std::string text(const Product &p); // "Label: value" lines
-    // Product.txt names are single tokens, so '_' stands for a space ("Whole_Milk" -> "Whole Milk").
-    static std::string displayName(const Product &p);
+private:
+    int lowStockThreshold_;
 };
 
-#endif
+class IProductFormatter
+{
+public:
+    virtual ~IProductFormatter() = default;
+    virtual std::string format(const ProductDescription &description) const = 0;
+};
+
+class TextProductFormatter : public IProductFormatter
+{
+public:
+    std::string format(const ProductDescription &description) const override;
+};

@@ -1,99 +1,91 @@
-#include "ProductValidator.h"
+#include "product/ProductValidator.h"
+#include "product/Ean8.h"
 
-#include <algorithm>
-#include <cctype>
-
-using Msg = std::optional<std::string>;
-
-Msg PositiveIdRule::check(const Product &p) const
+void ProductIdRule::check(const Product &p, ValidationReport &r) const
 {
-    return p.getProductID() > 0 ? Msg{} : Msg{"product id must be greater than 0"};
+    if (p.getProductID() <= 0)
+        r.errors.push_back("product id must be a positive number");
 }
 
-Msg BarcodeRequiredRule::check(const Product &p) const
-{
-    return p.getBarcode().empty() ? Msg{"barcode is empty"} : Msg{};
-}
-
-Msg BarcodeDigitsRule::check(const Product &p) const
+void BarcodeRule::check(const Product &p, ValidationReport &r) const
 {
     const std::string &b = p.getBarcode();
-    const bool digits = std::all_of(b.begin(), b.end(), [](unsigned char c)
-                                    { return std::isdigit(c) != 0; });
-    if (b.size() != length_ || !digits)
-        return "barcode '" + b + "' must be exactly " + std::to_string(length_) + " digits";
-    return {};
+    if (b.empty())
+    {
+        r.errors.push_back("barcode is empty");
+        return;
+    }
+    if (!ean8::isEightDigits(b))
+    {
+        r.errors.push_back("barcode '" + b + "' must be exactly 8 digits (EAN-8)");
+        return;
+    }
+    if (!ean8::hasValidCheckDigit(b))
+        r.warnings.push_back("barcode '" + b + "' has an invalid EAN-8 check digit");
 }
 
-Msg AcronymRule::check(const Product &p) const
+void AcronymRule::check(const Product &p, ValidationReport &r) const
 {
     if (p.getAcronym().empty())
-        return "acronym is empty";
-    if (p.getAcronym().size() > max_)
-        return "acronym '" + p.getAcronym() + "' is longer than " + std::to_string(max_) + " characters";
-    return {};
+        r.errors.push_back("acronym is empty");
+    else if (p.getAcronym().size() > maxLength_)
+        r.errors.push_back("acronym '" + p.getAcronym() + "' is longer than " + std::to_string(maxLength_) +
+                           " characters");
 }
 
-Msg NameRequiredRule::check(const Product &p) const
+void ProductNameRule::check(const Product &p, ValidationReport &r) const
 {
-    return p.getProductName().empty() ? Msg{"product name is empty"} : Msg{};
+    if (p.getProductName().empty())
+        r.errors.push_back("product name is empty");
 }
 
-Msg MeasurementUnitRule::check(const Product &p) const
-{
-    const std::string &u = p.getMeasurementUnit();
-    if (u != "count" && u != "weight")
-        return "measurement unit '" + u + "' must be 'count' or 'weight'";
-    return {};
-}
-
-Msg AmountsRule::check(const Product &p) const
+void PriceRule::check(const Product &p, ValidationReport &r) const
 {
     if (p.getUnitPrice() < 0)
-        return "unit price cannot be negative";
+        r.errors.push_back("unit price cannot be negative");
     if (p.getTax() < 0)
-        return "tax cannot be negative";
+        r.errors.push_back("tax cannot be negative");
     if (p.getDiscount() < 0)
-        return "discount cannot be negative";
+        r.errors.push_back("discount cannot be negative");
     if (p.getDiscount() > p.getUnitPrice())
-        return "discount cannot be greater than the unit price";
-    return {};
+        r.errors.push_back("discount cannot be greater than the unit price");
 }
 
-Msg QuantityRule::check(const Product &p) const
+void QuantityRule::check(const Product &p, ValidationReport &r) const
 {
-    return p.getAvailableQuantity() < 0 ? Msg{"available quantity cannot be negative"} : Msg{};
+    if (p.getAvailableQuantity() < 0)
+        r.errors.push_back("available quantity cannot be negative");
 }
 
-Msg BarcodeFilePathRule::check(const Product &p) const
+void BarcodePathRule::check(const Product &p, ValidationReport &r) const
 {
-    return p.getBarcodeFilePath().empty() ? Msg{"barcode file path is empty"} : Msg{};
+    if (p.getBarcodeFilePath().empty())
+        r.errors.push_back("barcode file path is empty");
 }
 
-ProductValidator ProductValidator::withDefaultRules()
+ProductValidator ProductValidator::standard()
 {
     ProductValidator v;
-    v.addRule(std::make_unique<PositiveIdRule>());
-    v.addRule(std::make_unique<BarcodeRequiredRule>());
-    v.addRule(std::make_unique<AcronymRule>());
-    v.addRule(std::make_unique<NameRequiredRule>());
-    v.addRule(std::make_unique<MeasurementUnitRule>());
-    v.addRule(std::make_unique<AmountsRule>());
-    v.addRule(std::make_unique<QuantityRule>());
-    v.addRule(std::make_unique<BarcodeFilePathRule>());
+    v.addRule(std::make_unique<ProductIdRule>())
+        .addRule(std::make_unique<BarcodeRule>())
+        .addRule(std::make_unique<AcronymRule>())
+        .addRule(std::make_unique<ProductNameRule>())
+        .addRule(std::make_unique<PriceRule>())
+        .addRule(std::make_unique<QuantityRule>())
+        .addRule(std::make_unique<BarcodePathRule>());
     return v;
 }
 
-void ProductValidator::addRule(std::unique_ptr<IProductRule> rule)
+ProductValidator &ProductValidator::addRule(std::unique_ptr<IProductRule> rule)
 {
-    rules_.push_back(std::shared_ptr<const IProductRule>(std::move(rule)));
+    rules_.push_back(std::move(rule));
+    return *this;
 }
 
-std::vector<std::string> ProductValidator::validate(const Product &p) const
+ValidationReport ProductValidator::validate(const Product &product) const
 {
-    std::vector<std::string> errors;
+    ValidationReport report;
     for (const auto &rule : rules_)
-        if (auto e = rule->check(p))
-            errors.push_back(*e);
-    return errors;
+        rule->check(product, report);
+    return report;
 }
