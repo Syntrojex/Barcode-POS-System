@@ -116,7 +116,7 @@ namespace W
     {
         auto *f = new QFrame(parent);
         f->setFixedHeight(1);
-        f->setStyleSheet("background:#e2e7f0; border:none;");
+        f->setObjectName("hline");
         return f;
     }
 
@@ -164,6 +164,12 @@ Card::Card(QWidget *parent, bool alert) : QFrame(parent), m_alert(alert)
 void Card::resizeEvent(QResizeEvent *e)
 {
     QFrame::resizeEvent(e);
+    rebuildShadow();
+}
+
+void Card::rebuildShadow()
+{
+    m_shadowDark = Theme::isDark();
     const qreal dpr = devicePixelRatioF();
     m_shadow = QPixmap(QSize(width(), height()) * dpr);
     m_shadow.setDevicePixelRatio(dpr);
@@ -175,19 +181,22 @@ void Card::resizeEvent(QResizeEvent *e)
     const QRectF body = QRectF(rect()).adjusted(8, 4, -8, -10);
     for (int i = 5; i >= 1; --i)
     {
-        p.setBrush(QColor(15, 27, 51, 7));
+        p.setBrush(Theme::palette().shadow);
         p.drawRoundedRect(body.translated(0, 2.5).adjusted(-i, -i + 1, i, i + 1), 12 + i, 12 + i);
     }
 }
 
 void Card::paintEvent(QPaintEvent *)
 {
+    if (m_shadowDark != Theme::isDark())
+        rebuildShadow(); // the mode changed since the last draw
+    const Theme::Palette &pal = Theme::palette();
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     p.drawPixmap(0, 0, m_shadow);
     const QRectF body = QRectF(rect()).adjusted(8, 4, -8, -10);
-    p.setBrush(m_alert ? QColor("#fffafa") : QColor("#ffffff"));
-    p.setPen(QPen(m_alert ? QColor("#f3c4bf") : QColor("#e2e7f0"), 1));
+    p.setBrush(m_alert ? pal.alertBg : pal.cardBg);
+    p.setPen(QPen(m_alert ? pal.alertBorder : pal.cardBorder, 1));
     p.drawRoundedRect(body.adjusted(.5, .5, -.5, -.5), 12, 12);
 }
 
@@ -310,6 +319,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
+    const Theme::Palette &pal = Theme::palette();
     const QRectF area(44, 16, width() - 44 - 8, height() - 16 - 26);
     double maxV = 1;
     for (double v : m_actual)
@@ -325,9 +335,9 @@ void RevenueChart::paintEvent(QPaintEvent *)
     for (int g = 0; g <= 4; ++g)
     {
         const qreal y = area.bottom() - area.height() * g / 4.0;
-        p.setPen(QPen(QColor("#e9edf4"), 1));
+        p.setPen(QPen(pal.chartGrid, 1));
         p.drawLine(QPointF(area.left(), y), QPointF(area.right(), y));
-        p.setPen(Theme::outline);
+        p.setPen(pal.subtle);
         p.drawText(QRectF(0, y - 8, 38, 16), Qt::AlignRight | Qt::AlignVCenter, QString("$%1").arg(int(maxV * g / 4)));
     }
 
@@ -349,19 +359,19 @@ void RevenueChart::paintEvent(QPaintEvent *)
         bar.addRoundedRect(QRectF(x, y, bw, h), 4, 4);
         bar.addRect(QRectF(x, qMax(y, area.bottom() - 4), bw, qMin<qreal>(4, h)));
         p.setPen(Qt::NoPen);
-        p.setBrush(hot ? Theme::primary : QColor("#b7c9f6"));
+        p.setBrush(hot ? pal.chartBarHot : pal.chartBar);
         p.drawPath(bar.simplified());
 
         if (hot)
         {
-            p.setPen(Theme::primary);
+            p.setPen(pal.accentText);
             QFont bf = f;
             bf.setBold(true);
             p.setFont(bf);
             p.drawText(QRectF(x - 16, y - 20, bw + 32, 16), Qt::AlignCenter, QString("$%1").arg(int(m_actual[i])));
             p.setFont(f);
         }
-        p.setPen(hot ? Theme::primary : Theme::onSurfaceVariant);
+        p.setPen(hot ? pal.accentText : pal.muted);
         if (i < m_labels.size())
         {
             QFont lf = f;
@@ -386,7 +396,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
                 path.lineTo(x, y);
         }
         p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(QColor("#e08a2c"), 1.8, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setPen(QPen(pal.chartTarget, 1.8, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
         p.drawPath(path);
     }
 }
@@ -402,7 +412,7 @@ QtyStepper::QtyStepper(int value, QWidget *parent) : QWidget(parent)
     auto *v = W::label(QString::number(value));
     v->setAlignment(Qt::AlignCenter);
     v->setMinimumWidth(22);
-    v->setStyleSheet("font-weight:700; color:#0f1b33;");
+    v->setStyleSheet("font-weight:700;");
     h->addWidget(m);
     h->addWidget(v);
     h->addWidget(pl);

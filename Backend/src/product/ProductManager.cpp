@@ -1,140 +1,149 @@
-#include "product/ProductManager.h"
+#include "ProductManager.h"
 
+#include "ProductRecordCodec.h"
+
+#include <cstdio>
+#include <filesystem>
 #include <fstream>
-#include <iomanip>
-#include <sstream>
-#include <unordered_set>
+#include <utility>
 
-namespace {
-void setError(std::string* error, const std::string& message) {
-    if (error) *error = message;
-}
+ProductManager::ProductManager() : validator_(ProductValidator::withDefaultRules()) {}
 
-bool parseProductLine(const std::string& line, Product& product, std::string& error) {
-    if (line.empty() || line.back() != '#') {
-        error = "record must end with #";
-        return false;
-    }
+ProductManager::ProductManager(ProductValidator validator) : validator_(std::move(validator)) {}
 
-    std::istringstream input(line.substr(0, line.size() - 1));
-    Product parsed;
-    std::string extra;
-    if (!(input >> parsed.productId >> parsed.barcode >> parsed.acronym >> parsed.name
-                 >> parsed.measurementUnit >> parsed.unitPrice >> parsed.tax
-                 >> parsed.discount >> parsed.availableQuantity >> parsed.barcodeFilePath)
-        || (input >> extra)) {
-        error = "expected exactly 10 space-separated fields";
-        return false;
-    }
-
-    if (!parsed.isValid(&error)) return false;
-    product = std::move(parsed);
-    return true;
-}
-}
-
-bool ProductManager::loadProducts(const std::string& filename, std::string* error) {
+bool ProductManager::loadProducts(const std::string &filename)
+{
     std::ifstream file(filename);
-    if (!file) {
-        setError(error, "cannot open product file: " + filename);
+    if (!file.is_open())
+    {
+        errors_ = {"cannot open '" + filename + "'"};
         return false;
     }
+    return loadProducts(file);
+}
 
-    std::vector<Product> loaded;
-    std::unordered_set<int> ids;
-    std::unordered_set<std::string> barcodes;
+bool ProductManager::loadProducts(std::istream &in)
+{
+    errors_.clear();
+    ProductManager staging(validator_); // built on the side so a bad file never half-loads
+    staging.errors_.clear();
+
     std::string line;
-    std::size_t lineNumber = 0;
+    for (int lineNo = 1; std::getline(in, line); ++lineNo)
+    {
+        if (line.find_first_not_of(" \t\r\n") == std::string::npos)
+            continue; // blank line
 
-    while (std::getline(file, line)) {
-        ++lineNumber;
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        if (line.empty()) continue;
-        Product product;
-        std::string reason;
-        if (!parseProductLine(line, product, reason)) {
-            setError(error, "line " + std::to_string(lineNumber) + ": " + reason);
-            return false;
+        const auto parsed = ProductRecordCodec::parse(line);
+        if (!parsed.ok)
+        {
+            errors_.push_back("line " + std::to_string(lineNo) + ": " + parsed.error);
+            continue;
         }
-        if (!ids.insert(product.productId).second || !barcodes.insert(product.barcode).second) {
-            setError(error, "line " + std::to_string(lineNumber) + ": duplicate product ID or barcode");
+        if (!staging.addProduct(parsed.product))
+            for (const auto &e : staging.errors_)
+                errors_.push_back("line " + std::to_string(lineNo) + ": " + e);
+    }
+
+    if (!errors_.empty())
+        return false;
+
+    products_ = std::move(staging.products_);
+    rebuildIndex();
+    return true;
+}
+
+bool ProductManager::saveProducts(const std::string &filename) const
+{
+    // Write to a temp file first so a crash never leaves a half-written Product.txt.
+    const std::string tmp = filename + ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::trunc);
+        if (!out)
             return false;
-        }
-        loaded.push_back(std::move(product));
-    }
-    if (file.bad()) {
-        setError(error, "error while reading product file: " + filename);
-        return false;
-    }
-
-    products.swap(loaded); // Keep the old catalogue if parsing fails.
-    setError(error, {});
-    return true;
-}
-
-bool ProductManager::saveProducts(const std::string& filename, std::string* error) const {
-    std::ofstream file(filename, std::ios::trunc);
-    if (!file) {
-        setError(error, "cannot write product file: " + filename);
-        return false;
-    }
-
-    file << std::fixed << std::setprecision(2);
-    for (const Product& p : products) {
-        std::string reason;
-        if (!p.isValid(&reason)) {
-            setError(error, "invalid product " + std::to_string(p.productId) + ": " + reason);
+        for (const auto &p : products_)
+            out << ProductRecordCodec::format(p) << '\n';
+        if (!out)
             return false;
-        }
-        file << p.productId << ' ' << p.barcode << ' ' << p.acronym << ' ' << p.name << ' '
-             << p.measurementUnit << ' ' << p.unitPrice << ' ' << p.tax << ' ' << p.discount << ' '
-             << p.availableQuantity << ' ' << p.barcodeFilePath << "#\n";
     }
-    if (!file) {
-        setError(error, "error while writing product file: " + filename);
+    std::error_code ec;
+    std::filesystem::rename(tmp, filename, ec);
+    if (ec) // some platforms refuse to rename over an existing file
+    {
+        std::filesystem::remove(filename, ec);
+        std::filesystem::rename(tmp, filename, ec);
+    }
+    return !ec;
+}
+
+bool ProductManager::addProduct(const Product &p)
+{
+    errors_ = validator_.validate(p);
+    if (!errors_.empty())
+        return false;
+    if (byId_.count(p.getProductID()))
+    {
+        errors_ = {"duplicate product id " + std::to_string(p.getProductID())};
         return false;
     }
-    setError(error, {});
-    return true;
-}
-
-Product* ProductManager::searchByBarcode(const std::string& barcode) {
-    for (auto& product : products) if (product.barcode == barcode) return &product;
-    return nullptr;
-}
-const Product* ProductManager::searchByBarcode(const std::string& barcode) const {
-    for (const auto& product : products) if (product.barcode == barcode) return &product;
-    return nullptr;
-}
-Product* ProductManager::searchByID(int id) {
-    for (auto& product : products) if (product.productId == id) return &product;
-    return nullptr;
-}
-const Product* ProductManager::searchByID(int id) const {
-    for (const auto& product : products) if (product.productId == id) return &product;
-    return nullptr;
-}
-
-bool ProductManager::addProduct(const Product& product, std::string* error) {
-    std::string reason;
-    if (!product.isValid(&reason)) { setError(error, reason); return false; }
-    if (searchByID(product.productId) || searchByBarcode(product.barcode)) {
-        setError(error, "duplicate product ID or barcode");
+    if (byBarcode_.count(p.getBarcode()))
+    {
+        errors_ = {"duplicate barcode " + p.getBarcode()};
         return false;
     }
-    products.push_back(product);
-    setError(error, {});
+    byId_[p.getProductID()] = products_.size();
+    byBarcode_[p.getBarcode()] = products_.size();
+    products_.push_back(p);
     return true;
 }
 
-bool ProductManager::reserveStock(int id, int quantity) {
-    Product* product = searchByID(id);
-    if (!product || quantity <= 0 || quantity > product->availableQuantity) return false;
-    product->availableQuantity -= quantity;
-    return true;
+Product *ProductManager::searchByBarcode(const std::string &barcode)
+{
+    return const_cast<Product *>(std::as_const(*this).searchByBarcode(barcode));
 }
 
-const std::vector<Product>& ProductManager::getAllProducts() const noexcept { return products; }
-std::vector<Product>& ProductManager::getAllProducts() noexcept { return products; }
-std::size_t ProductManager::getProductCount() const noexcept { return products.size(); }
-void ProductManager::clearProducts() noexcept { products.clear(); }
+Product *ProductManager::searchByID(int id)
+{
+    return const_cast<Product *>(std::as_const(*this).searchByID(id));
+}
+
+const Product *ProductManager::searchByBarcode(const std::string &barcode) const
+{
+    const auto it = byBarcode_.find(barcode);
+    return it == byBarcode_.end() ? nullptr : &products_[it->second];
+}
+
+const Product *ProductManager::searchByID(int id) const
+{
+    const auto it = byId_.find(id);
+    return it == byId_.end() ? nullptr : &products_[it->second];
+}
+
+void ProductManager::clearProducts()
+{
+    products_.clear();
+    byBarcode_.clear();
+    byId_.clear();
+}
+
+StockStatus ProductManager::deductStock(int productId, int quantity)
+{
+    Product *p = searchByID(productId);
+    if (!p)
+        return StockStatus::UnknownProduct;
+    const StockStatus status = StockValidator::check(*p, quantity);
+    if (status == StockStatus::Ok)
+        p->setAvailableQuantity(p->getAvailableQuantity() - quantity);
+    return status;
+}
+
+void ProductManager::rebuildIndex()
+{
+    byBarcode_.clear();
+    byId_.clear();
+    for (std::size_t i = 0; i < products_.size(); ++i)
+    {
+        byBarcode_[products_[i].getBarcode()] = i;
+        byId_[products_[i].getProductID()] = i;
+    }
+}

@@ -64,7 +64,7 @@ namespace Dialogs
         QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
         f.setPointSize(10);
         te->setFont(f);
-        te->setStyleSheet("QPlainTextEdit{background:white;border:1px solid #e2e7f0;border-radius:10px;padding:14px;}");
+        te->setObjectName("paper");
         te->setMinimumSize(420, 440);
         v->addWidget(te);
         auto *h = new QHBoxLayout;
@@ -113,7 +113,7 @@ namespace Dialogs
         }
         t->setMinimumSize(560, 200);
         t->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        t->setStyleSheet("QTableWidget{background:white;border:1px solid #e2e7f0;border-radius:10px;}");
+        t->setObjectName("boxedTable");
         W::alignHeaders(t, {1, 2, 3}, Qt::AlignRight);
         v->addWidget(t);
         v->addWidget(W::label(QString("Payment: %1      Total: %2").arg(o.payment, W::money(o.total)), "h2"));
@@ -188,7 +188,7 @@ namespace Dialogs
             change->setVisible(cash);
             const double c = spin->value() - total;
             change->setText(c >= -0.005 ? "Change due: " + W::money(c) : "Short by " + W::money(-c));
-            change->setStyleSheet(c >= -0.005 ? "color:#006329;" : "color:#ba1a1a;");
+            change->setStyleSheet(QString("color:%1;").arg((c >= -0.005 ? Theme::successText() : Theme::dangerText()).name()));
             ok->setEnabled(!cash || c >= -0.005);
         };
         QObject::connect(group, &QButtonGroup::idClicked, &d, [&](int)

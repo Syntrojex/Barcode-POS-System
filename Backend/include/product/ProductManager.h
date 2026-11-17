@@ -1,30 +1,58 @@
-#pragma once
+#ifndef PRODUCT_MANAGER_H
+#define PRODUCT_MANAGER_H
 
-#include "product/Product.h"
+#include "Product.h"
+#include "ProductValidator.h"
+#include "StockValidator.h"
+
+#include <istream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-// Owns the in-memory product catalogue and its business rules.
-class ProductManager {
+// Owns the product catalogue: loads/saves Product.txt and answers lookups. It composes the
+// single-purpose helpers (codec, validator, stock validator) instead of doing their jobs.
+//
+// Loading is all-or-nothing: if any line is bad the existing catalogue is left untouched and
+// lastErrors() lists every problem (with line numbers) so the GUI can show them.
+class ProductManager
+{
 public:
-    bool loadProducts(const std::string& filename, std::string* error = nullptr);
-    bool saveProducts(const std::string& filename, std::string* error = nullptr) const;
+    ProductManager();
+    explicit ProductManager(ProductValidator validator);
 
-    Product* searchByBarcode(const std::string& barcode);
-    const Product* searchByBarcode(const std::string& barcode) const;
-    Product* searchByID(int productId);
-    const Product* searchByID(int productId) const;
+    // ---- loading / saving -------------------------------------------------------------
+    bool loadProducts(const std::string &filename);
+    bool loadProducts(std::istream &in);
+    bool saveProducts(const std::string &filename) const;
+    const std::vector<std::string> &lastErrors() const { return errors_; }
 
-    // Adds a product only when it is valid and its ID/barcode are unique.
-    bool addProduct(const Product& product, std::string* error = nullptr);
-    // Reduces stock only if enough stock is available.
-    bool reserveStock(int productId, int quantity);
+    // ---- lookup (the pointer stays valid until the next load/clear/add) --------------
+    Product *searchByBarcode(const std::string &barcode);
+    Product *searchByID(int id);
+    const Product *searchByBarcode(const std::string &barcode) const;
+    const Product *searchByID(int id) const;
 
-    const std::vector<Product>& getAllProducts() const noexcept;
-    std::vector<Product>& getAllProducts() noexcept;
-    std::size_t getProductCount() const noexcept;
-    void clearProducts() noexcept;
+    // ---- catalogue -------------------------------------------------------------------
+    // Adds one product; false (and lastErrors()) when invalid or id/barcode already exist.
+    bool addProduct(const Product &p);
+    std::vector<Product> &getAllProducts() { return products_; }
+    const std::vector<Product> &getAllProducts() const { return products_; }
+    int getProductCount() const { return static_cast<int>(products_.size()); }
+    void clearProducts();
+
+    // ---- stock -----------------------------------------------------------------------
+    // Checks the quantity (StockValidator) and, only if it can be sold, reduces the stock.
+    StockStatus deductStock(int productId, int quantity);
 
 private:
-    std::vector<Product> products;
+    void rebuildIndex();
+
+    std::vector<Product> products_;
+    std::unordered_map<std::string, std::size_t> byBarcode_;
+    std::unordered_map<int, std::size_t> byId_;
+    std::vector<std::string> errors_;
+    ProductValidator validator_;
 };
+
+#endif

@@ -102,6 +102,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     auto *k = new QShortcut(QKeySequence("Ctrl+K"), this);
     connect(k, &QShortcut::activated, this, [this]
             { goTo(Dashboard); m_dashboard->focusLookup(); });
+    auto *dm = new QShortcut(QKeySequence("Ctrl+D"), this);
+    dm->setContext(Qt::ApplicationShortcut);
+    connect(dm, &QShortcut::activated, this, [] { Theme::setDark(!Theme::isDark()); });
     auto *nd = new QShortcut(QKeySequence("Ctrl+N"), this);
     connect(nd, &QShortcut::activated, this, [this]
             { goTo(RecordOrder); m_record->newDraft(); });
@@ -210,6 +213,21 @@ QWidget *MainWindow::buildTopBar()
     t->addStretch();
     h->addLayout(t);
     h->addStretch();
+
+    // light / dark switch (also Ctrl+D)
+    auto *themeBtn = W::button("", "");
+    themeBtn->setObjectName("themeToggle");
+    auto syncThemeBtn = [themeBtn]
+    {
+        const bool dark = Theme::isDark();
+        themeBtn->setIcon(Theme::icon(dark ? "sun" : "moon", dark ? Theme::palette().warnText : Theme::onSurfaceVariant, 18));
+        themeBtn->setIconSize({18, 18});
+        themeBtn->setToolTip(dark ? "Switch to light mode  (Ctrl+D)" : "Switch to dark mode  (Ctrl+D)");
+    };
+    syncThemeBtn();
+    connect(themeBtn, &QPushButton::clicked, this, [] { Theme::setDark(!Theme::isDark()); });
+    connect(&Theme::notifier(), &ThemeNotifier::changed, themeBtn, syncThemeBtn);
+    h->addWidget(themeBtn, 0, Qt::AlignVCenter);
 
     auto *chip = new QFrame;
     chip->setObjectName("chip");

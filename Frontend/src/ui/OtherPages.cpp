@@ -79,7 +79,6 @@ namespace
         auto *ic = new QLabel;
         ic->setFixedSize(32, 32);
         ic->setAlignment(Qt::AlignCenter);
-        ic->setStyleSheet("background:#eef3ff; border-radius:6px;");
         ic->setPixmap(Theme::iconPixmap(icon, Theme::primary, 16));
         h->addWidget(ic);
         return c;
@@ -162,6 +161,7 @@ OrdersPage::OrdersPage(QWidget *parent) : QWidget(parent)
     connect(m_custSearch, &QLineEdit::textChanged, this, [this]
             { rebuild(); });
     connect(&AppState::instance(), &AppState::changed, this, &OrdersPage::rebuild);
+    connect(&Theme::notifier(), &ThemeNotifier::changed, this, [this] { rebuild(); });
     connect(exp, &QPushButton::clicked, this, [this]
             {
         QStringList rows{"Order ID,Time,Customer,Contact,Items,Payment,Amount,Status"};
@@ -203,7 +203,7 @@ void OrdersPage::rebuild()
     {
         const auto &o = rows[r];
         m_table->setRowHeight(r, 56);
-        m_table->setItem(r, 0, item("#" + o.id, Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
+        m_table->setItem(r, 0, item("#" + o.id, Qt::AlignLeft | Qt::AlignVCenter, Theme::accentText().name(), true));
         m_table->setItem(r, 1, item(o.time.toString("yyyy-MM-dd HH:mm") + "\n" + o.shift));
         {
             auto *cw = new QWidget;
@@ -213,7 +213,8 @@ void OrdersPage::rebuild()
             auto *n = W::label(o.customer + (o.tier == "VIP" ? "  [VIP]" : ""));
             n->setStyleSheet("font-weight:600;");
             auto *c = W::label(o.contact);
-            c->setStyleSheet("color:#7b869c; font-size:11.5px;");
+            c->setObjectName("subtle");
+            c->setStyleSheet("font-size:11.5px;");
             cl->addWidget(n);
             cl->addWidget(c);
             m_table->setCellWidget(r, 2, cw);
@@ -289,6 +290,7 @@ ProductsPage::ProductsPage(QWidget *parent) : QWidget(parent)
     connect(m_search, &QLineEdit::textChanged, this, [this]
             { rebuild(); });
     connect(&AppState::instance(), &AppState::changed, this, &ProductsPage::rebuild);
+    connect(&Theme::notifier(), &ThemeNotifier::changed, this, [this] { rebuild(); });
     rebuild();
 }
 
@@ -307,14 +309,14 @@ void ProductsPage::rebuild()
     {
         const auto &p = rows[r];
         m_table->setRowHeight(r, 44);
-        m_table->setItem(r, 0, item(p.sku, Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
+        m_table->setItem(r, 0, item(p.sku, Qt::AlignLeft | Qt::AlignVCenter, Theme::accentText().name(), true));
         m_table->setItem(r, 1, item(p.ean));
         m_table->setItem(r, 2, item(p.name, Qt::AlignLeft | Qt::AlignVCenter, "", true));
         m_table->setItem(r, 3, item(p.category));
         m_table->setItem(r, 4, item(p.location));
         m_table->setItem(r, 5, item(W::money(p.price), Qt::AlignRight | Qt::AlignVCenter, "", true));
         const bool low = p.stock < p.reorderLimit;
-        m_table->setItem(r, 6, item(QString::number(p.stock), Qt::AlignRight | Qt::AlignVCenter, low ? "#ba1a1a" : "", low));
+        m_table->setItem(r, 6, item(QString::number(p.stock), Qt::AlignRight | Qt::AlignVCenter, low ? Theme::dangerText().name() : "", low));
         m_table->setCellWidget(r, 7, wrapW(W::badge(p.stock == 0 ? "Out" : low ? "Low" : "OK", p.stock == 0 ? "red" : low ? "amber" : "green")));
         auto *b = W::button("Add to Order", "mini");
         b->setEnabled(p.stock > 0);
@@ -353,6 +355,7 @@ BillsPage::BillsPage(QWidget *parent) : QWidget(parent)
     connect(m_search, &QLineEdit::textChanged, this, [this]
             { rebuild(); });
     connect(&AppState::instance(), &AppState::changed, this, &BillsPage::rebuild);
+    connect(&Theme::notifier(), &ThemeNotifier::changed, this, [this] { rebuild(); });
     rebuild();
 }
 
@@ -368,7 +371,7 @@ void BillsPage::rebuild()
     {
         const auto &o = rows[r];
         m_table->setRowHeight(r, 46);
-        m_table->setItem(r, 0, item("BILL-" + o.id.right(8), Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
+        m_table->setItem(r, 0, item("BILL-" + o.id.right(8), Qt::AlignLeft | Qt::AlignVCenter, Theme::accentText().name(), true));
         m_table->setItem(r, 1, item(o.id));
         m_table->setItem(r, 2, item(o.time.toString("yyyy-MM-dd HH:mm")));
         m_table->setItem(r, 3, item(o.customer));
