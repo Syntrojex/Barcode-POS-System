@@ -25,7 +25,8 @@ namespace
         t->setStyleSheet("font-weight:600; font-size:13.5px;");
         t->setWordWrap(true);
         auto *b = W::label(bottom);
-        b->setStyleSheet("color:#7b869c; font-size:11.5px;");
+        b->setObjectName("subtle");
+        b->setStyleSheet("font-size:11.5px;");
         v->addWidget(t);
         v->addWidget(b);
         return w;
@@ -59,6 +60,9 @@ RecordOrderPage::RecordOrderPage(QWidget *parent) : QWidget(parent)
     connect(&AppState::instance(), &AppState::scanned, this, [this](const QString &ean)
             { showCode(ean, true); });
     loadDemoDraft();
+    // cell colours and the thumbnail are painted in code, so redraw them when the mode flips
+    connect(&Theme::notifier(), &ThemeNotifier::changed, this, [this]
+            { rebuildTable(); setPreview(m_preview); });
 }
 
 QWidget *RecordOrderPage::buildCustomerStrip()
@@ -181,8 +185,7 @@ QWidget *RecordOrderPage::buildLeft()
     auto *nr = new QHBoxLayout;
     m_pName = W::label("Nothing scanned yet", "h1");
     m_pName->setWordWrap(true);
-    m_pPrice = W::label("");
-    m_pPrice->setStyleSheet("color:#2554d8; font-size:17px; font-weight:700;");
+    m_pPrice = W::label("", "price");
     nr->addWidget(m_pName, 1);
     nr->addWidget(m_pPrice);
     iv->addLayout(nr);
@@ -384,7 +387,8 @@ void RecordOrderPage::setPreview(const std::optional<Product> &p)
     m_pMeta->setText(QString("%1  •  %2  •  %3").arg(p->ean, p->category, p->sku));
     const bool low = p->stock < p->reorderLimit;
     m_pStock->setText(QString("%1 in stock").arg(p->stock));
-    m_pStock->setStyleSheet(QString("font-weight:700; color:%1;").arg(low ? "#b3261e" : "#0b7a36"));
+    m_pStock->setStyleSheet(QString("font-weight:700; color:%1;")
+                                .arg((low ? Theme::dangerText() : Theme::successText()).name()));
     W::setBadge(m_pBadge, p->stock == 0 ? "Out of stock" : low ? "Low stock" : "In stock",
                 p->stock == 0 ? "red" : low ? "amber" : "green");
 
@@ -395,9 +399,9 @@ void RecordOrderPage::setPreview(const std::optional<Product> &p)
     QPainter pa(&pm);
     pa.setRenderHint(QPainter::Antialiasing);
     pa.setPen(Qt::NoPen);
-    pa.setBrush(QColor("#e6eeff"));
+    pa.setBrush(Theme::palette().thumbBg);
     pa.drawRoundedRect(QRectF(2, 6, 56, 56), 12, 12);
-    pa.setPen(QColor("#2554d8"));
+    pa.setPen(Theme::accentText());
     QFont f = pa.font();
     f.setPixelSize(19);
     f.setBold(true);
@@ -483,8 +487,8 @@ void RecordOrderPage::rebuildTable()
                 { changeQty(r, -1); });
         connect(stp, &QtyStepper::plus, this, [this, r]
                 { changeQty(r, +1); });
-        m_table->setItem(r, 3, cell(disc > 0 ? W::money(-disc) : "—", disc > 0 ? "#0b7a36" : "#8a94ab"));
-        m_table->setItem(r, 4, cell(W::money(gross - disc), "#2554d8", true));
+        m_table->setItem(r, 3, cell(disc > 0 ? W::money(-disc) : "—", (disc > 0 ? Theme::successText() : Theme::subtleText()).name()));
+        m_table->setItem(r, 4, cell(W::money(gross - disc), Theme::accentText().name(), true));
         auto *del = new QPushButton;
         del->setProperty("kind", "flat");
         del->setIcon(Theme::icon("trash", Theme::error, 18));

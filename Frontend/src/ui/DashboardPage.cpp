@@ -25,9 +25,7 @@ namespace
         auto *v = new QVBoxLayout;
         v->setSpacing(0);
         v->addWidget(W::label(caption, "caption"));
-        value = W::label("", "bigValue");
-        if (alert)
-            value->setStyleSheet("color:#c0271d;");
+        value = W::label("", alert ? "bigValueAlert" : "bigValue");
         v->addWidget(value);
         sub = W::label("", "muted");
         sub->setStyleSheet("font-size:12px;");
@@ -56,6 +54,7 @@ DashboardPage::DashboardPage(QWidget *parent) : QWidget(parent)
 {
     build();
     connect(&AppState::instance(), &AppState::changed, this, &DashboardPage::refresh);
+    connect(&Theme::notifier(), &ThemeNotifier::changed, this, [this] { refresh(); }); // table cell colours
     refresh();
 }
 
@@ -83,7 +82,7 @@ void DashboardPage::build()
     // ---- KPI row
     auto *stats = new QHBoxLayout;
     stats->setSpacing(0);
-    stats->addWidget(statCard("SALES TODAY", "cash", QColor("#2554d8"), m_sales, m_salesSub));
+    stats->addWidget(statCard("SALES TODAY", "cash", Theme::primary, m_sales, m_salesSub));
     stats->addWidget(statCard("ORDERS", "orders", QColor("#15915a"), m_orders, m_ordersSub));
     stats->addWidget(statCard("PENDING", "clock", QColor("#d98a0b"), m_pending, m_pendingSub));
     stats->addWidget(statCard("LOW STOCK", "warn", QColor("#d9392b"), m_lowCount, m_lowSub, true));
@@ -122,7 +121,7 @@ void DashboardPage::build()
     auto *cv = new QVBoxLayout(cc);
     cv->setContentsMargins(18, 14, 18, 12);
     cv->setSpacing(6);
-    auto *legend = new QLabel("<span style='color:#2554d8'>■</span> Revenue &nbsp;&nbsp; <span style='color:#e08a2c'>╌</span> Target");
+    auto *legend = new QLabel("<span style='color:#3b6ae8'>■</span> Revenue &nbsp;&nbsp; <span style='color:#e08a2c'>╌</span> Target");
     legend->setObjectName("muted");
     W::headerRow(cv, "", "Hourly revenue", legend);
     m_chart = new RevenueChart;
@@ -215,20 +214,21 @@ void DashboardPage::refresh()
         auto *a = W::label(p.name);
         a->setStyleSheet("font-weight:600;");
         auto *b = W::label(p.sku);
-        b->setStyleSheet("color:#7b869c; font-size:11px;");
+        b->setObjectName("subtle");
+        b->setStyleSheet("font-size:11px;");
         nv->addWidget(a);
         nv->addWidget(b);
         m_low->setCellWidget(r, 0, name);
         auto *sk = new QTableWidgetItem(QString::number(p.stock));
         sk->setTextAlignment(Qt::AlignCenter);
-        sk->setForeground(QColor(p.stock <= 5 ? "#c0271d" : "#b36b00"));
+        sk->setForeground(p.stock <= 5 ? Theme::dangerText() : Theme::warnText());
         QFont f = sk->font();
         f.setBold(true);
         sk->setFont(f);
         m_low->setItem(r, 1, sk);
         auto *lim = new QTableWidgetItem(QString::number(p.reorderLimit));
         lim->setTextAlignment(Qt::AlignCenter);
-        lim->setForeground(QColor("#7b869c"));
+        lim->setForeground(Theme::subtleText());
         m_low->setItem(r, 2, lim);
         const bool done = st.isReordered(p.sku);
         auto *btn = W::button(done ? "Ordered ✓" : "Reorder", "mini");
@@ -250,7 +250,7 @@ void DashboardPage::refresh()
         const auto &o = orders[r];
         m_recent->setRowHeight(r, 48);
         auto id = new QTableWidgetItem(o.id);
-        id->setForeground(QColor("#2554d8"));
+        id->setForeground(Theme::accentText());
         QFont f = id->font();
         f.setBold(true);
         id->setFont(f);

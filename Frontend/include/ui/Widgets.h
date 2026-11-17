@@ -23,7 +23,9 @@ protected:
     void resizeEvent(QResizeEvent *) override;
 
 private:
+    void rebuildShadow();
     QPixmap m_shadow;
+    bool m_shadowDark = false; // mode the cached shadow was drawn for
     bool m_alert;
 };
 
