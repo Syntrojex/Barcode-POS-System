@@ -1,21 +1,7 @@
 #pragma once
 
-#include <string>
+// Kept so older includes still compile. Bill now lives in billing/Bill.h
+// (namespace barcodehub::billing); Order / OrderDetail live in the order module.
+#include "billing/Bill.h"
 
-// File record model for the Billing module.
-// Order / OrderDetail now live in order/Order.h and order/OrderDetail.h (namespace
-// barcodehub::order), so they are not declared a second time here.
-struct Bill {
-    std::string billId;
-    std::string customerName;
-    std::string orderId;
-    std::string productAcronym;
-    double unitPrice{0.0};
-    double discountPerUnit{0.0};
-    int quantity{0};
-    double totalWithoutTax{0.0};
-    double totalTax{0.0};
-    double totalDiscount{0.0};
-    double payable{0.0};
-    std::string paymentStatus;
-};
+using Bill = barcodehub::billing::Bill;
