@@ -52,6 +52,10 @@ bool doubleNear(double a, double b, double epsilon = 0.001) {
     return std::abs(a - b) <= epsilon;
 }
 
+// ============================================================
+// BILL CALCULATOR TESTS
+// ============================================================
+
 bool testCalculatorSingleItem() {
     std::vector<BillLine> lines = {
         {"MILK", 100.0, 17.0, 5.0, 2.0} // 2 units: subtotal 200, tax 34, discount 10 -> payable 224
@@ -112,23 +116,18 @@ bool testCalculatorNegativeValues() {
     BillTotals totals;
     std::string error;
 
-    // Negative unit price
     std::vector<BillLine> negPrice = {{"ITEM", -50.0, 5.0, 0.0, 1.0}};
     TEST_ASSERT(!BillCalculator::calculate(negPrice, totals, &error), "Negative price should fail");
 
-    // Negative tax
     std::vector<BillLine> negTax = {{"ITEM", 50.0, -5.0, 0.0, 1.0}};
     TEST_ASSERT(!BillCalculator::calculate(negTax, totals, &error), "Negative tax should fail");
 
-    // Negative discount
     std::vector<BillLine> negDisc = {{"ITEM", 50.0, 5.0, -2.0, 1.0}};
     TEST_ASSERT(!BillCalculator::calculate(negDisc, totals, &error), "Negative discount should fail");
 
-    // Zero quantity
     std::vector<BillLine> zeroQty = {{"ITEM", 50.0, 5.0, 0.0, 0.0}};
     TEST_ASSERT(!BillCalculator::calculate(zeroQty, totals, &error), "Zero quantity should fail");
 
-    // Negative quantity
     std::vector<BillLine> negQty = {{"ITEM", 50.0, 5.0, 0.0, -3.0}};
     TEST_ASSERT(!BillCalculator::calculate(negQty, totals, &error), "Negative quantity should fail");
 
@@ -136,7 +135,6 @@ bool testCalculatorNegativeValues() {
 }
 
 bool testCalculatorExcessiveDiscount() {
-    // Subtotal 100, Tax 0, Discount 150 -> Net payable would be -50
     std::vector<BillLine> lines = {
         {"COFFEE", 100.0, 0.0, 150.0, 1.0}
     };
@@ -163,6 +161,101 @@ bool testCalculatorNonFiniteValues() {
     return true;
 }
 
+// ============================================================
+// PAYMENT STRATEGY TESTS
+// ============================================================
+
+bool testCashPaymentExact() {
+    CashPayment cash;
+    PaymentRequest req;
+    req.mode = barcodehub::order::PaymentMode::Cash;
+    req.amountTendered = 500.0;
+
+    PaymentResult res = cash.process(req, 500.0);
+    TEST_ASSERT(res.ok, "Exact cash should succeed");
+    TEST_ASSERT(doubleNear(res.change, 0.0), "Change should be 0 for exact payment");
+    return true;
+}
+
+bool testCashPaymentWithChange() {
+    CashPayment cash;
+    PaymentRequest req;
+    req.mode = barcodehub::order::PaymentMode::Cash;
+    req.amountTendered = 1000.0;
+
+    PaymentResult res = cash.process(req, 777.50);
+    TEST_ASSERT(res.ok, "Overpayment should succeed");
+    TEST_ASSERT(doubleNear(res.change, 222.50), "Change should be 222.50");
+    return true;
+}
+
+bool testCashPaymentInsufficient() {
+    CashPayment cash;
+    PaymentRequest req;
+    req.mode = barcodehub::order::PaymentMode::Cash;
+    req.amountTendered = 450.0;
+
+    PaymentResult res = cash.process(req, 500.0);
+    TEST_ASSERT(!res.ok, "Insufficient cash should be rejected");
+    TEST_ASSERT(res.error.find("less than the amount payable") != std::string::npos,
+                "Unexpected error message: " + res.error);
+    return true;
+}
+
+bool testCardPaymentValid() {
+    CardPayment card;
+    PaymentRequest req;
+    req.mode = barcodehub::order::PaymentMode::Card;
+    req.merchant = "HBL";
+
+    PaymentResult res = card.process(req, 1250.0);
+    TEST_ASSERT(res.ok, "Card payment with valid bank should succeed");
+    TEST_ASSERT(doubleNear(res.change, 0.0), "Card payment change should be zero");
+    return true;
+}
+
+bool testCardPaymentMissingBank() {
+    CardPayment card;
+    PaymentRequest req;
+    req.mode = barcodehub::order::PaymentMode::Card;
+    req.merchant = "";
+
+    PaymentResult res = card.process(req, 1250.0);
+    TEST_ASSERT(!res.ok, "Card payment without bank name should fail");
+    TEST_ASSERT(res.error.find("bank") != std::string::npos, "Unexpected error: " + res.error);
+    return true;
+}
+
+bool testCardPaymentInvalidCharacter() {
+    CardPayment card;
+    PaymentRequest req;
+    req.mode = barcodehub::order::PaymentMode::Card;
+    req.merchant = "Bank#Branch"; // '#' is forbidden delimiter
+
+    PaymentResult res = card.process(req, 1250.0);
+    TEST_ASSERT(!res.ok, "Merchant with '#' delimiter should be rejected");
+    return true;
+}
+
+bool testWalletPaymentValid() {
+    WalletPayment wallet;
+    PaymentRequest req;
+    req.mode = barcodehub::order::PaymentMode::Wallet;
+    req.merchant = "JazzCash";
+
+    PaymentResult res = wallet.process(req, 350.0);
+    TEST_ASSERT(res.ok, "Wallet payment with valid provider should succeed");
+    return true;
+}
+
+bool testPaymentRegistryDefaults() {
+    PaymentMethodRegistry reg = PaymentMethodRegistry::withDefaults();
+    TEST_ASSERT(reg.find(barcodehub::order::PaymentMode::Cash) != nullptr, "Cash method must be registered");
+    TEST_ASSERT(reg.find(barcodehub::order::PaymentMode::Card) != nullptr, "Card method must be registered");
+    TEST_ASSERT(reg.find(barcodehub::order::PaymentMode::Wallet) != nullptr, "Wallet method must be registered");
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -175,6 +268,7 @@ int main() {
     std::cout << " Author: Ali Abdullah (25L-3022)\n";
     std::cout << "========================================\n\n";
 
+    // Bill Calculator Tests
     RUN_TEST(testCalculatorSingleItem);
     RUN_TEST(testCalculatorMultipleItems);
     RUN_TEST(testCalculatorRoundingPrecision);
@@ -182,6 +276,16 @@ int main() {
     RUN_TEST(testCalculatorNegativeValues);
     RUN_TEST(testCalculatorExcessiveDiscount);
     RUN_TEST(testCalculatorNonFiniteValues);
+
+    // Payment Strategy Tests
+    RUN_TEST(testCashPaymentExact);
+    RUN_TEST(testCashPaymentWithChange);
+    RUN_TEST(testCashPaymentInsufficient);
+    RUN_TEST(testCardPaymentValid);
+    RUN_TEST(testCardPaymentMissingBank);
+    RUN_TEST(testCardPaymentInvalidCharacter);
+    RUN_TEST(testWalletPaymentValid);
+    RUN_TEST(testPaymentRegistryDefaults);
 
     std::cout << "\n----------------------------------------\n";
     std::cout << "Test Summary: " << passedTests << "/" << totalTests << " passed.\n";
