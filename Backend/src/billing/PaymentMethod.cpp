@@ -27,7 +27,11 @@ PaymentResult electronic(const PaymentRequest& request, const char* what) {
 
 PaymentResult CashPayment::process(const PaymentRequest& request, double payable) const {
     PaymentResult result;
-    if (!std::isfinite(request.amountTendered) || request.amountTendered + 1e-9 < payable) {
+    if (!std::isfinite(request.amountTendered) || request.amountTendered < 0.0) {
+        result.error = "Invalid cash amount tendered.";
+        return result;
+    }
+    if (request.amountTendered + 1e-9 < payable) {
         result.error = "Cash received is less than the amount payable.";
         return result;
     }

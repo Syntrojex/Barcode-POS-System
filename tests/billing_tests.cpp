@@ -199,6 +199,13 @@ bool testCashPaymentInsufficient() {
     TEST_ASSERT(!res.ok, "Insufficient cash should be rejected");
     TEST_ASSERT(res.error.find("less than the amount payable") != std::string::npos,
                 "Unexpected error message: " + res.error);
+
+    // Negative cash tendered
+    req.amountTendered = -50.0;
+    PaymentResult resNeg = cash.process(req, 500.0);
+    TEST_ASSERT(!resNeg.ok, "Negative cash tendered must be rejected");
+    TEST_ASSERT(resNeg.error.find("Invalid cash amount") != std::string::npos,
+                "Unexpected error message: " + resNeg.error);
     return true;
 }
 
