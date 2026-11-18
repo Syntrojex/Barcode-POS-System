@@ -160,7 +160,7 @@ Please read the [Contributing Guidelines](CONTRIBUTING.md) before making changes
 ---
 
 <p align="center">
-  <b>BarcodeHub</b>
+  <b>Barcode POS System</b>
   <br />
   Building a practical barcode solution, one increment at a time.
   <br /><br />
