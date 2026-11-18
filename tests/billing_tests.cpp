@@ -256,6 +256,74 @@ bool testPaymentRegistryDefaults() {
     return true;
 }
 
+// ============================================================
+// BILL RECORD CODEC TESTS
+// ============================================================
+
+bool testCodecFormatAndParse() {
+    Bill bill;
+    bill.id = "261118001";
+    bill.customerName = "Ali Abdullah";
+    bill.orderId = "26111818";
+    bill.paymentStatus = "paid";
+    bill.totals = {500.0, 50.0, 25.0, 525.0};
+
+    BillLine line;
+    line.productAcronym = "MILK";
+    line.unitPrice = 250.0;
+    line.discountPerUnit = 12.5;
+    line.quantity = 2.0;
+
+    std::string formatted = BillRecordCodec::format(bill, line);
+    TEST_ASSERT(formatted.back() == '#', "Formatted record must end with '#'");
+
+    Bill parsedHeader;
+    BillLine parsedLine;
+    std::string error;
+    TEST_ASSERT(BillRecordCodec::parse(formatted, parsedHeader, parsedLine, &error),
+                "Parse failed: " + error);
+
+    TEST_ASSERT(parsedHeader.id == "261118001", "Parsed bill ID mismatch");
+    TEST_ASSERT(parsedHeader.customerName == "Ali Abdullah", "Parsed customer mismatch");
+    TEST_ASSERT(parsedHeader.orderId == "26111818", "Parsed order ID mismatch");
+    TEST_ASSERT(parsedHeader.paymentStatus == "paid", "Parsed status mismatch");
+    TEST_ASSERT(doubleNear(parsedHeader.totals.payable, 525.0), "Parsed payable mismatch");
+
+    TEST_ASSERT(parsedLine.productAcronym == "MILK", "Parsed acronym mismatch");
+    TEST_ASSERT(doubleNear(parsedLine.unitPrice, 250.0), "Parsed unit price mismatch");
+    TEST_ASSERT(doubleNear(parsedLine.discountPerUnit, 12.5), "Parsed discount mismatch");
+    TEST_ASSERT(doubleNear(parsedLine.quantity, 2.0), "Parsed quantity mismatch");
+    return true;
+}
+
+bool testCodecParseErrors() {
+    Bill header;
+    BillLine line;
+    std::string error;
+
+    // Missing trailing '#'
+    std::string noTerminator = "261118001 Ali 26111818 MILK 250 12.5 2 500 50 25 525 paid";
+    TEST_ASSERT(!BillRecordCodec::parse(noTerminator, header, line, &error), "Missing '#' must fail");
+    TEST_ASSERT(error.find("end with '#'") != std::string::npos, "Unexpected error: " + error);
+
+    // Too few fields
+    std::string shortRecord = "261118001 Ali 26111818 MILK #";
+    TEST_ASSERT(!BillRecordCodec::parse(shortRecord, header, line, &error), "Short record must fail");
+    TEST_ASSERT(error.find("expected 12 fields") != std::string::npos, "Unexpected error: " + error);
+
+    // Invalid Bill ID length (8 digits instead of 9)
+    std::string badId = "26111801 Ali 26111818 MILK 250 12.5 2 500 50 25 525 paid #";
+    TEST_ASSERT(!BillRecordCodec::parse(badId, header, line, &error), "8-digit bill ID must fail");
+    TEST_ASSERT(error.find("exactly 9 digits") != std::string::npos, "Unexpected error: " + error);
+
+    // Non-numeric in number field
+    std::string badNumber = "261118001 Ali 26111818 MILK NOT_A_NUM 12.5 2 500 50 25 525 paid #";
+    TEST_ASSERT(!BillRecordCodec::parse(badNumber, header, line, &error), "Non-numeric price must fail");
+    TEST_ASSERT(error.find("not a number") != std::string::npos, "Unexpected error: " + error);
+
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -286,6 +354,10 @@ int main() {
     RUN_TEST(testCardPaymentInvalidCharacter);
     RUN_TEST(testWalletPaymentValid);
     RUN_TEST(testPaymentRegistryDefaults);
+
+    // Bill Record Codec Tests
+    RUN_TEST(testCodecFormatAndParse);
+    RUN_TEST(testCodecParseErrors);
 
     std::cout << "\n----------------------------------------\n";
     std::cout << "Test Summary: " << passedTests << "/" << totalTests << " passed.\n";
