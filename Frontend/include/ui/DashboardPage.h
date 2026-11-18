@@ -27,8 +27,7 @@ private:
 
     QLabel *m_sales, *m_salesSub, *m_orders, *m_ordersSub, *m_pending, *m_pendingSub, *m_lowCount, *m_lowSub;
     RevenueChart *m_chart;
-    QPushButton *m_genPO;
-    QTableWidget *m_low, *m_recent;
-    QLabel *m_showing, *m_lowBadge;
+    QTableWidget *m_recent;
+    QLabel *m_showing;
     QLineEdit *m_search;
 };
