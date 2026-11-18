@@ -301,26 +301,100 @@ bool testCodecParseErrors() {
     BillLine line;
     std::string error;
 
-    // Missing trailing '#'
     std::string noTerminator = "261118001 Ali 26111818 MILK 250 12.5 2 500 50 25 525 paid";
     TEST_ASSERT(!BillRecordCodec::parse(noTerminator, header, line, &error), "Missing '#' must fail");
     TEST_ASSERT(error.find("end with '#'") != std::string::npos, "Unexpected error: " + error);
 
-    // Too few fields
     std::string shortRecord = "261118001 Ali 26111818 MILK #";
     TEST_ASSERT(!BillRecordCodec::parse(shortRecord, header, line, &error), "Short record must fail");
     TEST_ASSERT(error.find("expected 12 fields") != std::string::npos, "Unexpected error: " + error);
 
-    // Invalid Bill ID length (8 digits instead of 9)
     std::string badId = "26111801 Ali 26111818 MILK 250 12.5 2 500 50 25 525 paid #";
     TEST_ASSERT(!BillRecordCodec::parse(badId, header, line, &error), "8-digit bill ID must fail");
     TEST_ASSERT(error.find("exactly 9 digits") != std::string::npos, "Unexpected error: " + error);
 
-    // Non-numeric in number field
     std::string badNumber = "261118001 Ali 26111818 MILK NOT_A_NUM 12.5 2 500 50 25 525 paid #";
     TEST_ASSERT(!BillRecordCodec::parse(badNumber, header, line, &error), "Non-numeric price must fail");
     TEST_ASSERT(error.find("not a number") != std::string::npos, "Unexpected error: " + error);
 
+    return true;
+}
+
+// ============================================================
+// BILL REPOSITORY TESTS
+// ============================================================
+
+bool testRepositoryNextBillId() {
+    std::vector<Bill> existing;
+    std::string error;
+
+    // 1. First bill of the day
+    std::string id1 = BillRepository::nextBillId("2026-11-18", existing, &error);
+    TEST_ASSERT(id1 == "261118001", "Expected 261118001, got: " + id1);
+
+    // 2. Sequential increment
+    Bill b1;
+    b1.id = id1;
+    existing.push_back(b1);
+    std::string id2 = BillRepository::nextBillId("2026-11-18", existing, &error);
+    TEST_ASSERT(id2 == "261118002", "Expected 261118002, got: " + id2);
+
+    // 3. Different date does not interfere
+    Bill bPrevDate;
+    bPrevDate.id = "261117099"; // previous day had 99 bills
+    existing.push_back(bPrevDate);
+    std::string idNewDate = BillRepository::nextBillId("2026-11-18", existing, &error);
+    TEST_ASSERT(idNewDate == "261118002", "Previous date should not increment current date sequence");
+
+    // 4. Invalid date format
+    std::string badDateId = BillRepository::nextBillId("18-11-2026", existing, &error);
+    TEST_ASSERT(badDateId.empty(), "Invalid date format should fail");
+
+    return true;
+}
+
+bool testRepositoryAppendAndLoad() {
+    const fs::path testDir = fs::temp_directory_path() / "barcodehub_billing_unit_test";
+    std::error_code ec;
+    fs::remove_all(testDir, ec);
+    fs::create_directories(testDir, ec);
+
+    const fs::path billFile = testDir / "Bill.txt";
+    BillRepository repo(billFile);
+
+    std::vector<Bill> initial;
+    std::string error;
+    TEST_ASSERT(repo.loadAll(initial, &error), "Load from non-existent file should return empty vector");
+    TEST_ASSERT(initial.empty(), "Initial bills must be empty");
+
+    // Create a 2-line bill
+    Bill bill;
+    bill.id = "261118001";
+    bill.customerName = "Ali Abdullah";
+    bill.orderId = "26111818";
+    bill.paymentStatus = "paid";
+    bill.totals = {400.0, 40.0, 20.0, 420.0};
+    bill.lines = {
+        {"MILK", 200.0, 20.0, 10.0, 1.0},
+        {"BREAD", 200.0, 20.0, 10.0, 1.0}
+    };
+
+    TEST_ASSERT(repo.append(bill, &error), "Append bill failed: " + error);
+
+    // Verify loaded content
+    std::vector<Bill> loaded;
+    TEST_ASSERT(repo.loadAll(loaded, &error), "Load bills failed: " + error);
+    TEST_ASSERT(loaded.size() == 1, "Expected 1 aggregated bill");
+    TEST_ASSERT(loaded[0].id == "261118001", "Bill ID mismatch");
+    TEST_ASSERT(loaded[0].lines.size() == 2, "Expected 2 lines in aggregated bill");
+    TEST_ASSERT(doubleNear(loaded[0].totals.payable, 420.0), "Payable mismatch");
+
+    // Attempting to append duplicate bill ID should fail
+    TEST_ASSERT(!repo.append(bill, &error), "Duplicate bill ID append must be rejected");
+    TEST_ASSERT(error.find("already exists") != std::string::npos, "Unexpected error: " + error);
+
+    // Clean up
+    fs::remove_all(testDir, ec);
     return true;
 }
 
@@ -358,6 +432,10 @@ int main() {
     // Bill Record Codec Tests
     RUN_TEST(testCodecFormatAndParse);
     RUN_TEST(testCodecParseErrors);
+
+    // Bill Repository Tests
+    RUN_TEST(testRepositoryNextBillId);
+    RUN_TEST(testRepositoryAppendAndLoad);
 
     std::cout << "\n----------------------------------------\n";
     std::cout << "Test Summary: " << passedTests << "/" << totalTests << " passed.\n";
