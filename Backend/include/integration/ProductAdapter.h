@@ -1,7 +1,7 @@
 #pragma once
 
 #include "order/OrderManager.h"   // ProductSnapshot
-#include "product/Product.h"      // Farzam's Product
+#include "product/ProductModel.h"      // Farzam's Product
 
 namespace barcodehub::integration {
 

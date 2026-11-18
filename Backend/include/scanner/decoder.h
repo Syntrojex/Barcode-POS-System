@@ -19,6 +19,7 @@ class Decoder
     static const char *const patterns[10]; // pattern of each digit 0..9
     mutable bool badCheckDigit = false;    // check for a badcheckdigit
 public:
+    // Historic name: returns the FULL 8-digit EAN used as Product.txt lookup key.
     bool decodeSix(const std::string &bits, std::string &six) const;
     bool decodeCropping(const cv::Mat &gray, std::string &six) const;
     bool isBadCheck() const;

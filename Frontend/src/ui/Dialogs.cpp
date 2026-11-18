@@ -1,6 +1,7 @@
 #include "Dialogs.h"
 #include "Theme.h"
 #include "Widgets.h"
+#include <QLineEdit>
 #include <QButtonGroup>
 #include <QDialog>
 #include <QDoubleSpinBox>
@@ -27,10 +28,10 @@ namespace Dialogs
         { return l + QString(qMax(1, w - l.size() - r.size()), ' ') + r; };
         const QString rule(w, '-');
         QString t;
-        t += center("SMARTPOS RETAIL") + "\n" + center("Store #102 - Register 02") + "\n" + rule + "\n";
+        t += center("BARCODEHUB POS") + "\n" + center("Retail receipt") + "\n" + rule + "\n";
         t += two("Order", o.id) + "\n";
+        if (!o.billId.isEmpty()) t += two("Bill", o.billId) + "\n";
         t += two("Date", o.time.toString("yyyy-MM-dd HH:mm")) + "\n";
-        t += two("Cashier", "Alex Rivera") + "\n";
         t += two("Customer", o.customer) + "\n" + rule + "\n";
         for (const auto &l : o.lines)
         {
@@ -190,7 +191,7 @@ namespace Dialogs
         d.exec();
     }
 
-    bool payment(QWidget *parent, double total, QString &mode, double &tendered)
+    bool payment(QWidget *parent, double total, QString &mode, double &tendered, QString &merchant)
     {
         QDialog d(parent);
         d.setWindowTitle("Instant Payment");
@@ -231,6 +232,15 @@ namespace Dialogs
         v->addWidget(tenderRow);
         auto *change = W::label("", "h2");
         v->addWidget(change);
+        auto *merchantRow = new QWidget;
+        auto *mh = new QHBoxLayout(merchantRow);
+        mh->setContentsMargins(0, 0, 0, 0);
+        auto *merchantName = W::label("Bank / wallet name", "muted");
+        auto *merchantInput = new QLineEdit;
+        merchantInput->setPlaceholderText("e.g. HBL, JazzCash");
+        mh->addWidget(merchantName);
+        mh->addWidget(merchantInput, 1);
+        v->addWidget(merchantRow);
 
         auto *h = new QHBoxLayout;
         h->addStretch();
@@ -245,14 +255,17 @@ namespace Dialogs
             const bool cash = group->checkedId() == 0;
             tenderRow->setVisible(cash);
             change->setVisible(cash);
+            merchantRow->setVisible(!cash);
             const double c = spin->value() - total;
             change->setText(c >= -0.005 ? "Change due: " + W::money(c) : "Short by " + W::money(-c));
             change->setStyleSheet(c >= -0.005 ? "color:#006329;" : "color:#ba1a1a;");
-            ok->setEnabled(!cash || c >= -0.005);
+            ok->setEnabled(cash ? c >= -0.005 : !merchantInput->text().trimmed().isEmpty());
         };
         QObject::connect(group, &QButtonGroup::idClicked, &d, [&](int)
                          { refresh(); });
         QObject::connect(spin, qOverload<double>(&QDoubleSpinBox::valueChanged), &d, [&](double)
+                         { refresh(); });
+        QObject::connect(merchantInput, &QLineEdit::textChanged, &d, [&](const QString&)
                          { refresh(); });
         QObject::connect(cancel, &QPushButton::clicked, &d, &QDialog::reject);
         QObject::connect(ok, &QPushButton::clicked, &d, &QDialog::accept);
@@ -262,6 +275,7 @@ namespace Dialogs
         const int id = group->checkedId();
         mode = names[id];
         tendered = id == 0 ? spin->value() : 0;
+        merchant = id == 0 ? QString() : merchantInput->text().trimmed();
         return true;
     }
 }

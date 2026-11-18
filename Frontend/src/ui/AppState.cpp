@@ -1,9 +1,15 @@
 #include "AppState.h"
+#include "integration/ProductAdapter.h"
+#include "billing/BillingService.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QFile>
+#include <QSaveFile>
 #include <QtMath>
 #include <algorithm>
+#include <cmath>
+#include <map>
 
 #ifndef BARCODEHUB_SOURCE_DIR
 #define BARCODEHUB_SOURCE_DIR ""
@@ -86,12 +92,19 @@ AppState::AppState()
     const QString dir = locateDataDir();
     if (!dir.isEmpty())
         loadProducts(dir + "/Product.txt");
-    seedOrders();
+    if (!dir.isEmpty())
+    {
+        const std::string root = dir.toStdString();
+        m_orderManager = std::make_unique<barcodehub::order::OrderManager>(root + "/Order.txt", root + "/OrderDetail.txt");
+        m_billRepository = std::make_unique<barcodehub::billing::BillRepository>(root + "/Bill.txt");
+        refreshOrders();
+    }
 }
 
 bool AppState::loadProducts(const QString &path)
 {
     m_root = QDir::cleanPath(QFileInfo(path).absolutePath() + "/..");
+    m_productPath = path;
     const bool ok = m_manager.loadProducts(path.toStdString());
     refreshCache();
     emit changed();
@@ -101,14 +114,14 @@ bool AppState::loadProducts(const QString &path)
 void AppState::refreshCache()
 {
     m_products.clear();
-    for (const auto &p : m_manager.getAllProducts())
+    for (const auto &p : m_manager.getProducts())
         m_products.push_back(ProductInfo::from(p, m_root));
 }
 
 QStringList AppState::productIssues() const
 {
     QStringList out;
-    const auto &r = m_manager.lastLoad();
+    const auto &r = m_manager.getLastLoad();
     if (!r.fileOpened)
         out << QString::fromStdString(r.summary());
     for (const auto &i : r.issues)
@@ -184,73 +197,235 @@ void AppState::reorderAllLow()
 
 QString AppState::nextOrderId()
 {
-    return QString("%1").arg(m_nextOrderNo, 8, 10, QChar('0'));
+    if (!m_orderManager)
+        return "--------";
+    std::string error;
+    const std::string id = m_orderManager->nextOrderId(&error);
+    return id.empty() ? QString("--------") : QString::fromStdString(id);
 }
 
-void AppState::addOrder(const OrderRecord &o)
+bool AppState::addOrder(OrderRecord &o, QString *error)
 {
-    for (const auto &l : o.lines)
-        if (const ProductInfo p = findByCode(l.acronym).value_or(ProductInfo()); p.id > 0)
-            m_manager.deductStock(p.id, l.qty);
-    std::string err;
-    m_manager.saveProducts(&err); // keep Product.txt in step with the sale
-    refreshCache();
-    m_orders.prepend(o);
-    ++m_nextOrderNo;
-    ++m_sessionOrders;
-    m_sessionSales += o.total;
-    emit changed();
-}
+    auto fail = [&](const QString &why) {
+        if (error) *error = why;
+        return false;
+    };
+    if (error) error->clear();
+    if (!m_orderManager || !m_billRepository)
+        return fail("Data directory is unavailable. Check BARCODEHUB_DATA and Product.txt.");
+    if (o.lines.isEmpty())
+        return fail("The order is empty.");
 
-void AppState::seedOrders()
-{
-    auto line = [&](int productId, int qty)
+    namespace bh = barcodehub;
+    std::string why;
+    bh::order::PaymentMode mode = bh::order::PaymentMode::Cash;
+    if (!bh::order::paymentModeFromString(o.payment.toLower().toStdString(), mode))
+        return fail("Unsupported payment method.");
+    bh::billing::PaymentRequest payment;
+    payment.mode = mode;
+    payment.merchant = o.merchant.toStdString();
+    payment.amountTendered = o.tendered;
+    const auto methods = bh::billing::PaymentMethodRegistry::withDefaults();
+    const auto *method = methods.find(mode);
+    if (!method)
+        return fail("Payment method unavailable.");
+
+    m_orderManager->clearCart();
+    std::map<std::string, bh::order::ProductSnapshot> manualProducts;
+    std::map<int, int> stockToDeduct;
+    for (const auto &line : o.lines)
     {
-        for (const auto &p : m_products)
-            if (p.id == productId)
-                return ReceiptLine{p.name, p.sku, qty, p.price, p.tax, p.discount};
-        return ReceiptLine{};
-    };
-    struct O
-    {
-        const char *customer, *contact, *tier, *payment, *merchant, *status;
-        int minutesAgo;
-        std::vector<std::pair<int, int>> items; // product id, quantity
-    };
-    const O os[] = {
-        {"Walk-in Customer", "-", "Guest", "cash", "-", "Paid", 1, {{5, 2}, {1, 2}, {2, 1}}},
-        {"Elena Rostova", "0300-3456712", "VIP", "card", "ABL", "In Progress", 4, {{8, 6}, {12, 3}}},
-        {"Marco Diaz", "0321-4412890", "Standard", "wallet", "JazzCash", "On Hold", 10, {{4, 1}, {14, 2}}},
-        {"Walk-in Customer", "-", "Guest", "wallet", "Easypaisa", "Paid", 17, {{6, 3}}},
-        {"Sarah Jenkins", "0333-2348901", "VIP", "card", "HBL", "Paid", 31, {{3, 1}, {1, 1}, {2, 1}}},
-        {"Marcus Vance", "0345-0192834", "Gold", "wallet", "JazzCash", "Paid", 44, {{10, 1}, {5, 2}}},
-        {"David Kim", "0300-4412890", "Guest", "cash", "-", "Paid", 58, {{12, 4}}},
-        {"Claire Dupont", "0311-8809921", "Rewards", "cash", "-", "On Hold", 71, {{9, 4}, {14, 1}}},
-        {"Walk-in Customer", "-", "Guest", "card", "MCB", "Paid", 90, {{8, 3}, {7, 1}}},
-        {"Aisha Khan", "0302-1204477", "Standard", "cash", "-", "Paid", 112, {{2, 2}, {3, 1}}},
-        {"Tom Becker", "0309-9023310", "VIP", "wallet", "Easypaisa", "Paid", 135, {{13, 2}, {10, 1}}},
-        {"Walk-in Customer", "-", "Guest", "cash", "-", "Paid", 160, {{8, 6}}},
-    };
-    int no = 89210;
-    const QDateTime now = QDateTime::currentDateTime();
-    for (const auto &o : os)
-    {
-        OrderRecord r;
-        r.id = QString("%1").arg(no--, 8, 10, QChar('0'));
-        r.time = now.addSecs(-60 * o.minutesAgo);
-        r.customer = o.customer;
-        r.contact = o.contact;
-        r.tier = o.tier;
-        r.payment = o.payment;
-        r.merchant = o.merchant;
-        r.status = o.status;
-        r.shift = QString("POS #0%1 • Shift A").arg(1 + (no % 4));
-        for (const auto &it : o.items)
-            if (auto l = line(it.first, it.second); l.qty > 0)
-                r.lines << l;
-        r.recompute();
-        if (r.status == "Paid" && r.payment == "cash")
-            r.tendered = qCeil(r.total / 100.0) * 100.0;
-        m_orders.push_back(r);
+        bh::order::ProductSnapshot snapshot;
+        if (line.productId > 0)
+        {
+            const Product *p = m_manager.searchByID(line.productId);
+            if (!p || QString::fromStdString(p->getAcronym()) != line.acronym)
+                return fail("A product in the order no longer exists. Refresh and retry.");
+            snapshot = bh::integration::toSnapshot(*p);
+            stockToDeduct[line.productId] += line.qty;
+        }
+        else
+        {
+            // Manual items have no inventory entry. Their snapshot remains valid for this
+            // checkout and their price/quantity is saved to Bill.txt for future receipts.
+            snapshot.productId = "CUSTOM-" + line.acronym.toStdString();
+            snapshot.barcode = snapshot.productId;
+            snapshot.acronym = line.acronym.toStdString();
+            snapshot.name = line.name.toStdString();
+            snapshot.measurementUnit = "count";
+            snapshot.unitPrice = line.price;
+            snapshot.taxPerUnit = line.tax;
+            snapshot.discountPerUnit = line.discount;
+            snapshot.availableQuantity = 1000000;
+            manualProducts[snapshot.productId] = snapshot;
+        }
+        if (!m_orderManager->addToCart(snapshot, line.qty, &why))
+            return fail(QString::fromStdString(why));
     }
+    for (const auto &[id, qty] : stockToDeduct)
+        if (const auto *p = m_manager.searchByID(id); !p || qty > p->getAvailableQuantity())
+            return fail("Stock changed while preparing checkout. Refresh and retry.");
+
+    // Validate the same arithmetic/payment rules used by Billing before touching disk.
+    o.recompute();
+    const double payable = m_orderManager->totalPayable();
+    if (std::fabs(o.total - payable) > 0.011)
+        return fail("Cart totals differ from backend totals. Please refresh the order.");
+    const auto accepted = method->process(payment, payable);
+    if (!accepted.ok)
+        return fail(QString::fromStdString(accepted.error));
+
+    bh::order::Order created;
+    const std::string name = o.customer.trimmed().isEmpty() ? "Walk-in Customer" : o.customer.toStdString();
+    const std::string contact = o.contact == "-" ? "" : o.contact.toStdString();
+    if (!m_orderManager->createOrder(name, contact, created, &why))
+        return fail(QString::fromStdString(why));
+
+    // Capture the original inventory before changing stock, so a failed checkout can
+    // restore Product.txt instead of leaving stock deducted for an unpaid order.
+    QFile stockFile(m_productPath);
+    if (!stockFile.open(QIODevice::ReadOnly))
+    {
+        std::string ignored;
+        m_orderManager->discardOrder(created.id, &ignored);
+        return fail("Cannot back up Product.txt before checkout.");
+    }
+    const QByteArray originalStock = stockFile.readAll();
+    stockFile.close();
+    auto restoreStock = [&]() -> bool {
+        QSaveFile output(m_productPath);
+        if (!output.open(QIODevice::WriteOnly)) return false;
+        if (output.write(originalStock) != originalStock.size()) return false;
+        if (!output.commit()) return false;
+        m_manager.loadProducts(m_productPath.toStdString());
+        refreshCache();
+        return true;
+    };
+    for (const auto &[id, qty] : stockToDeduct)
+        m_manager.deductStock(id, qty);
+    if (!m_manager.saveProducts(&why))
+    {
+        const bool restored = restoreStock();
+        std::string ignored;
+        const bool discarded = m_orderManager->discardOrder(created.id, &ignored);
+        return fail("Could not save stock: " + QString::fromStdString(why) +
+                    (!restored || !discarded ? " (rollback needs manual attention)" : ""));
+    }
+
+    bh::billing::BillingService service(*m_orderManager, *m_billRepository,
+        [this, &manualProducts](const std::string &id, bh::order::ProductSnapshot &snapshot) {
+            const auto custom = manualProducts.find(id);
+            if (custom != manualProducts.end()) { snapshot = custom->second; return true; }
+            try {
+                const Product *p = m_manager.searchByID(std::stoi(id));
+                if (p) { snapshot = bh::integration::toSnapshot(*p); return true; }
+            } catch (...) {}
+            return false;
+        });
+    bh::billing::Bill bill;
+    double change = 0;
+    if (!service.checkout(created.id, payment, bill, &change, &why))
+    {
+        const bool restored = restoreStock();
+        std::string ignored;
+        const bool discarded = m_orderManager->discardOrder(created.id, &ignored);
+        refreshCache();
+        return fail("Checkout failed: " + QString::fromStdString(why) +
+                    (!restored || !discarded ? " (rollback needs manual attention)" : ""));
+    }
+
+    o.id = QString::fromStdString(created.id);
+    o.billId = QString::fromStdString(bill.id);
+    o.time = QDateTime::fromString(QString::fromStdString(created.date + " " + created.time), "yyyy-MM-dd HH:mm:ss");
+    o.status = "Paid";
+    o.total = bill.totals.payable;
+    o.subtotal = bill.totals.withoutTax;
+    o.discount = bill.totals.discount;
+    o.tax = bill.totals.tax;
+    refreshCache();
+    refreshOrders();
+    // The current session knows the manual item descriptions even if the catalogue doesn't.
+    for (auto &history : m_orders)
+        if (history.id == o.id) { history = o; break; }
+    emit changed();
+    return true;
+}
+
+void AppState::refreshOrders()
+{
+    m_orders.clear();
+    m_baseSales = 0;
+    m_baseOrders = 0;
+    if (!m_orderManager || !m_billRepository) return;
+    std::vector<barcodehub::order::Order> orders;
+    std::vector<barcodehub::order::OrderDetail> details;
+    std::vector<barcodehub::billing::Bill> bills;
+    std::string error;
+    if (!m_orderManager->loadOrders(orders, &error) ||
+        !m_orderManager->loadOrderDetails(details, &error) ||
+        !m_billRepository->loadAll(bills, &error))
+    {
+        qWarning("Could not load persisted orders/bills: %s", error.c_str());
+        return;
+    }
+    const QDate today = QDate::currentDate();
+    for (const auto &entry : orders)
+    {
+        OrderRecord rec;
+        rec.id = QString::fromStdString(entry.id);
+        rec.time = QDateTime::fromString(QString::fromStdString(entry.date + " " + entry.time), "yyyy-MM-dd HH:mm:ss");
+        rec.customer = QString::fromStdString(entry.customerName);
+        rec.contact = entry.customerContact.empty() ? "-" : QString::fromStdString(entry.customerContact);
+        rec.tier = "Guest";
+        rec.shift = "POS #01";
+        rec.status = QString::fromStdString(barcodehub::order::toString(entry.status));
+        if (entry.status == barcodehub::order::OrderStatus::InProgress) rec.status = "In Progress";
+        if (entry.status == barcodehub::order::OrderStatus::OnHold) rec.status = "On Hold";
+        if (entry.status == barcodehub::order::OrderStatus::Paid) rec.status = "Paid";
+        if (entry.status == barcodehub::order::OrderStatus::Archived) rec.status = "Archived";
+        rec.payment = QString::fromStdString(barcodehub::order::toString(entry.paymentMode));
+        rec.merchant = QString::fromStdString(entry.paymentMerchant);
+        const auto bill = std::find_if(bills.begin(), bills.end(), [&](const auto &b) { return b.orderId == entry.id; });
+        if (bill != bills.end()) rec.billId = QString::fromStdString(bill->id);
+        int detailIndex = 0;
+        for (const auto &detail : details)
+        {
+            if (detail.orderId != entry.id) continue;
+            const Product *p = nullptr;
+            try { p = m_manager.searchByID(std::stoi(detail.productId)); } catch (...) {}
+            ReceiptLine line;
+            line.name = p ? QString::fromStdString(p->getProductName()) : QString::fromStdString(detail.productId);
+            line.acronym = p ? QString::fromStdString(p->getAcronym()) : QString::fromStdString(detail.productId);
+            line.productId = p ? p->getProductID() : 0;
+            line.qty = static_cast<int>(detail.quantity);
+            line.price = p ? p->getUnitPrice() : 0;
+            line.tax = p ? p->getTax() : 0;
+            line.discount = p ? p->getDiscount() : 0;
+            if (bill != bills.end() && detailIndex < static_cast<int>(bill->lines.size()))
+            {
+                const auto &saved = bill->lines[detailIndex];
+                line.acronym = QString::fromStdString(saved.productAcronym);
+                if (!p) line.name = line.acronym;
+                line.price = saved.unitPrice;
+                line.discount = saved.discountPerUnit;
+            }
+            rec.lines.push_back(line);
+            ++detailIndex;
+        }
+        rec.recompute();
+        if (bill != bills.end())
+        {
+            rec.subtotal = bill->totals.withoutTax;
+            rec.discount = bill->totals.discount;
+            rec.tax = bill->totals.tax;
+            rec.total = bill->totals.payable;
+        }
+        if (rec.time.date() == today)
+        {
+            ++m_baseOrders;
+            if (rec.status == "Paid") m_baseSales += rec.total;
+        }
+        m_orders.push_back(std::move(rec));
+    }
+    std::sort(m_orders.begin(), m_orders.end(), [](const OrderRecord &a, const OrderRecord &b) { return a.time > b.time; });
 }

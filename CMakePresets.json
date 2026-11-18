@@ -9,7 +9,7 @@
     {
       "name": "qt-mingw",
       "displayName": "Qt 6 MinGW 64-bit (Default)",
-      "description": "Qt 6 MinGW 64-bit + Ninja (frontend only)",
+      "description": "Qt 6 MinGW 64-bit + Ninja (frontend + backend)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/qt-mingw",
       "cacheVariables": {

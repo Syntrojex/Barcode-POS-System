@@ -122,14 +122,12 @@ void DashboardPage::build()
     auto *cv = new QVBoxLayout(cc);
     cv->setContentsMargins(18, 14, 18, 12);
     cv->setSpacing(6);
-    auto *legend = new QLabel("<span style='color:#3f6fe0'>■</span> Revenue &nbsp;&nbsp; <span style='color:#f08a24'>╌</span> Target");
+    auto *legend = new QLabel("Revenue from paid orders");
     legend->setObjectName("muted");
     W::headerRow(cv, "", "Hourly revenue", legend);
     m_chart = new RevenueChart;
     m_chart->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_chart->setData({"08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"},
-                     {120, 190, 330, 480, 610, 641, 560, 470, 380, 290, 210, 150, 90},
-                     {250, 260, 280, 320, 360, 400, 420, 420, 400, 360, 320, 290, 260});
+    m_chart->setData({}, {}, {}); // populated from real paid orders in refresh()
     cv->addWidget(m_chart, 1);
     mid->addWidget(cc, 6);
 
@@ -155,7 +153,7 @@ void DashboardPage::build()
     mid->addWidget(lc, 4);
     root->addLayout(mid, 5);
     connect(m_genPO, &QPushButton::clicked, this, [this]
-            { AppState::instance().reorderAllLow(); emit toast("Purchase orders drafted for all low-stock items"); });
+            { AppState::instance().reorderAllLow(); emit toast("Low-stock items marked for reorder (session only)"); });
 
     // ---- recent orders
     auto *rc = W::card(this);
@@ -191,14 +189,26 @@ void DashboardPage::refresh()
     m_sales->setText(W::money(st.salesToday()));
     m_salesSub->setText("Revenue so far today");
     m_orders->setText(QString::number(st.ordersToday()));
-    m_ordersSub->setText("Average " + W::money(st.salesToday() / qMax(1, st.ordersToday())) + " per order");
+    int paidToday = 0;
+    for (const auto &o : orders)
+        if (o.status == "Paid" && o.time.date() == QDate::currentDate()) ++paidToday;
+    m_ordersSub->setText("Average " + W::money(st.salesToday() / qMax(1, paidToday)) + " per paid order");
+
+    QStringList hours;
+    QVector<double> earned(13, 0.0), target(13, 0.0);
+    for (int hour = 8; hour <= 20; ++hour) hours << QString("%1").arg(hour, 2, 10, QChar('0'));
+    for (const auto &o : orders)
+        if (o.status == "Paid" && o.time.date() == QDate::currentDate() &&
+            o.time.time().hour() >= 8 && o.time.time().hour() <= 20)
+            earned[o.time.time().hour() - 8] += o.total;
+    m_chart->setData(hours, earned, target);
     m_pending->setText(QString::number(pending));
     m_pendingSub->setText("On hold or in progress");
     const auto low = st.lowStock();
     m_lowCount->setText(QString::number(low.size()));
     m_lowSub->setText("Items at or below the low-stock limit");
     W::setBadge(m_lowBadge, QString("%1 items").arg(low.size()), "red");
-    m_genPO->setText(QString("Reorder all (%1)").arg(low.size()));
+    m_genPO->setText(QString("Mark for reorder (%1)").arg(low.size()));
     m_genPO->setEnabled(!low.isEmpty());
 
     const int n = qMin(5, low.size());
@@ -230,7 +240,7 @@ void DashboardPage::refresh()
         lim->setForeground(QColor("#8a94ab"));
         m_low->setItem(r, 2, lim);
         const bool done = st.isReordered(p.id);
-        auto *btn = W::button(done ? "Ordered ✓" : "Reorder", "mini");
+        auto *btn = W::button(done ? "Marked ✓" : "Mark", "mini");
         btn->setEnabled(!done);
         auto *wrap = new QWidget;
         auto *wl = new QHBoxLayout(wrap);
@@ -239,7 +249,7 @@ void DashboardPage::refresh()
         m_low->setCellWidget(r, 3, wrap);
         const int pid = p.id; const QString nm = p.name;
         connect(btn, &QPushButton::clicked, this, [this, pid, nm]
-                { AppState::instance().reorder(pid); emit toast("Purchase order drafted for " + nm); });
+                { AppState::instance().reorder(pid); emit toast("Marked for reorder (session only): " + nm); });
     }
 
     const int m = qMin(5, orders.size());
@@ -266,20 +276,15 @@ void DashboardPage::refresh()
         swl->addWidget(W::badge(o.status, W::statusBadgeKind(o.status)), 0, Qt::AlignVCenter);
         swl->addStretch();
         m_recent->setCellWidget(r, 5, sw);
-        const bool hold = o.status == "On Hold";
-        auto *ab = W::button(hold ? "Resume" : "View", hold ? "primary" : "mini");
-        if (hold)
-            ab->setStyleSheet("padding:4px 12px;");
+        auto *ab = W::button("View", "mini");
         auto *aw = new QWidget;
         auto *al = new QHBoxLayout(aw);
         al->setContentsMargins(0, 0, 4, 0);
         al->addWidget(ab);
         m_recent->setCellWidget(r, 6, aw);
         const OrderRecord copy = o;
-        connect(ab, &QPushButton::clicked, this, [this, copy, hold]
-                {
-            if (hold) emit resumeOrder(copy.id);
-            else Dialogs::orderDetails(this, copy); });
+        connect(ab, &QPushButton::clicked, this, [this, copy]
+                { Dialogs::orderDetails(this, copy); });
     }
-    m_showing->setText(QString("Showing the latest %1 of %2 orders today").arg(m).arg(st.ordersToday()));
+    m_showing->setText(QString("Showing the latest %1 of %2 saved orders").arg(m).arg(orders.size()));
 }

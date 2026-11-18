@@ -58,6 +58,11 @@ public:
     // Update payment/status after the cashier completes payment or holds the order.
     bool updateOrder(const Order& order, std::string* error = nullptr);
 
+    // The next order ID (preview only; createOrder allocates it at save time).
+    std::string nextOrderId(std::string* error = nullptr) const;
+    // Remove a newly created, unpaid order if checkout fails.
+    bool discardOrder(const std::string& orderId, std::string* error = nullptr);
+
     // Read persisted data for UI/history screens.
     bool loadOrders(std::vector<Order>& orders, std::string* error = nullptr) const;
     bool loadOrderDetails(std::vector<OrderDetail>& details,

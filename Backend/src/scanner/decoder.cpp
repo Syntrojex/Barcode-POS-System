@@ -125,12 +125,10 @@ bool Decoder::decodeSix(const std::string &bits, std::string &six) const
             badCheckDigit = true;
             continue;
         }
-        if (d[0] == '0' && d[1] != '0') // 04829157
-        {
-            six = d.substr(1, 6); // six=482915
-            badCheckDigit = false;
-            return true;
-        }
+        // Product.txt stores the full eight-digit EAN-8, not the six-digit payload.
+        six = d;
+        badCheckDigit = false;
+        return true;
     }
     return false;
 }

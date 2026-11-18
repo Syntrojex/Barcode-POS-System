@@ -1,371 +1,422 @@
-cmake_minimum_required(VERSION 3.20)   # file(SIZE) needs 3.20; Qt ships a newer one
+cmake_minimum_required(VERSION 3.21)
+
 project(BarcodePOS LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(BACKEND_ONLY "Build only the Qt-free backend and its tests (no GUI)" OFF)
+option(BACKEND_ONLY "Build backend and tests without Qt" OFF)
 
-# Camera scanner (Shauzab). OFF (default for now) = build without the camera, no OpenCV needed.
-# ON = camera included (CMake stops if OpenCV 4 is missing), AUTO = camera if OpenCV 4 is found.
-set(CAMERA OFF CACHE STRING "Camera scanner: OFF | ON | AUTO")
+set(CAMERA ON CACHE STRING "OpenCV camera: OFF, ON, AUTO")
 set_property(CACHE CAMERA PROPERTY STRINGS OFF ON AUTO)
 
-# ---------------------------------------------------------------------------
-# Windows: always use the Qt from C:/Qt, never the one from MSYS2.
-# (Qt Creator's "CMake preset" kit has no Qt path, so CMake falls back to PATH and can pick
-#  C:/msys64/ucrt64. Its uic.exe then dies with 0xc0000139 next to Qt's MinGW.)
-# ---------------------------------------------------------------------------
-set(QT_INSTALL_ROOT "C:/Qt" CACHE PATH "Folder that holds the Qt installs (6.x.x/mingw_64)")
-if(WIN32)
-    file(GLOB _qt_roots "${QT_INSTALL_ROOT}/6.*/mingw_64")
-    if(_qt_roots)
-        list(SORT _qt_roots COMPARE NATURAL ORDER DESCENDING)   # newest version first
-        list(GET _qt_roots 0 _qt_root)
+# ============================================================
+# BACKEND LIBRARIES
+# ============================================================
 
-        # A Qt found earlier in MSYS2 is remembered in the cache: forget it.
-        get_cmake_property(_cache_vars CACHE_VARIABLES)
-        foreach(_v ${_cache_vars})
-            if(_v MATCHES "^Qt6.*_DIR$" AND "${${_v}}" MATCHES "msys64")
-                unset(${_v} CACHE)
+# Product management
+add_library(product_core STATIC
+    Backend/src/product/ProductModel.cpp
+    Backend/src/product/ProductStorage.cpp
+    Backend/src/product/ProductValidation.cpp
+)
+
+target_include_directories(product_core PUBLIC
+    Backend/include
+    Backend/include/product
+)
+
+# Order management
+add_library(order_core STATIC
+    Backend/src/order/Order.cpp
+    Backend/src/order/OrderDetail.cpp
+    Backend/src/order/OrderManager.cpp
+)
+
+target_include_directories(order_core PUBLIC
+    Backend/include
+)
+
+# Common utilities
+add_library(common_core STATIC
+    Backend/src/common/RecordText.cpp
+)
+
+target_include_directories(common_core PUBLIC
+    Backend/include
+)
+
+# Billing
+add_library(billing_core STATIC
+    Backend/src/billing/BillCalculator.cpp
+    Backend/src/billing/BillingService.cpp
+    Backend/src/billing/BillRecordCodec.cpp
+    Backend/src/billing/BillRepository.cpp
+    Backend/src/billing/PaymentMethod.cpp
+)
+
+target_include_directories(billing_core PUBLIC
+    Backend/include
+)
+
+target_link_libraries(billing_core PUBLIC
+    order_core
+    common_core
+)
+
+# Backend integration
+add_library(integration_core STATIC
+    Backend/src/integration/ProductAdapter.cpp
+)
+
+target_include_directories(integration_core PUBLIC
+    Backend/include
+)
+
+target_link_libraries(integration_core PUBLIC
+    product_core
+    order_core
+)
+
+# Combined backend
+add_library(backend_core INTERFACE)
+
+target_link_libraries(backend_core INTERFACE
+    integration_core
+    billing_core
+)
+
+# ============================================================
+# OPTIONAL OPENCV CAMERA SUPPORT
+# ============================================================
+
+set(CAMERA_ENABLED OFF)
+
+if(NOT CAMERA STREQUAL "OFF")
+
+    if(NOT OpenCV_DIR)
+        foreach(_candidate
+            "${CMAKE_SOURCE_DIR}/build/deps/opencv"
+            "${CMAKE_SOURCE_DIR}/build/deps/opencv/x64/mingw/lib"
+        )
+            if(EXISTS "${_candidate}/OpenCVConfig.cmake")
+                set(OpenCV_DIR "${_candidate}"
+                    CACHE PATH "OpenCV installation" FORCE)
+                break()
             endif()
         endforeach()
-
-        if(NOT Qt6_DIR AND NOT CMAKE_PREFIX_PATH)               # the kit did not give a Qt
-            list(PREPEND CMAKE_PREFIX_PATH "${_qt_root}")
-            message(STATUS "Qt: using ${_qt_root}")
-        endif()
-        list(APPEND CMAKE_IGNORE_PREFIX_PATH "C:/msys64" "C:/msys64/ucrt64" "C:/msys64/mingw64")
     endif()
-endif()
 
-# ---------------------------------------------------------------------------
-# Pre-flight: a module is only built when its headers are really there.
-# An empty / old header (e.g. a 0-byte Order.h) makes every file that includes it fail with
-# 100+ errors. So a broken module is SKIPPED with a clear message and the rest still builds.
-# ---------------------------------------------------------------------------
-function(bh_check_header var path marker)
-    set(_f "${CMAKE_SOURCE_DIR}/${path}")
-    set(${var} OFF PARENT_SCOPE)
-    if(NOT EXISTS "${_f}")
-        message(STATUS "!!  ${path}: MISSING")
-        return()
-    endif()
-    file(SIZE "${_f}" _bytes)
-    file(READ "${_f}" _text)
-    string(FIND "${_text}" "${marker}" _pos)
-    if(_bytes EQUAL 0 OR _pos EQUAL -1)
-        message(STATUS "!!  ${path}: EMPTY OR OLD (${_bytes} bytes, no '${marker}')")
-        return()
-    endif()
-    message(STATUS "ok  ${path} (${_bytes} bytes)")
-    set(${var} ON PARENT_SCOPE)
-endfunction()
-
-bh_check_header(_h_product  Backend/include/product/Product.h                 "Product")
-bh_check_header(_h_prod2    Backend/include/product/ProductDescriber.h        "ProductDescriber")
-bh_check_header(_h_prod3    Backend/include/product/ProductManager.h          "ProductManager")
-bh_check_header(_h_prod4    Backend/include/product/ProductRecordCodec.h      "ProductRecordCodec")
-bh_check_header(_h_prod5    Backend/include/product/ProductValidator.h        "ProductValidator")
-bh_check_header(_h_prod6    Backend/include/product/StockValidator.h          "StockValidator")
-bh_check_header(_h_order1   Backend/include/order/Order.h                     "struct Order")
-bh_check_header(_h_order2   Backend/include/order/OrderDetail.h               "OrderDetail")
-bh_check_header(_h_order3   Backend/include/order/OrderManager.h              "ProductSnapshot")
-bh_check_header(_h_adapter  Backend/include/integration/ProductAdapter.h      "toSnapshot")
-bh_check_header(_h_payment  Backend/include/billing/PaymentMethod.h           "IPaymentMethod")
-bh_check_header(_h_common   Backend/include/common/RecordText.h               "splitRecord")
-
-set(HAVE_PRODUCT OFF)
-set(HAVE_ORDER   OFF)
-set(HAVE_BILLING OFF)
-set(HAVE_INTEGRATION OFF)
-if(_h_product AND _h_prod2 AND _h_prod3 AND _h_prod4 AND _h_prod5 AND _h_prod6)
-    set(HAVE_PRODUCT ON)
-endif()
-if(_h_order1 AND _h_order2 AND _h_order3)           
-    set(HAVE_ORDER ON)
-endif()
-if(HAVE_ORDER AND _h_payment AND _h_common)         
-    set(HAVE_BILLING ON)
-endif()
-if(HAVE_ORDER AND HAVE_PRODUCT AND _h_adapter)      
-    set(HAVE_INTEGRATION ON)
-endif()
-foreach(_m PRODUCT ORDER BILLING INTEGRATION)
-    if(HAVE_${_m})
-        message(STATUS "Module ${_m}: built")
-    else()
-        message(STATUS "Module ${_m}: SKIPPED (a header above is missing / empty)")
-    endif()
-endforeach()
-
-# A second copy of a header somewhere else would silently win over the real one.
-file(GLOB_RECURSE _dup_orders "${CMAKE_SOURCE_DIR}/Backend/*/Order.h" "${CMAKE_SOURCE_DIR}/Frontend/*/Order.h")
-list(LENGTH _dup_orders _n_orders)
-if(_n_orders GREATER 1)
-    message(WARNING "More than one Order.h found:\n${_dup_orders}\nKeep only Backend/include/order/Order.h")
-endif()
-
-# Show only the first few errors of each file: the first one is the real one, the rest is noise.
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-fmax-errors=5)
-endif()
-
-# ===========================================================================
-# BACKEND  (plain C++17: no Qt in here)
-# ===========================================================================
-# Two include styles are used by the modules, so both roots are exported:
-#   Backend/include          ->  #include "order/OrderManager.h", "product/Product.h"
-#   Backend/include/product  ->  #include "Product.h"   (Farzam's files include each other flat)
-
-# Each module is only built when its headers passed the pre-flight above.
-set(BACKEND_LIBS "")
-
-# --- Product (Farzam) ---------------------------------------------------------
-if(HAVE_PRODUCT)
-    file(GLOB PRODUCT_SOURCES CONFIGURE_DEPENDS Backend/src/product/*.cpp)
-    add_library(product_core STATIC ${PRODUCT_SOURCES})
-    target_include_directories(product_core PUBLIC Backend/include Backend/include/product)
-    list(APPEND BACKEND_LIBS product_core)
-endif()
-
-# --- Order (Mustafa): independent of Product on purpose (talks via ProductSnapshot) ---
-if(HAVE_ORDER)
-    file(GLOB ORDER_SOURCES CONFIGURE_DEPENDS Backend/src/order/*.cpp)
-    add_library(order_core STATIC ${ORDER_SOURCES})
-    target_include_directories(order_core PUBLIC Backend/include)
-    list(APPEND BACKEND_LIBS order_core)
-endif()
-
-# --- Billing: bill maths, Bill.txt, payment modes, checkout (needs Order, not Product) ---
-if(HAVE_BILLING)
-    add_library(common_core STATIC Backend/src/common/RecordText.cpp)
-    target_include_directories(common_core PUBLIC Backend/include)
-
-    file(GLOB BILLING_SOURCES CONFIGURE_DEPENDS Backend/src/billing/*.cpp)
-    set(BILLING_REAL_SOURCES "")
-    foreach(f ${BILLING_SOURCES})
-        file(SIZE ${f} _bytes)
-        if(_bytes GREATER 0)            # skips the empty placeholder Billing.cpp
-            list(APPEND BILLING_REAL_SOURCES ${f})
-        endif()
-    endforeach()
-    add_library(billing_core STATIC ${BILLING_REAL_SOURCES})
-    target_include_directories(billing_core PUBLIC Backend/include)
-    target_link_libraries(billing_core PUBLIC order_core common_core)
-    list(APPEND BACKEND_LIBS billing_core common_core)
-endif()
-
-# --- Integration glue: Product -> ProductSnapshot -> Order ---------------------
-if(HAVE_INTEGRATION)
-    add_library(integration_core STATIC Backend/src/integration/ProductAdapter.cpp)
-    target_link_libraries(integration_core PUBLIC product_core order_core)
-    list(APPEND BACKEND_LIBS integration_core)
-endif()
-
-# --- One name for the frontend to link (only the modules that are built) -------
-add_library(backend_core INTERFACE)
-if(BACKEND_LIBS)
-    target_link_libraries(backend_core INTERFACE ${BACKEND_LIBS})
-endif()
-
-# --- Camera scanner (Shauzab): needs OpenCV 4 --------------------------------
-# Part of the normal build: AUTO switches it on as soon as OpenCV 4 is found.
-set(CAMERA_ENABLED OFF)
-if(NOT CAMERA STREQUAL "OFF")
-    # 1) the OpenCV that scripts/build-windows.ps1 builds inside the project
-    foreach(candidate
-            ${CMAKE_SOURCE_DIR}/build/deps/opencv/x64/mingw/lib
-            ${CMAKE_SOURCE_DIR}/build/deps/opencv)
-        if(EXISTS ${candidate}/OpenCVConfig.cmake)
-            set(OpenCV_DIR ${candidate} CACHE PATH "OpenCV 4 location" FORCE)
-            break()
-        endif()
-    endforeach()
-    # 2) otherwise whatever OpenCV 4 the system offers (never the one in MSYS2: see top)
     if(CAMERA STREQUAL "ON")
-        find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
+        find_package(OpenCV 4 REQUIRED COMPONENTS
+            core imgproc imgcodecs videoio)
     else()
-        find_package(OpenCV 4 QUIET COMPONENTS core imgproc imgcodecs videoio)
+        find_package(OpenCV 4 QUIET COMPONENTS
+            core imgproc imgcodecs videoio)
     endif()
+
     if(OpenCV_FOUND)
         set(CAMERA_ENABLED ON)
     endif()
+
 endif()
 
 if(CAMERA_ENABLED)
-    message(STATUS "Camera: ON  (OpenCV ${OpenCV_VERSION})")
-    file(GLOB SCANNER_SOURCES CONFIGURE_DEPENDS Backend/src/scanner/*.cpp)
-    add_library(scanner_core STATIC ${SCANNER_SOURCES})
-    target_include_directories(scanner_core PUBLIC Backend/include/scanner ${OpenCV_INCLUDE_DIRS})
-    target_link_libraries(scanner_core PUBLIC ${OpenCV_LIBS})
+
+    # Find the OpenCV header folder ourselves (and print what was found), so the
+    # compiler always gets it, whatever OpenCVConfig.cmake reports.
+    find_path(OPENCV_HEADER_DIR opencv2/core.hpp
+        HINTS ${OpenCV_INCLUDE_DIRS}
+              "${OpenCV_DIR}/../../../include"
+              "${OpenCV_DIR}/../../include"
+              "${OpenCV_DIR}/../include"
+              "${OpenCV_DIR}/include"
+              "${CMAKE_SOURCE_DIR}/build/deps/opencv/include"
+        PATH_SUFFIXES opencv4
+        NO_DEFAULT_PATH)
+    message(STATUS "OpenCV_DIR     = ${OpenCV_DIR}")
+    message(STATUS "OpenCV headers = ${OPENCV_HEADER_DIR}")
+    message(STATUS "OpenCV libs    = ${OpenCV_LIBS}")
+    if(NOT OPENCV_HEADER_DIR)
+        message(FATAL_ERROR
+            "opencv2/core.hpp not found near ${OpenCV_DIR}. "
+            "Run scripts/build-windows.ps1 to build OpenCV first.")
+    endif()
+
+    add_library(scanner_core STATIC
+        Backend/src/scanner/cameraScanner.cpp
+        Backend/src/scanner/decoder.cpp
+    )
+
+    target_include_directories(scanner_core PUBLIC
+        Backend/include/scanner
+        ${OPENCV_HEADER_DIR}
+        ${OpenCV_INCLUDE_DIRS}
+    )
+
+    target_link_libraries(scanner_core PUBLIC
+        ${OpenCV_LIBS}
+    )
+
     if(WIN32)
-        target_link_libraries(scanner_core PUBLIC ole32 oleaut32 strmiids)   # DirectShow camera
+        target_link_libraries(scanner_core PUBLIC
+            ole32 oleaut32 strmiids)
     endif()
-else()
-    message(STATUS "Camera: OFF (switch on later with -DCAMERA=ON)")
+
 endif()
 
-# --- Backend tests (no Qt, no camera) -----------------------------------------
-# A test is only built when its file exists AND the modules it needs are built.
-if(HAVE_INTEGRATION AND EXISTS ${CMAKE_SOURCE_DIR}/tests/integration_test.cpp)
-    add_executable(integration_test tests/integration_test.cpp)
-    target_link_libraries(integration_test PRIVATE backend_core)
-endif()
-if(HAVE_BILLING AND HAVE_PRODUCT AND EXISTS ${CMAKE_SOURCE_DIR}/tests/billing_tests.cpp)
-    add_executable(billing_tests tests/billing_tests.cpp)
-    target_link_libraries(billing_tests PRIVATE backend_core)
-endif()
+# ============================================================
+# BACKEND TESTS
+# ============================================================
 
-if(HAVE_PRODUCT AND EXISTS ${CMAKE_SOURCE_DIR}/tests/product_tests.cpp)
-    add_executable(product_tests tests/product_tests.cpp)
+include(CTest)
+
+if(BUILD_TESTING)
+
+    add_executable(product_tests
+        tests/product_tests.cpp
+    )
+
     target_link_libraries(product_tests PRIVATE product_core)
-    if(EXISTS ${CMAKE_SOURCE_DIR}/tests/data/Product.sample.txt)
-        add_custom_command(TARGET product_tests POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${CMAKE_SOURCE_DIR}/tests/data/Product.sample.txt
-                $<TARGET_FILE_DIR:product_tests>/Product.sample.txt)
-    endif()
-endif()
 
-# Scanner test: draws a barcode picture and reads it back (no camera needed)
-if(CAMERA_ENABLED AND EXISTS ${CMAKE_SOURCE_DIR}/tests/scanner_tests.cpp)
-    add_executable(scanner_tests tests/scanner_tests.cpp)
-    target_link_libraries(scanner_tests PRIVATE scanner_core)
-endif()
+    add_test(NAME product COMMAND product_tests)
 
-enable_testing()
-if(TARGET scanner_tests)
-    add_test(NAME scanner COMMAND scanner_tests)
-endif()
-if(TARGET integration_test)
+    set_tests_properties(product PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_executable(order_tests
+        tests/OrderManagementSmokeTest.cpp
+    )
+
+    target_link_libraries(order_tests PRIVATE order_core)
+
+    add_test(NAME order COMMAND order_tests)
+
+    add_executable(integration_test
+        tests/integration_test.cpp
+    )
+
+    target_link_libraries(integration_test PRIVATE backend_core)
+
     add_test(NAME integration COMMAND integration_test)
-endif()
-if(TARGET billing_tests)
-    add_test(NAME billing COMMAND billing_tests)
+
+    set_tests_properties(integration PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
+    add_executable(checkout_test
+        tests/checkout_test.cpp
+    )
+
+    target_link_libraries(checkout_test PRIVATE backend_core)
+
+    add_test(NAME checkout COMMAND checkout_test)
+
 endif()
 
 if(BACKEND_ONLY)
-    message(STATUS "BACKEND_ONLY=ON: Qt frontend skipped")
+    message(STATUS "BACKEND_ONLY enabled: Qt frontend skipped")
     return()
 endif()
 
-# ===========================================================================
-# FRONTEND  (Qt Widgets)
-# ===========================================================================
+# ============================================================
+# QT CONFIGURATION
+# ============================================================
+
+set(QT_INSTALL_ROOT "C:/Qt"
+    CACHE PATH "Qt installation root"
+)
+
+if(WIN32 AND NOT CMAKE_PREFIX_PATH AND NOT Qt6_DIR)
+
+    file(GLOB _qt_roots
+        "${QT_INSTALL_ROOT}/6.*/mingw_64"
+    )
+
+    if(_qt_roots)
+        list(SORT _qt_roots
+            COMPARE NATURAL
+            ORDER DESCENDING
+        )
+
+        list(GET _qt_roots 0 _qt_root)
+        list(PREPEND CMAKE_PREFIX_PATH "${_qt_root}")
+    endif()
+
+endif()
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(QT NAMES Qt6 Qt5
+    REQUIRED COMPONENTS Widgets
+)
 
-file(GLOB UI_SOURCES CONFIGURE_DEPENDS Frontend/src/ui/*.cpp)
-file(GLOB UI_HEADERS CONFIGURE_DEPENDS Frontend/include/ui/*.h)
+find_package(Qt${QT_VERSION_MAJOR}
+    REQUIRED COMPONENTS Widgets
+)
 
-# main() never goes into the library (the executable owns it). Frontend/src/ui/Main.cpp is the old
-# camera-only demo: it is skipped here too, it must not be compiled without OpenCV.
-list(FILTER UI_SOURCES EXCLUDE REGEX "[/\\\\][Mm]ain\\.cpp$")   # Main.cpp AND main.cpp (REGEX is case-sensitive)
+# ============================================================
+# FRONTEND
+# ============================================================
 
-# These need OpenCV, so they are only compiled when the camera is on.
-if(NOT CAMERA_ENABLED)
-    list(FILTER UI_SOURCES EXCLUDE REGEX "CameraWidget|CameraController|LiveCamera|POSWindow")
-    list(FILTER UI_HEADERS EXCLUDE REGEX "CameraWidget|CameraController|POSWindow")
-endif()
+set(UI_SOURCES
+    Frontend/src/ui/AppState.cpp
+    Frontend/src/ui/DashboardPage.cpp
+    Frontend/src/ui/Dialogs.cpp
+    Frontend/src/ui/MainWindow.cpp
+    Frontend/src/ui/NavigationModel.cpp
+    Frontend/src/ui/OtherPages.cpp
+    Frontend/src/ui/RecordOrderPage.cpp
+    Frontend/src/ui/Theme.cpp
+    Frontend/src/ui/Widgets.cpp
+)
 
-add_library(barcode_ui STATIC ${UI_SOURCES} ${UI_HEADERS})
-# The UI includes the backend headers directly (e.g. AppState.h -> "product/ProductDescriber.h"),
-# so both backend include roots are given to it explicitly.
-target_include_directories(barcode_ui PUBLIC Frontend/include/ui Frontend/include
-                                              Backend/include Backend/include/product)
-if(NOT HAVE_PRODUCT)
-    message(WARNING "The UI needs the Product module but it is SKIPPED: fix the '!!' files listed above.")
-endif()
-target_link_libraries(barcode_ui PUBLIC Qt${QT_VERSION_MAJOR}::Widgets backend_core)
+file(GLOB UI_HEADERS CONFIGURE_DEPENDS
+    Frontend/include/ui/*.h
+)
+
+list(FILTER UI_HEADERS EXCLUDE REGEX
+    "CameraWidget.h|POSWindow.h"
+)
+
+add_library(barcode_ui STATIC
+    ${UI_SOURCES}
+    ${UI_HEADERS}
+)
+
+target_include_directories(barcode_ui PUBLIC
+    Frontend/include/ui
+    Frontend/include
+    Backend/include
+    Backend/include/product
+)
+
+target_link_libraries(barcode_ui PUBLIC
+    Qt${QT_VERSION_MAJOR}::Widgets
+    backend_core
+)
+
+target_compile_definitions(barcode_ui PRIVATE
+    BARCODEHUB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
 if(CAMERA_ENABLED)
     target_link_libraries(barcode_ui PUBLIC scanner_core)
-    target_compile_definitions(barcode_ui PUBLIC WITH_CAMERA)   # lets the UI use #ifdef WITH_CAMERA
+    target_compile_definitions(barcode_ui PUBLIC WITH_CAMERA)
 endif()
 
-# --- Stand-alone camera test window ------------------------------------------
-if(CAMERA_ENABLED AND EXISTS ${CMAKE_SOURCE_DIR}/tests/camera_demo.cpp)
-    add_executable(CameraDemo WIN32 tests/camera_demo.cpp)
-    target_link_libraries(CameraDemo PRIVATE barcode_ui)
-endif()
+# ============================================================
+# MAIN EXECUTABLE
+# ============================================================
 
-# --- Main app -------------------------------------------------------------------
-if(EXISTS ${CMAKE_SOURCE_DIR}/Frontend/src/main.cpp)
-    set(APP_MAIN Frontend/src/main.cpp)
-elseif(EXISTS ${CMAKE_SOURCE_DIR}/Frontend/src/ui/main.cpp)
-    set(APP_MAIN Frontend/src/ui/main.cpp)
-else()
-    message(FATAL_ERROR "No main.cpp found in Frontend/src or Frontend/src/ui")
-endif()
-add_executable(BarcodeHub WIN32 ${APP_MAIN})
-target_link_libraries(BarcodeHub PRIVATE barcode_ui)
+add_executable(BarcodeHub WIN32
+    Frontend/src/main.cpp
+)
 
-# --- Windows: DLLs + data next to the exe ---------------------------------------
-if(WIN32)
-    set(_apps BarcodeHub)
-    if(TARGET CameraDemo)
-        list(APPEND _apps CameraDemo)
-    endif()
+target_link_libraries(BarcodeHub PRIVATE
+    barcode_ui
+)
 
-    # windeployqt copies the Qt DLLs *and* the plugins (platforms/qwindows.dll ...) next to the exe.
-    # Without the plugins the exe says: Could not find the Qt platform plugin "windows".
-    if(TARGET Qt${QT_VERSION_MAJOR}::windeployqt)
-        get_target_property(WINDEPLOYQT_EXECUTABLE Qt${QT_VERSION_MAJOR}::windeployqt IMPORTED_LOCATION)
-    else()
-        find_program(WINDEPLOYQT_EXECUTABLE windeployqt
-            HINTS "${Qt${QT_VERSION_MAJOR}_DIR}/../../../bin")
-    endif()
-    if(NOT WINDEPLOYQT_EXECUTABLE)
-        message(WARNING "windeployqt not found: BarcodeHub.exe will not start from Explorer/Qt Creator")
-    endif()
-    get_filename_component(_cxx_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)   # MinGW runtime DLLs live here
-    get_filename_component(_qt_bin "${WINDEPLOYQT_EXECUTABLE}" DIRECTORY)
-    file(WRITE "${CMAKE_BINARY_DIR}/run_windeployqt.cmake" [=[
-string(REPLACE "|" ";" _dirs "${DIRS}")
-set(ENV{PATH} "${_dirs};C:/Windows/System32;C:/Windows")
-execute_process(COMMAND "${WINDEPLOYQT}" --force --no-translations "${EXE}" RESULT_VARIABLE _r)
-if(NOT _r EQUAL 0)
-    message(FATAL_ERROR "windeployqt failed (${_r})")
-endif()
-]=])
-
-    foreach(app ${_apps})
-        add_custom_command(TARGET ${app} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_RUNTIME_DLLS:${app}> $<TARGET_FILE_DIR:${app}>
-            COMMAND_EXPAND_LISTS VERBATIM)
-        if(CAMERA_ENABLED AND EXISTS ${OpenCV_DIR}/../bin)
-            add_custom_command(TARGET ${app} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    ${OpenCV_DIR}/../bin $<TARGET_FILE_DIR:${app}>)
-        endif()
-        if(WINDEPLOYQT_EXECUTABLE)
-            # Run through a small script with a clean PATH (Qt + MinGW only). If MSYS2 is on PATH,
-            # windeployqt would copy ITS Qt plugins (another version) and Qt refuses to start.
-            add_custom_command(TARGET ${app} POST_BUILD
-                COMMAND ${CMAKE_COMMAND}
-                    "-DWINDEPLOYQT=${WINDEPLOYQT_EXECUTABLE}"
-                    "-DEXE=$<TARGET_FILE:${app}>"
-                    "-DDIRS=${_qt_bin}|${_cxx_bin}"
-                    -P "${CMAKE_BINARY_DIR}/run_windeployqt.cmake"
-                VERBATIM)
-        endif()
-        foreach(_dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)   # MinGW runtime
-            if(EXISTS "${_cxx_bin}/${_dll}")
-                add_custom_command(TARGET ${app} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${_cxx_bin}/${_dll}" $<TARGET_FILE_DIR:${app}>)
-            endif()
-        endforeach()
-    endforeach()
-
-    if(EXISTS ${CMAKE_SOURCE_DIR}/data)   # Product.txt, Order.txt ... next to the exe
+# Camera build on Windows: copy the OpenCV runtime DLLs next to BarcodeHub.exe,
+# otherwise the exe cannot start outside a shell that has OpenCV on PATH.
+if(WIN32 AND CAMERA_ENABLED)
+    file(GLOB _opencv_dlls
+        "${OpenCV_DIR}/../bin/*.dll"
+        "${OpenCV_DIR}/../../bin/*.dll")
+    if(_opencv_dlls)
         add_custom_command(TARGET BarcodeHub POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_SOURCE_DIR}/data $<TARGET_FILE_DIR:BarcodeHub>/data)
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_opencv_dlls} "$<TARGET_FILE_DIR:BarcodeHub>"
+            VERBATIM
+            COMMENT "Copying OpenCV runtime DLLs"
+        )
+    else()
+        message(WARNING "No OpenCV DLLs found near ${OpenCV_DIR}; add OpenCV bin to PATH to run the exe.")
+    endif()
+endif()
+
+# Preserve existing records during rebuilding.
+# Only copy starter data files when they do not already exist.
+
+add_custom_command(TARGET BarcodeHub POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        "-DSOURCE_DATA=${CMAKE_SOURCE_DIR}/data"
+        "-DDEST_DATA=$<TARGET_FILE_DIR:BarcodeHub>/data"
+        -P "${CMAKE_SOURCE_DIR}/cmake/seed-data.cmake"
+    VERBATIM
+)
+
+# ============================================================
+# OPTIONAL CAMERA DEMO
+# ============================================================
+
+if(CAMERA_ENABLED AND EXISTS
+    "${CMAKE_SOURCE_DIR}/tests/camera_demo.cpp")
+
+    add_executable(CameraDemo WIN32
+        tests/camera_demo.cpp
+        Frontend/src/ui/CameraWidget.cpp
+        Frontend/include/ui/CameraWidget.h
+    )
+
+    target_include_directories(CameraDemo PRIVATE
+        Frontend/include/ui
+        Backend/include/scanner
+    )
+
+    target_link_libraries(CameraDemo PRIVATE
+        Qt${QT_VERSION_MAJOR}::Widgets
+        scanner_core
+    )
+
+endif()
+
+# ============================================================
+# WINDOWS DEPLOYMENT (OPTIONAL)
+# ============================================================
+
+# Deployment is not part of the normal build. Qt Creator sets up the
+# Qt/MinGW environment when launching an application using its Qt kit.
+# To copy Qt DLLs and plugins for standalone distribution, build the
+# BarcodeHub_deploy target explicitly instead.
+
+if(WIN32)
+    # Prefer the deployment tool belonging to the Qt version used by this kit.
+    if(TARGET Qt${QT_VERSION_MAJOR}::windeployqt)
+        get_target_property(WINDEPLOYQT_EXECUTABLE
+            Qt${QT_VERSION_MAJOR}::windeployqt IMPORTED_LOCATION)
+    endif()
+
+    if(NOT WINDEPLOYQT_EXECUTABLE)
+        find_program(WINDEPLOYQT_EXECUTABLE
+            NAMES windeployqt
+            HINTS
+                "${Qt${QT_VERSION_MAJOR}_DIR}/../../../bin"
+                "${QT_INSTALL_ROOT}/6.11.0/mingw_64/bin"
+        )
+    endif()
+
+    if(WINDEPLOYQT_EXECUTABLE)
+        set(_deploy_apps BarcodeHub)
+        if(TARGET CameraDemo)
+            list(APPEND _deploy_apps CameraDemo)
+        endif()
+
+        foreach(app IN LISTS _deploy_apps)
+            add_custom_target(${app}_deploy
+                COMMAND "${WINDEPLOYQT_EXECUTABLE}"
+                    --no-translations
+                    "$<TARGET_FILE:${app}>"
+                DEPENDS ${app}
+                VERBATIM
+                COMMENT "Deploying Qt runtime for ${app}"
+            )
+        endforeach()
+    else()
+        message(STATUS
+            "windeployqt not found; optional deployment targets disabled")
     endif()
 endif()
