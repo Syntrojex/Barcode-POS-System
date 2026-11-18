@@ -58,6 +58,10 @@ RecordOrderPage::RecordOrderPage(QWidget *parent) : QWidget(parent)
 
     connect(&AppState::instance(), &AppState::scanned, this, [this](const QString &ean)
             { showCode(ean, true); });
+    connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [](const QString &ean) {
+        AppState::instance().emitScan(ean);
+    });
+    connect(m_feed, &CameraFeedWidget::scanError, this, &RecordOrderPage::toast);
     loadDemoDraft();
 }
 
@@ -130,8 +134,8 @@ QWidget *RecordOrderPage::buildLeft()
 
     auto *btns = new QHBoxLayout;
     btns->setSpacing(8);
-    m_camToggle = W::button("Stop camera", "soft", "stop");
-    auto *scan = W::button("Scan  [F9]", "primary", "barcode");
+    m_camToggle = W::button("Start camera", "soft", "play");
+    auto *scan = W::button("Start scanning  [F9]", "primary", "barcode");
     btns->addWidget(m_camToggle, 1);
     btns->addWidget(scan, 1);
     cv->addLayout(btns);
@@ -139,8 +143,9 @@ QWidget *RecordOrderPage::buildLeft()
             {
         const bool on = !m_feed->running();
         m_feed->setRunning(on);
-        m_camToggle->setText(on ? "Stop camera" : "Start camera");
-        m_camToggle->setIcon(Theme::icon(on ? "stop" : "play", Theme::primary, 16)); });
+        const bool running = m_feed->running();
+        m_camToggle->setText(running ? "Stop camera" : "Start camera");
+        m_camToggle->setIcon(Theme::icon(running ? "stop" : "play", Theme::primary, 16)); });
     connect(scan, &QPushButton::clicked, this, &RecordOrderPage::simulateScan);
 
     auto *mr = new QHBoxLayout;
@@ -243,7 +248,7 @@ QWidget *RecordOrderPage::buildRight()
         const double price = QInputDialog::getDouble(this, "Custom item", "Unit price (PKR):", 1.0, 0.01, 100000, 2, &ok);
         if (!ok) return;
         ProductInfo p;
-        p.sku = QString("CUSTOM-%1").arg(m_cart.size() + 1, 2, 10, QChar('0'));
+        p.sku = QString("CUSTOM-%1").arg(m_nextCustomLine++, 2, 10, QChar('0'));
         p.name = name.trimmed();
         p.price = price;
         p.unit = "count";
@@ -322,15 +327,12 @@ void RecordOrderPage::focusInput()
 
 void RecordOrderPage::simulateScan()
 {
-    if (!m_feed->running())
-    {
-        emit toast("Camera is stopped - start it first");
-        return;
+    if (!m_feed->running()) m_feed->setRunning(true);
+    if (!m_feed->running()) emit toast("Unable to start camera scanning");
+    else {
+        m_camToggle->setText("Stop camera");
+        m_camToggle->setIcon(Theme::icon("stop", Theme::primary, 16));
     }
-    const auto &ps = AppState::instance().products();
-    if (ps.isEmpty())
-        return;
-    showCode(ps[m_scanIndex++ % ps.size()].ean, true);
 }
 
 void RecordOrderPage::quickLookup()
@@ -557,23 +559,28 @@ void RecordOrderPage::checkout()
     }
     OrderRecord o;
     for (const auto &l : m_cart)
-        o.lines.push_back({l.p.name, l.p.sku, l.qty, l.p.price, l.p.tax, l.p.discount});
+        o.lines.push_back({l.p.name, l.p.sku, l.qty, l.p.price, l.p.tax, l.p.discount, l.p.id});
     o.recompute();
 
-    QString mode;
+    QString mode, merchant;
     double tendered = 0;
-    if (!Dialogs::payment(this, o.total, mode, tendered))
+    if (!Dialogs::payment(this, o.total, mode, tendered, merchant))
         return;
-    o.id = AppState::instance().nextOrderId();
-    o.time = QDateTime::currentDateTime();
+
     o.customer = m_customer->text().trimmed().isEmpty() ? "Walk-in Customer" : m_customer->text().trimmed();
     o.contact = m_contact->text().trimmed().isEmpty() ? "-" : m_contact->text().trimmed();
     o.tier = m_vip ? "VIP" : "Standard";
     o.payment = mode;
+    o.merchant = merchant;
     o.tendered = tendered;
     o.status = "Paid";
     o.shift = "POS #04 • Shift A";
-    AppState::instance().addOrder(o);
+    QString checkoutError;
+    if (!AppState::instance().addOrder(o, &checkoutError))
+    {
+        emit toast(checkoutError);
+        return;
+    }
 
     Dialogs::receipt(this, o);
     m_cart.clear();

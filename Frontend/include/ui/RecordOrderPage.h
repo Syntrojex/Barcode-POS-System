@@ -19,7 +19,7 @@ public:
 
 public slots:
     void focusInput();
-    void simulateScan(); // F9
+    void simulateScan(); // F9: start real scanner when enabled
     void quickLookup();  // F4
     void checkout();     // F10
     void showCode(const QString &code, bool fromScanner);
@@ -48,7 +48,7 @@ private:
 
     QVector<CartLine> m_cart;
     std::optional<ProductInfo> m_preview;
-    int m_scanIndex = 0;
+    int m_nextCustomLine = 1;
     bool m_vip = true;
 
     QLineEdit *m_customer, *m_contact, *m_manual;

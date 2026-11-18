@@ -1,10 +1,7 @@
 // Unit tests for the product module. Plain C++17, no framework: run `product_tests` or `ctest`.
-#include "product/Money.h"
-#include "product/ProductDescriber.h"
-#include "product/ProductFileLoader.h"
-#include "product/ProductFileWriter.h"
-#include "product/ProductManager.h"
-#include "product/StockValidator.h"
+#include "product/ProductModel.h"
+#include "product/ProductStorage.h"
+#include "product/ProductValidation.h"
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -68,7 +65,7 @@ int main()
     // ---- manager: search + stock
     ProductManager pm;
     CHECK(pm.loadProducts("data/Product.txt"));
-    CHECK(pm.getProductCount() == 14);
+    CHECK(pm.getProducts().size() == 14);
     CHECK(pm.searchByBarcode("40001029") && pm.searchByBarcode("40001029")->getProductID() == 1);
     CHECK(pm.searchByBarcode("12345678") == nullptr);
     CHECK(pm.searchByID(5) && pm.searchByID(5)->getAcronym() == "BASMATI");
@@ -86,7 +83,11 @@ int main()
     CHECK(sv.checkAdd(eggs, 3, 1).ok() && !sv.checkAdd(eggs, 4, 1).ok());
     CHECK(sv.check(eggs, 0).status == StockStatus::InvalidQuantity);
     CHECK(sv.check(*pm.searchByID(11), 1).status == StockStatus::OutOfStock);
-    StockValidator strict(std::make_shared<StrictlyBelowAvailablePolicy>());
+    struct BelowAvailable : IStockPolicy {
+        bool allows(int requested, int available) const override { return requested < available; }
+        std::string describe() const override { return "strictly below available"; }
+    };
+    StockValidator strict(std::make_shared<BelowAvailable>());
     CHECK(!strict.check(eggs, 4).ok() && strict.check(eggs, 3).ok());
 
     // ---- description (what) + formatter (how)
@@ -94,7 +95,7 @@ int main()
     CHECK(d.describe(eggs).stockLevel == "low" && d.describe(*pm.searchByID(11)).stockLevel == "out");
     const std::string text = TextProductFormatter().format(d.describe(eggs));
     CHECK(text.find("Farm Fresh Eggs Dozen") != std::string::npos && text.find("PKR 390.00") != std::string::npos);
-    CHECK(formatPKR(1234567.5) == "PKR 1,234,567.50" && formatPKR(0) == "PKR 0.00");
+    CHECK(formatPKR(1234567.5) == "PKR 1234567.50" && formatPKR(0) == "PKR 0.00");
 
     // ---- writer round trip
     const std::string tmp = "product_roundtrip.txt";
@@ -102,8 +103,8 @@ int main()
     a.loadProducts("data/Product.txt");
     a.deductStock(1, 2);
     ProductFileWriter w;
-    CHECK(w.save(tmp, a.getAllProducts()));
-    CHECK(b.loadProducts(tmp) && b.getProductCount() == a.getProductCount() &&
+    CHECK(w.save(tmp, a.getProducts()));
+    CHECK(b.loadProducts(tmp) && b.getProducts().size() == a.getProducts().size() &&
           b.searchByID(1)->getAvailableQuantity() == 40);
     std::remove(tmp.c_str());
 

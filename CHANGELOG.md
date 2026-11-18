@@ -2,6 +2,30 @@
 
 All notable changes to **BarcodeHub** are documented in this file.
 
+## [Unreleased] — Frontend/backend integration (2026-11-18)
+
+### Added
+- Order/OrderDetail model definitions and validation reconstructed from existing OrderManager tests.
+- Qt-to-backend checkout bridge; file-backed order and bill history; actual payment merchant entry.
+- Order ID preview, unpaid-order rollback helper, data seeding script and checkout test.
+- Optional camera-backed barcode scanning via OpenCV (`CAMERA=ON`).
+
+### Fixed
+- CMake referred to missing product headers and quietly skipped order/billing modules.
+- Product adapter API and frontend product lookups used obsolete names.
+- Stock changes and bills were not persisted from the Qt checkout flow.
+- Portable rebuilds risked overwriting previous records; bill display fabricated numbers.
+- Scanner returned six digits while catalogue barcodes were eight digits.
+
+### Removed from the running UI
+- Mock camera/automatic fake sample scans, fabricated order history/sales chart,
+  nonfunctional Resume action and misleading "purchase order drafted" messages.
+- No nonempty teammate source files were deleted.
+
+### Verification
+- Backend: 4/4 CTest tests passed.
+- Qt/OpenCV desktop runtime and Windows package: not tested on this Linux machine (dependencies absent).
+
 ## [2.0.0] — Increment 2: Point of Sale System
 
 ### Planned

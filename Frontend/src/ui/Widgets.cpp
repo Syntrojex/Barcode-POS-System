@@ -1,5 +1,9 @@
 #include "Widgets.h"
 #include "Theme.h"
+#ifdef WITH_CAMERA
+#include "cameraScanner.h"
+#include <opencv2/imgproc.hpp>
+#endif
 #include <QHBoxLayout>
 #include <QLinearGradient>
 #include <QLocale>
@@ -191,17 +195,64 @@ void Card::paintEvent(QPaintEvent *)
 CameraFeedWidget::CameraFeedWidget(QWidget *parent) : QWidget(parent)
 {
     setMinimumHeight(150);
-    connect(&m_timer, &QTimer::timeout, this, [this]
-            {
-        m_phase += 0.012;
-        if (m_phase > 1) m_phase = 0;
-        update(); });
-    m_timer.start(33);
+#ifdef WITH_CAMERA
+    connect(&m_timer, &QTimer::timeout, this, [this] {
+        if (!m_camera) return;
+        cv::Mat bgr;
+        if (!m_camera->readFrame(bgr) || bgr.empty()) {
+            const QString why = QString::fromStdString(m_camera->errMessage());
+            setRunning(false);
+            emit scanError(why.isEmpty() ? "Camera stopped sending frames" : why);
+            return;
+        }
+        std::string code;
+        cv::Rect box;
+        if (m_camera->frameRead(code, box, bgr) && !code.empty()) {
+            if (box.area() > 0) cv::rectangle(bgr, box, cv::Scalar(0, 255, 0), 2);
+            const QString value = QString::fromStdString(code);
+            if (value != m_lastDetected || !m_lastEmit.isValid() || m_lastEmit.elapsed() > 3000) {
+                m_lastDetected = value;
+                m_lastEmit.restart();
+                emit barcodeDetected(value);
+            }
+        }
+        cv::Mat rgb;
+        cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
+        m_frame = QImage(rgb.data, rgb.cols, rgb.rows, static_cast<int>(rgb.step), QImage::Format_RGB888).copy();
+        update();
+    });
+#endif
 }
+CameraFeedWidget::~CameraFeedWidget() = default;
 
 void CameraFeedWidget::setRunning(bool on)
 {
-    m_running = on;
+    if (!on) {
+        m_timer.stop();
+#ifdef WITH_CAMERA
+        m_camera.reset();
+#endif
+        m_running = false;
+        m_frame = QImage();
+        update();
+        return;
+    }
+#ifdef WITH_CAMERA
+    if (m_running) return;
+    m_camera = std::make_unique<cameraScanner>();
+    if (!m_camera->openCamera()) {
+        const QString why = QString::fromStdString(m_camera->errMessage());
+        m_camera.reset();
+        emit scanError(why);
+        return;
+    }
+    m_lastDetected.clear();
+    m_lastEmit.invalidate();
+    m_running = true;
+    m_timer.start(40);
+#else
+    emit scanError("Camera support is disabled. Configure with -DCAMERA=ON and install OpenCV 4.");
+#endif
     update();
 }
 
@@ -215,99 +266,24 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    const QRectF r = QRectF(rect()).adjusted(1, 1, -1, -1);
-    QPainterPath clip;
-    clip.addRoundedRect(r, 12, 12);
-    p.setClipPath(clip);
-
-    QLinearGradient g(r.topLeft(), r.bottomRight());
-    g.setColorAt(0, QColor("#2c4472"));
-    g.setColorAt(1, QColor("#0b1430"));
-    p.fillRect(r, g);
-
-    if (!m_running)
-    {
-        p.setPen(QColor("#9fb4f0"));
-        QFont f = font();
-        f.setPixelSize(14);
-        f.setBold(true);
-        p.setFont(f);
-        p.drawText(r, Qt::AlignCenter, "Camera stopped");
+    const QRect r = rect().adjusted(1, 1, -1, -1);
+    p.fillRect(r, QColor("#162644"));
+    if (!m_frame.isNull()) {
+        const QImage scaled = m_frame.scaled(r.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        p.drawImage(QPoint((width() - scaled.width()) / 2, (height() - scaled.height()) / 2), scaled);
+    } else {
+        p.setPen(QColor("#c2d0ef"));
+#ifdef WITH_CAMERA
+        p.drawText(r, Qt::AlignCenter, "Camera stopped — press Start camera");
+#else
+        p.drawText(r.adjusted(15, 0, -15, 0), Qt::AlignCenter | Qt::TextWordWrap,
+                   "Camera unavailable in this build.\nUse barcode lookup or build with CAMERA=ON.");
+#endif
     }
-    else
-    {
-        // product label with barcode
-        const QRectF label(r.width() * .24, r.height() * .2, r.width() * .52, r.height() * .56);
-        p.setPen(Qt::NoPen);
-        p.setBrush(QColor(0, 0, 0, 60));
-        p.drawRoundedRect(label.translated(0, 6), 10, 10);
-        QLinearGradient lg(label.topLeft(), label.bottomLeft());
-        lg.setColorAt(0, QColor("#ffffff"));
-        lg.setColorAt(1, QColor("#dfe8fb"));
-        p.setBrush(lg);
-        p.drawRoundedRect(label, 10, 10);
-        p.setBrush(QColor("#0f1b33"));
-        const QString digits = m_code.isEmpty() ? QString("00000000") : m_code;
-        qreal x = label.left() + label.width() * .08;
-        const qreal barW = label.width() * .84 / (digits.size() * 7 + 6);
-        const qreal top = label.top() + label.height() * .14, h = label.height() * .56;
-        for (QChar ch : digits)
-        {
-            const int d = ch.isDigit() ? ch.digitValue() : 0;
-            for (int i = 0; i < 4; ++i)
-            {
-                const int w = 1 + ((d + i * 3) % 3 == 0 ? 1 : 0) + (i == 1 ? 1 : 0);
-                if (i % 2 == 0)
-                    p.drawRect(QRectF(x, top, barW * w, h));
-                x += barW * w;
-            }
-            x += barW * 0.2;
-        }
-        p.setPen(QColor("#0f1b33"));
-        QFont mf("Consolas");
-        mf.setStyleHint(QFont::Monospace);
-        mf.setPixelSize(qMax(10, int(label.height() * .13)));
-        p.setFont(mf);
-        p.drawText(QRectF(label.left(), top + h, label.width(), label.bottom() - top - h), Qt::AlignCenter, digits);
-
-        // corner brackets
-        p.setPen(QPen(QColor("#4ade80"), 3, Qt::SolidLine, Qt::RoundCap));
-        const QRectF b = r.adjusted(r.width() * .14, r.height() * .12, -r.width() * .14, -r.height() * .12);
-        const qreal L = 20;
-        auto corner = [&](QPointF c, int sx, int sy)
-        {
-            p.drawLine(c, c + QPointF(sx * L, 0));
-            p.drawLine(c, c + QPointF(0, sy * L));
-        };
-        corner(b.topLeft(), 1, 1);
-        corner(b.topRight(), -1, 1);
-        corner(b.bottomLeft(), 1, -1);
-        corner(b.bottomRight(), -1, -1);
-
-        // sweeping laser
-        const qreal y = b.top() + b.height() * (0.5 + 0.5 * qSin(m_phase * 2 * 3.14159265358979));
-        QLinearGradient sg(b.left(), y, b.right(), y);
-        sg.setColorAt(0, QColor(74, 222, 128, 0));
-        sg.setColorAt(.5, QColor(74, 222, 128, 240));
-        sg.setColorAt(1, QColor(74, 222, 128, 0));
-        p.setPen(QPen(QBrush(sg), 2.4));
-        p.drawLine(QPointF(b.left(), y), QPointF(b.right(), y));
-        QLinearGradient glow(0, y - 14, 0, y + 14);
-        glow.setColorAt(0, QColor(74, 222, 128, 0));
-        glow.setColorAt(.5, QColor(74, 222, 128, 50));
-        glow.setColorAt(1, QColor(74, 222, 128, 0));
-        p.fillRect(QRectF(b.left(), y - 14, b.width(), 28), glow);
+    if (!m_code.isEmpty()) {
+        p.setPen(Qt::white);
+        p.drawText(r.adjusted(12, 0, -12, -8), Qt::AlignBottom | Qt::AlignRight, m_code);
     }
-
-    // glass reflection
-    QLinearGradient gl(r.topLeft(), QPointF(r.left(), r.top() + r.height() * .45));
-    gl.setColorAt(0, QColor(255, 255, 255, 38));
-    gl.setColorAt(1, QColor(255, 255, 255, 0));
-    p.fillRect(QRectF(r.left(), r.top(), r.width(), r.height() * .45), gl);
-    p.setClipping(false);
-    p.setPen(QPen(QColor(255, 255, 255, 40), 1));
-    p.setBrush(Qt::NoBrush);
-    p.drawRoundedRect(r, 12, 12);
 }
 
 // ------------------------------------------------------------------ RevenueChart (3D bars)

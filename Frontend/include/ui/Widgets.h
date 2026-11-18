@@ -1,6 +1,9 @@
 #pragma once
 // Small reusable widgets and helpers shared by all pages.
 #include <QFrame>
+#include <QImage>
+#include <QElapsedTimer>
+#include <memory>
 #include <QLabel>
 #include <QPushButton>
 #include <QTimer>
@@ -50,15 +53,21 @@ namespace W
                            QWidget *rightWidget = nullptr);
 }
 
-// Simulated optical scanner feed. Draws an animated placeholder; no camera or OpenCV needed.
+// Actual OpenCV camera capture when built with CAMERA=ON; otherwise an honest disabled view.
 class CameraFeedWidget : public QWidget
 {
     Q_OBJECT
 public:
     explicit CameraFeedWidget(QWidget *parent = nullptr);
+    ~CameraFeedWidget() override;
     bool running() const { return m_running; }
     void setRunning(bool on);
     void setCode(const QString &code); // barcode digits shown in the viewfinder
+signals:
+    void barcodeDetected(const QString &ean);
+    void scanError(const QString &error);
+
+public:
     QSize sizeHint() const override { return {420, 236}; }
     QSize minimumSizeHint() const override { return {260, 150}; }
 
@@ -66,10 +75,15 @@ protected:
     void paintEvent(QPaintEvent *) override;
 
 private:
-    bool m_running = true;
-    qreal m_phase = 0;
-    QString m_code = "40088404";
+    bool m_running = false;
+    QString m_code;
+    QString m_lastDetected;
+    QElapsedTimer m_lastEmit;
+    QImage m_frame;
     QTimer m_timer;
+#ifdef WITH_CAMERA
+    std::unique_ptr<class cameraScanner> m_camera;
+#endif
 };
 
 // 3D bar chart: hourly revenue as extruded columns against a dashed target line.

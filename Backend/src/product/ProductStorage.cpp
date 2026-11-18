@@ -209,8 +209,11 @@ bool ProductFileWriter::save(const std::string &path, const std::vector<Product>
     fs::rename(tmp, path, ec);
     if (ec)
     {
-        fs::remove(path, ec);
-        fs::rename(tmp, path, ec);
+        // Do not delete the original if Windows does not support rename-over-existing.
+        ec.clear();
+        fs::copy_file(tmp, path, fs::copy_options::overwrite_existing, ec);
+        std::error_code ignored;
+        fs::remove(tmp, ignored);
         if (ec)
         {
             if (error)

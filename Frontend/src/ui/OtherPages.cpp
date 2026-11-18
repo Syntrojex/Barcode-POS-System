@@ -228,24 +228,11 @@ void OrdersPage::rebuild()
         h->setContentsMargins(4, 0, 4, 0);
         h->setSpacing(4);
         const OrderRecord copy = o;
-        if (o.status == "On Hold")
-        {
-            auto *res = W::button("Resume", "primary");
-            res->setMinimumHeight(26);
-            res->setMinimumWidth(72);
-            res->setStyleSheet("padding:3px 8px;");
-            h->addWidget(res);
-            connect(res, &QPushButton::clicked, this, [this, copy]
-                    { emit resumeOrder(copy.id); });
-        }
-        else
-        {
-            auto *view = W::button("", "flat", "eye");
-            view->setToolTip("View details");
-            h->addWidget(view);
-            connect(view, &QPushButton::clicked, this, [this, copy]
-                    { Dialogs::orderDetails(this, copy); });
-        }
+        auto *view = W::button("", "flat", "eye");
+        view->setToolTip("View details");
+        h->addWidget(view);
+        connect(view, &QPushButton::clicked, this, [this, copy]
+                { Dialogs::orderDetails(this, copy); });
         auto *rc = W::button("", "flat", "bills");
         rc->setToolTip("Receipt");
         h->addWidget(rc);
@@ -377,14 +364,15 @@ void BillsPage::rebuild()
     const QString q = m_search->text().trimmed();
     QVector<OrderRecord> rows;
     for (const auto &o : AppState::instance().orders())
-        if (o.status == "Paid" && (q.isEmpty() || o.id.contains(q, Qt::CaseInsensitive) || o.customer.contains(q, Qt::CaseInsensitive)))
+        if (o.status == "Paid" && !o.billId.isEmpty() &&
+            (q.isEmpty() || o.id.contains(q, Qt::CaseInsensitive) || o.billId.contains(q, Qt::CaseInsensitive) || o.customer.contains(q, Qt::CaseInsensitive)))
             rows << o;
     m_table->setRowCount(rows.size());
     for (int r = 0; r < rows.size(); ++r)
     {
         const auto &o = rows[r];
         m_table->setRowHeight(r, 46);
-        m_table->setItem(r, 0, item("BILL-" + o.id.right(8), Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
+        m_table->setItem(r, 0, item(o.billId, Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
         m_table->setItem(r, 1, item(o.id));
         m_table->setItem(r, 2, item(o.time.toString("yyyy-MM-dd HH:mm")));
         m_table->setItem(r, 3, item(o.customer));
@@ -421,8 +409,8 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
     m_feed->setMinimumHeight(300);
     cv->addWidget(m_feed, 1);
     auto *btns = new QHBoxLayout;
-    m_toggle = W::button("Stop Cam", "soft", "stop");
-    auto *scan = W::button("Scan Now [F9]", "primary", "barcode");
+    m_toggle = W::button("Start Cam", "soft", "play");
+    auto *scan = W::button("Start Scan [F9]", "primary", "barcode");
     btns->addWidget(m_toggle);
     btns->addWidget(scan);
     btns->addStretch();
@@ -460,9 +448,16 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
             {
         const bool on = !m_feed->running();
         m_feed->setRunning(on);
-        m_toggle->setText(on ? "Stop Cam" : "Start Cam");
-        m_toggle->setIcon(Theme::icon(on ? "stop" : "play", Theme::primary, 16)); });
+        const bool running = m_feed->running();
+        m_toggle->setText(running ? "Stop Cam" : "Start Cam");
+        m_toggle->setIcon(Theme::icon(running ? "stop" : "play", Theme::primary, 16)); });
     connect(scan, &QPushButton::clicked, this, &ScannerPage::scanNext);
+    connect(m_feed, &CameraFeedWidget::scanError, this, &ScannerPage::toast);
+    connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString &code) {
+        const auto product = AppState::instance().findByCode(code);
+        if (product) show(*product);
+        else emit toast("Barcode " + code + " not found in Product.txt");
+    });
     auto lookup = [this]
     {
         const auto p = AppState::instance().findByCode(m_manual->text());
@@ -480,24 +475,16 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
             { emit sendToOrder(m_lastEan); });
     connect(m_describe, &QPushButton::clicked, this, [this]
             { Dialogs::productDescription(this, m_lastId); });
-    connect(this, &ScannerPage::described, this, [this](int id)
-            { Dialogs::productDescription(this, id); });
 }
 
 void ScannerPage::scanNext()
 {
-    if (!m_feed->running())
-    {
-        emit toast("Camera is stopped - press Start Cam first");
-        return;
+    if (!m_feed->running()) m_feed->setRunning(true);
+    if (!m_feed->running()) emit toast("Unable to start camera scanning");
+    else {
+        m_toggle->setText("Stop Cam");
+        m_toggle->setIcon(Theme::icon("stop", Theme::primary, 16));
     }
-    const auto &ps = AppState::instance().products();
-    if (ps.isEmpty())
-    {
-        emit toast("No products loaded - check data/Product.txt");
-        return;
-    }
-    show(ps[m_index++ % ps.size()]);
 }
 
 void ScannerPage::show(const ProductInfo &p)
@@ -509,7 +496,7 @@ void ScannerPage::show(const ProductInfo &p)
     m_history->insertItem(0, QString("%1   %2   %3").arg(QTime::currentTime().toString("HH:mm:ss"), p.ean, p.name));
     m_send->setEnabled(true);
     m_describe->setEnabled(true);
-    emit described(p.id); // scanning shows the product description (cashier or manager)
+    // Show description only on request; opening a modal on every camera frame is disruptive.
 }
 
 // =================================================================== SettingsPage

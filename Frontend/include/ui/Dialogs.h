@@ -7,7 +7,7 @@ class QWidget;
 namespace Dialogs
 {
     // Payment chooser (Cash / Card / Wallet). Returns false when cancelled.
-    bool payment(QWidget *parent, double total, QString &mode, double &tendered);
+    bool payment(QWidget *parent, double total, QString &mode, double &tendered, QString &merchant);
     // Printable-style bill for an order.
     void receipt(QWidget *parent, const OrderRecord &order);
     // Order summary with line items.

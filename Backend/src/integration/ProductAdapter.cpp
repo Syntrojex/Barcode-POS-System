@@ -10,7 +10,7 @@ order::ProductSnapshot toSnapshot(const Product& p) {
     s.barcode = p.getBarcode();
     s.acronym = p.getAcronym();
     s.name = p.getProductName();
-    s.measurementUnit = p.getMeasurementUnit();
+    s.measurementUnit = p.getMeasurementUnitName();
     s.unitPrice = p.getUnitPrice();
     s.taxPerUnit = p.getTax();
     s.discountPerUnit = p.getDiscount();

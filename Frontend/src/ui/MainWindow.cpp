@@ -79,13 +79,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         if (text.trimmed().isEmpty()) return;
         if (AppState::instance().findByCode(text)) { m_products->setSearch(text); goTo(Products); }
         else { m_orders->setSearch(text); goTo(Orders); } });
-    auto resume = [this](const QString &id)
-    {
-        goTo(RecordOrder);
-        showToast("Resumed " + id + " (demo: line items are not restored)");
-    };
-    connect(m_dashboard, &DashboardPage::resumeOrder, this, resume);
-    connect(m_orders, &OrdersPage::resumeOrder, this, resume);
     connect(m_products, &ProductsPage::addToOrder, this, [this](const QString &ean)
             { goTo(RecordOrder); m_record->showCode(ean, true); });
     connect(m_scanner, &ScannerPage::sendToOrder, this, [this](const QString &ean)

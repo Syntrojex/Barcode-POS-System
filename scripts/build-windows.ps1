@@ -82,7 +82,7 @@ try {
     }
     Run $cmake @('-S',$repo,'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release',
         "-DCMAKE_CXX_COMPILER=$MinGWRoot/bin/g++.exe","-DCMAKE_MAKE_PROGRAM=$ninja",
-        "-DCMAKE_PREFIX_PATH=$QtRoot","-DOpenCV_DIR=$opencv",'-DBUILD_TESTING=ON')
+        "-DCMAKE_PREFIX_PATH=$QtRoot","-DOpenCV_DIR=$opencv",'-DCAMERA=ON','-DBUILD_TESTING=ON')
     Run $cmake @('--build',$build,'--parallel',"$Jobs")
     Run $deploy @('--release','--no-translations','--no-system-d3d-compiler','--no-opengl-sw',
         '--compiler-runtime',"$build/BarcodeHub.exe")
@@ -106,8 +106,19 @@ try {
     foreach ($dll in Get-ChildItem $build -Filter '*.dll') {
         Run $cmake @('-E','copy_if_different',$dll.FullName,(Join-Path $package $dll.Name))
     }
+    # OpenCV DLLs are installed under the OpenCV prefix, not deployed by windeployqt.
+    foreach ($cvBin in @((Join-Path $opencv 'bin'), (Join-Path $opencv 'x64/mingw/bin'))) {
+        if (Test-Path $cvBin) {
+            Get-ChildItem $cvBin -Filter '*.dll' -File | ForEach-Object {
+                Run $cmake @('-E','copy_if_different',$_.FullName,(Join-Path $package $_.Name))
+            }
+        }
+    }
     Run $deploy @('--release','--no-translations','--no-system-d3d-compiler','--no-opengl-sw',
         '--compiler-runtime',"$package/BarcodeHub.exe")
+    # Seed only missing files; preserve orders, stock, and bills in an existing installation.
+    Run $cmake @("-DSOURCE_DATA=$repo/data", "-DDEST_DATA=$package/data",
+        '-P', (Join-Path $repo 'cmake/seed-data.cmake'))
     $licenses = Join-Path $package 'licenses'
     New-Item -ItemType Directory -Force $licenses | Out-Null
     Copy-Item (Join-Path $repo 'LICENSE') (Join-Path $licenses 'BarcodeHub-LICENSE.txt') -Force

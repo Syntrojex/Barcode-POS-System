@@ -1,10 +1,12 @@
 #pragma once
-// GUI-side application state. Products come from the pure-C++ product module (Product.txt);
-// orders are kept in memory (the Order/Bill modules belong to teammates and plug in here later).
-// ProductInfo is a Qt-friendly view of the backend Product - the GUI never touches std::string.
-#include "product/ProductDescriber.h"
-#include "product/ProductManager.h"
-#include "product/StockValidator.h"
+// Qt-facing bridge to the Product, Order, and Billing backend modules.
+// Data is loaded from and persisted to Product.txt, Order.txt, OrderDetail.txt and Bill.txt.
+#include "product/ProductModel.h"
+#include "product/ProductStorage.h"
+#include "product/ProductValidation.h"
+#include "order/OrderManager.h"
+#include "billing/BillRepository.h"
+#include <memory>
 #include <QDateTime>
 #include <QObject>
 #include <QPair>
@@ -42,11 +44,13 @@ struct ReceiptLine
     double price = 0;    // unit price, no tax
     double tax = 0;      // per unit
     double discount = 0; // per unit
+    int productId = 0;   // 0 = manually entered product
 };
 
 struct OrderRecord
 {
     QString id;
+    QString billId; // only nonempty when an actual Bill.txt record exists
     QDateTime time;
     QString customer, contact, tier, payment, merchant, status, shift;
     QVector<ReceiptLine> lines;
@@ -72,9 +76,9 @@ public:
 
     // ---- products (backed by Product.txt) ----
     bool loadProducts(const QString &path);
-    QString productFile() const { return QString::fromStdString(m_manager.filePath()); }
+    QString productFile() const { return m_productPath; }
     QStringList productIssues() const; // "line 4: acronym ... " (errors and warnings)
-    int productErrorCount() const { return m_manager.lastLoad().errorCount(); }
+    int productErrorCount() const { return m_manager.getLastLoad().errorCount(); }
     const QVector<ProductInfo> &products() const { return m_products; }
     std::optional<ProductInfo> findByCode(const QString &code) const; // barcode, id or acronym
     QVector<ProductInfo> searchText(const QString &query) const;
@@ -90,7 +94,7 @@ public:
     // ---- orders ----
     const QVector<OrderRecord> &orders() const { return m_orders; } // newest first
     QString nextOrderId();
-    void addOrder(const OrderRecord &o); // deducts stock and saves Product.txt
+    bool addOrder(OrderRecord &o, QString *error = nullptr); // creates order, bill, updates stock; reports failures
     double salesToday() const { return m_baseSales + m_sessionSales; }
     int ordersToday() const { return m_baseOrders + m_sessionOrders; }
 
@@ -105,15 +109,17 @@ signals:
 private:
     AppState();
     void refreshCache();
-    void seedOrders();
+    void refreshOrders();
     ProductManager m_manager;
     StockValidator m_stock;
     QVector<ProductInfo> m_products;
     QString m_root;
+    QString m_productPath;
+    std::unique_ptr<barcodehub::order::OrderManager> m_orderManager;
+    std::unique_ptr<barcodehub::billing::BillRepository> m_billRepository;
     QVector<OrderRecord> m_orders;
     QSet<int> m_reordered;
     Settings m_settings;
-    int m_nextOrderNo = 89211;
-    double m_baseSales = 184250.0, m_sessionSales = 0;
-    int m_baseOrders = 148, m_sessionOrders = 0;
+    double m_baseSales = 0, m_sessionSales = 0;
+    int m_baseOrders = 0, m_sessionOrders = 0;
 };

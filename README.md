@@ -167,3 +167,13 @@ Please read the [Contributing Guidelines](CONTRIBUTING.md) before making changes
   <br /><br />
   <sub>Developed with ❤️ by the BarcodeHub team.</sub>
 </p>
+
+---
+
+## Current integration / development status (18 November 2026)
+
+The GUI checkout path now uses the Product, Order and Billing backend modules, and reads back the saved text records. Four backend tests pass. The GUI and real camera **have not** been tested in a Qt/OpenCV-capable environment yet.
+
+For the exact changes, build commands, limitations and testing matrix, see [`INTEGRATION_REPORT.md`](INTEGRATION_REPORT.md). The camera is optional: configure `-DCAMERA=ON` to build OpenCV capture, or `-DCAMERA=OFF` to use the typed barcode lookup without a camera.
+
+**Data preservation:** existing `data/Product.txt`, `data/Order.txt`, `data/OrderDetail.txt` and `data/Bill.txt` are no longer overwritten by a rebuilt portable application. Keep this `data/` folder when replacing the executable.

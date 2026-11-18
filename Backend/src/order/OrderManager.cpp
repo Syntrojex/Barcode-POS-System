@@ -564,6 +564,38 @@ bool OrderManager::createOrder(const std::string& customerName,
     return true;
 }
 
+std::string OrderManager::nextOrderId(std::string* error) const {
+    std::vector<Order> existing;
+    if (!loadOrders(existing, error)) return {};
+    return generateOrderId(currentDate(), existing, error);
+}
+
+bool OrderManager::discardOrder(const std::string& orderId, std::string* error) {
+    clearError(error);
+    std::vector<Order> orders;
+    std::vector<OrderDetail> details;
+    if (!loadOrders(orders, error) || !loadOrderDetails(details, error)) return false;
+    const auto it = std::find_if(orders.begin(), orders.end(), [&](const Order& order) {
+        return order.id == orderId;
+    });
+    if (it == orders.end() || it->status != OrderStatus::InProgress) {
+        if (error) *error = "Only existing in-progress orders may be discarded.";
+        return false;
+    }
+    const auto oldDetails = details;
+    orders.erase(it);
+    details.erase(std::remove_if(details.begin(), details.end(), [&](const OrderDetail& detail) {
+        return detail.orderId == orderId;
+    }), details.end());
+    if (!writeDetailsTo(orderDetailFile_, details, error)) return false;
+    if (!writeOrdersTo(orderFile_, orders, error)) {
+        std::string ignored;
+        writeDetailsTo(orderDetailFile_, oldDetails, &ignored);
+        return false;
+    }
+    return true;
+}
+
 bool OrderManager::updateOrder(const Order& order, std::string* error) {
     clearError(error);
     if (!order.isValid(error)) return false;
