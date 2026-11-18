@@ -115,7 +115,7 @@ void DashboardPage::build()
     connect(m_search, &QLineEdit::returnPressed, this, [this]
             { emit lookup(m_search->text()); m_search->clear(); });
 
-    // ---- chart + low stock
+    // ---- chart (full width)
     auto *mid = new QHBoxLayout;
     mid->setSpacing(0);
     auto *cc = W::card(this);
@@ -129,31 +129,8 @@ void DashboardPage::build()
     m_chart->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_chart->setData({}, {}, {}); // populated from real paid orders in refresh()
     cv->addWidget(m_chart, 1);
-    mid->addWidget(cc, 6);
-
-    auto *lc = W::card(this);
-    auto *lv = new QVBoxLayout(lc);
-    lv->setContentsMargins(18, 14, 18, 12);
-    lv->setSpacing(6);
-    m_lowBadge = W::badge("", "red");
-    W::headerRow(lv, "warn", "Low stock", m_lowBadge);
-    m_low = table({"PRODUCT", "STOCK", "LIMIT", ""});
-    m_low->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int c : {1, 2, 3})
-        m_low->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
-    m_low->setColumnWidth(1, 66);
-    m_low->setColumnWidth(2, 52);
-    m_low->setColumnWidth(3, 92);
-    lv->addWidget(m_low, 1);
-    auto *lf = new QHBoxLayout;
-    lf->addStretch();
-    m_genPO = W::button("Reorder all", "primary", "arrow-right");
-    lf->addWidget(m_genPO);
-    lv->addLayout(lf);
-    mid->addWidget(lc, 4);
+    mid->addWidget(cc, 1);
     root->addLayout(mid, 5);
-    connect(m_genPO, &QPushButton::clicked, this, [this]
-            { AppState::instance().reorderAllLow(); emit toast("Low-stock items marked for reorder (session only)"); });
 
     // ---- recent orders
     auto *rc = W::card(this);
@@ -207,50 +184,6 @@ void DashboardPage::refresh()
     const auto low = st.lowStock();
     m_lowCount->setText(QString::number(low.size()));
     m_lowSub->setText("Items at or below the low-stock limit");
-    W::setBadge(m_lowBadge, QString("%1 items").arg(low.size()), "red");
-    m_genPO->setText(QString("Mark for reorder (%1)").arg(low.size()));
-    m_genPO->setEnabled(!low.isEmpty());
-
-    const int n = qMin(5, low.size());
-    m_low->setRowCount(n);
-    for (int r = 0; r < n; ++r)
-    {
-        const auto &p = low[r];
-        m_low->setRowHeight(r, 50);
-        auto *name = new QWidget;
-        auto *nv = new QVBoxLayout(name);
-        nv->setContentsMargins(4, 4, 4, 4);
-        nv->setSpacing(0);
-        auto *a = W::label(p.name);
-        a->setStyleSheet("font-weight:700;");
-        auto *b = W::label(p.sku);
-        b->setStyleSheet("color:#8a94ab; font-size:11px;");
-        nv->addWidget(a);
-        nv->addWidget(b);
-        m_low->setCellWidget(r, 0, name);
-        auto *sk = new QTableWidgetItem(QString::number(p.stock));
-        sk->setTextAlignment(Qt::AlignCenter);
-        sk->setForeground(QColor(p.stock <= 0 ? "#c0271d" : "#b36b00"));
-        QFont f = sk->font();
-        f.setBold(true);
-        sk->setFont(f);
-        m_low->setItem(r, 1, sk);
-        auto *lim = new QTableWidgetItem(QString::number(st.settings().lowStockThreshold));
-        lim->setTextAlignment(Qt::AlignCenter);
-        lim->setForeground(QColor("#8a94ab"));
-        m_low->setItem(r, 2, lim);
-        const bool done = st.isReordered(p.id);
-        auto *btn = W::button(done ? "Marked ✓" : "Mark", "mini");
-        btn->setEnabled(!done);
-        auto *wrap = new QWidget;
-        auto *wl = new QHBoxLayout(wrap);
-        wl->setContentsMargins(0, 0, 4, 0);
-        wl->addWidget(btn);
-        m_low->setCellWidget(r, 3, wrap);
-        const int pid = p.id; const QString nm = p.name;
-        connect(btn, &QPushButton::clicked, this, [this, pid, nm]
-                { AppState::instance().reorder(pid); emit toast("Marked for reorder (session only): " + nm); });
-    }
 
     const int m = qMin(5, orders.size());
     m_recent->setRowCount(m);
