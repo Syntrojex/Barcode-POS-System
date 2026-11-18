@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -76,11 +77,6 @@ bool testCalculatorMultipleItems() {
     BillTotals totals;
     std::string error;
     TEST_ASSERT(BillCalculator::calculate(lines, totals, &error), "Multi-item calculation failed: " + error);
-    // Totals:
-    // withoutTax: 150 + 300 + 300 = 750.0
-    // tax: 0 + 30 + 15 = 45.0
-    // discount: 10 + 0 + 7.5 = 17.5
-    // payable: 750 + 45 - 17.5 = 777.5
     TEST_ASSERT(doubleNear(totals.withoutTax, 750.0), "Multi-item subtotal mismatch");
     TEST_ASSERT(doubleNear(totals.tax, 45.0), "Multi-item tax mismatch");
     TEST_ASSERT(doubleNear(totals.discount, 17.5), "Multi-item discount mismatch");
@@ -89,7 +85,6 @@ bool testCalculatorMultipleItems() {
 }
 
 bool testCalculatorRoundingPrecision() {
-    // 3 units at 33.3333 PKR = 99.9999 -> rounded to 100.0
     std::vector<BillLine> lines = {
         {"RICE", 33.3333, 1.6666, 0.5555, 3.0}
     };
@@ -97,14 +92,74 @@ bool testCalculatorRoundingPrecision() {
     BillTotals totals;
     std::string error;
     TEST_ASSERT(BillCalculator::calculate(lines, totals, &error), "Rounding test failed: " + error);
-    // 33.3333 * 3 = 100.00
-    // 1.6666 * 3 = 5.00
-    // 0.5555 * 3 = 1.67
-    // payable = 100.00 + 5.00 - 1.67 = 103.33
     TEST_ASSERT(doubleNear(totals.withoutTax, 100.0, 0.01), "Rounded withoutTax mismatch");
     TEST_ASSERT(doubleNear(totals.tax, 5.0, 0.01), "Rounded tax mismatch");
     TEST_ASSERT(doubleNear(totals.discount, 1.67, 0.01), "Rounded discount mismatch");
     TEST_ASSERT(doubleNear(totals.payable, 103.33, 0.01), "Rounded payable mismatch");
+    return true;
+}
+
+bool testCalculatorEmptyLines() {
+    std::vector<BillLine> lines;
+    BillTotals totals;
+    std::string error;
+    TEST_ASSERT(!BillCalculator::calculate(lines, totals, &error), "Empty bill should fail");
+    TEST_ASSERT(error.find("at least one product") != std::string::npos, "Unexpected error: " + error);
+    return true;
+}
+
+bool testCalculatorNegativeValues() {
+    BillTotals totals;
+    std::string error;
+
+    // Negative unit price
+    std::vector<BillLine> negPrice = {{"ITEM", -50.0, 5.0, 0.0, 1.0}};
+    TEST_ASSERT(!BillCalculator::calculate(negPrice, totals, &error), "Negative price should fail");
+
+    // Negative tax
+    std::vector<BillLine> negTax = {{"ITEM", 50.0, -5.0, 0.0, 1.0}};
+    TEST_ASSERT(!BillCalculator::calculate(negTax, totals, &error), "Negative tax should fail");
+
+    // Negative discount
+    std::vector<BillLine> negDisc = {{"ITEM", 50.0, 5.0, -2.0, 1.0}};
+    TEST_ASSERT(!BillCalculator::calculate(negDisc, totals, &error), "Negative discount should fail");
+
+    // Zero quantity
+    std::vector<BillLine> zeroQty = {{"ITEM", 50.0, 5.0, 0.0, 0.0}};
+    TEST_ASSERT(!BillCalculator::calculate(zeroQty, totals, &error), "Zero quantity should fail");
+
+    // Negative quantity
+    std::vector<BillLine> negQty = {{"ITEM", 50.0, 5.0, 0.0, -3.0}};
+    TEST_ASSERT(!BillCalculator::calculate(negQty, totals, &error), "Negative quantity should fail");
+
+    return true;
+}
+
+bool testCalculatorExcessiveDiscount() {
+    // Subtotal 100, Tax 0, Discount 150 -> Net payable would be -50
+    std::vector<BillLine> lines = {
+        {"COFFEE", 100.0, 0.0, 150.0, 1.0}
+    };
+
+    BillTotals totals;
+    std::string error;
+    TEST_ASSERT(!BillCalculator::calculate(lines, totals, &error), "Excessive discount should be rejected");
+    TEST_ASSERT(error.find("Discount is larger") != std::string::npos, "Unexpected error: " + error);
+    return true;
+}
+
+bool testCalculatorNonFiniteValues() {
+    BillTotals totals;
+    std::string error;
+    double nanVal = std::numeric_limits<double>::quiet_NaN();
+    double infVal = std::numeric_limits<double>::infinity();
+
+    std::vector<BillLine> nanLine = {{"NAN_ITEM", nanVal, 0.0, 0.0, 1.0}};
+    TEST_ASSERT(!BillCalculator::calculate(nanLine, totals, &error), "NaN price should be rejected");
+
+    std::vector<BillLine> infLine = {{"INF_ITEM", 10.0, infVal, 0.0, 1.0}};
+    TEST_ASSERT(!BillCalculator::calculate(infLine, totals, &error), "Infinity tax should be rejected");
+
     return true;
 }
 
@@ -123,6 +178,10 @@ int main() {
     RUN_TEST(testCalculatorSingleItem);
     RUN_TEST(testCalculatorMultipleItems);
     RUN_TEST(testCalculatorRoundingPrecision);
+    RUN_TEST(testCalculatorEmptyLines);
+    RUN_TEST(testCalculatorNegativeValues);
+    RUN_TEST(testCalculatorExcessiveDiscount);
+    RUN_TEST(testCalculatorNonFiniteValues);
 
     std::cout << "\n----------------------------------------\n";
     std::cout << "Test Summary: " << passedTests << "/" << totalTests << " passed.\n";
