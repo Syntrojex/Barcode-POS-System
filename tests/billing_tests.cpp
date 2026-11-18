@@ -223,6 +223,11 @@ bool testCardPaymentMissingBank() {
     PaymentResult res = card.process(req, 1250.0);
     TEST_ASSERT(!res.ok, "Card payment without bank name should fail");
     TEST_ASSERT(res.error.find("bank") != std::string::npos, "Unexpected error: " + res.error);
+
+    // Whitespace-only name should also fail
+    req.merchant = "   \t  ";
+    PaymentResult resWs = card.process(req, 1250.0);
+    TEST_ASSERT(!resWs.ok, "Card payment with whitespace bank name should fail");
     return true;
 }
 

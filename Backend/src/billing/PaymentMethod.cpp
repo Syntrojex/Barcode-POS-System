@@ -8,7 +8,9 @@ namespace barcodehub::billing {
 namespace {
 
 bool validMerchant(const std::string& name) {
-    return !name.empty() && name.find('#') == std::string::npos;
+    const auto first = name.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return false;
+    return name.find('#') == std::string::npos;
 }
 
 PaymentResult electronic(const PaymentRequest& request, const char* what) {
