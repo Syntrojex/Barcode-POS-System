@@ -69,6 +69,10 @@ if errorlevel 1 (
 
 :: Step 3: Launch BarcodeHub POS application
 echo [*] Launching BarcodeHub POS System...
+
+:: Ensure desktop shortcut with custom icon exists on this PC
+powershell -NoProfile -Command "$desktop = [Environment]::GetFolderPath('Desktop'); $lnk = Join-Path $desktop 'BarcodeHub POS System.lnk'; if (!(Test-Path $lnk)) { $ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut($lnk); $s.TargetPath = '%~dp0Run-BarcodeHub.cmd'; $s.WorkingDirectory = '%~dp0'; $s.IconLocation = '%~dp0assets\pos_icon.ico,0'; $s.Description = 'BarcodeHub Point of Sale (POS) and Billing System'; $s.Save() }" >nul 2>&1
+
 start "" "%EXE%"
 
 :: Exit launcher window cleanly
