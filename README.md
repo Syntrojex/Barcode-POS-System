@@ -79,7 +79,7 @@ Each record follows the specified field order and uses `#` as its end-of-record 
 |---|---|
 | **C++17** | Core application logic |
 | **Qt 6 Widgets** | Desktop graphical interface |
-| **OpenCV** | Camera capture and image processing |
+| **OpenCV / Qt Multimedia** | Camera capture (barcode decoding is pure C++) |
 | **CMake** | Build configuration |
 | **MinGW-w64** | Windows C++ compilation |
 | **PowerShell** | Build automation |
@@ -112,6 +112,7 @@ Bar-Code-System-CPP/
 ├── tests/
 ├── .github/
 │
+├── main.cpp
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── project.json
@@ -160,9 +161,19 @@ Please read the [Contributing Guidelines](CONTRIBUTING.md) before making changes
 ---
 
 <p align="center">
-  <b>Barcode POS System</b>
+  <b>BarcodeHub</b>
   <br />
   Building a practical barcode solution, one increment at a time.
   <br /><br />
   <sub>Developed with ❤️ by the BarcodeHub team.</sub>
 </p>
+
+---
+
+## Current integration / development status (18 November 2026)
+
+The GUI checkout path now uses the Product, Order and Billing backend modules, and reads back the saved text records. Four backend tests pass. The GUI and real camera **have not** been tested in a Qt Multimedia-capable environment yet.
+
+For the exact changes, build commands, limitations and testing matrix, see [`INTEGRATION_REPORT.md`](INTEGRATION_REPORT.md). The camera is optional: the camera uses OpenCV when a build for your compiler is found (MinGW: a folder with `libopencv_*.dll` and the matching `include`; set `-DOPENCV_ROOT=<folder>` if it is not found automatically), otherwise Qt Multimedia. `-DCAMERA_BACKEND=OPENCV|QT|AUTO`, `-DCAMERA_MODE=AUTO|ON|OFF`.
+
+**Data preservation:** existing `data/Product.txt`, `data/Order.txt`, `data/OrderDetail.txt` and `data/Bill.txt` are no longer overwritten by a rebuilt portable application. Keep this `data/` folder when replacing the executable.

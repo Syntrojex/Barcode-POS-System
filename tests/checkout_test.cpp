@@ -15,7 +15,7 @@ int main() {
     fs::create_directories(dir);
     bh::order::OrderManager orders(dir / "Order.txt", dir / "OrderDetail.txt");
     bh::billing::BillRepository bills(dir / "Bill.txt");
-    Product product(1, "40001029", "MILK", "Fresh Milk", MeasurementUnit::Count, 250, 12.5, 10, 5, "-");
+    Product product(1, "01001020", "MILK", "Fresh Milk", MeasurementUnit::Count, 250, 12.5, 10, 5, "-");
     bh::billing::BillingService service(orders, bills, [&](const std::string& id, bh::order::ProductSnapshot& out) {
         if (id != "1") return false;
         out = bh::integration::toSnapshot(product);
