@@ -56,3 +56,18 @@ Sources: [main camera feed](../../../Frontend/src/ui/Widgets.cpp),
 [decoder](../../../Backend/src/scanner/decoder.cpp),
 [order page](../../../Frontend/src/ui/RecordOrderPage.cpp), and
 [CameraDemo widget](../../../Frontend/src/ui/CameraWidget.cpp).
+
+## Separate successful decoding from a successful product match
+
+A decoded EAN-8 value can be absent from the current catalogue. For such a
+label the camera may emit a valid code while Record Order reports no product.
+Record both the emitted digits and the lookup result when diagnosing a demo.
+
+| Observation | What it establishes | What still needs checking |
+| --- | --- | --- |
+| Frame visible but no digits | Camera capture started | Label orientation, sharpness and decoder acceptance |
+| Digits emitted but unknown product | Decoder found a valid candidate | Selected catalogue and exact barcode key |
+| Correct preview but empty cart | Lookup succeeded | Explicit Add or scanner auto-add preference |
+| Quantity increases twice | Addition occurred twice | Repeat detection interval and auto-add setting |
+
+These are source-based diagnostic cases; none was run with camera hardware.
