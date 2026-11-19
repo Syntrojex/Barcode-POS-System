@@ -57,3 +57,18 @@ error and backup before any manual recovery; no automated repair tool is supplie
 **What has actually been tested?** Existing backend tests cover successful file
 round trips and normal rejection paths. They do not simulate power loss, full
 disks or rollback failures. See [verification](../verification.md).
+
+## Preserve the relevant evidence when a read fails
+
+| Reported stage | Files to compare with the same backup set | Reason |
+| --- | --- | --- |
+| Product lookup or stock save | Product.txt and referenced barcode path | Product metadata and image resolution are separate |
+| Order lookup | Order.txt | Header identity, state and payment are stored here |
+| Empty/missing order products | OrderDetail.txt together with Order.txt | Detail rows require the correct order identity |
+| Bill parsing or history display | Bill.txt together with both order files | History combines all three record sources |
+| Inconsistent inventory after failure | All four files | A checkout spans multiple independent replacements |
+
+A single file from an older backup can disagree with the other three even if
+every row parses. Match order IDs, bill order references and item quantities
+before drawing conclusions from screen totals. No repair action was executed
+as part of this review.
