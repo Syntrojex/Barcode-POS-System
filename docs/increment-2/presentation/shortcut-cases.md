@@ -50,3 +50,16 @@ Sources: [MainWindow routing](../../../Frontend/src/ui/MainWindow.cpp),
 [unused navigation list](../../../Frontend/src/ui/NavigationModel.cpp),
 [Record Order handlers](../../../Frontend/src/ui/RecordOrderPage.cpp),
 and [existing settings guide](../settings.md).
+
+## Trace manual entry without confusing focus, preview and add
+
+On Record Order, F2 focuses the barcode field. Typing 40001029 and pressing
+Enter calls the manual preview path; it is not an instruction to add a cart
+unit. The visible Add to order button then performs the addition. Auto-add is
+checked only for the scanner-style path, so switching that preference does not
+change the manual Enter sequence.
+
+In a rehearsal, note the cart quantity after each of these three actions.
+This separates a keyboard-routing issue from a lookup issue or stock rejection.
+See focusInput, showCode, and the manual field's returnPressed connection
+in [RecordOrderPage](../../../Frontend/src/ui/RecordOrderPage.cpp).
