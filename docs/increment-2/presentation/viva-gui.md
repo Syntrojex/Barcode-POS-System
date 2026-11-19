@@ -56,3 +56,19 @@ the Qt widgets or `AppState::addOrder()`. The GUI build at `883425c` passes with
 `CAMERA=OFF`; interactive checkout and a camera trial remain separate acceptance steps.
 Use [verification](../verification.md) for the earlier recorded test coverage
 and [screen rehearsal](screen-rehearsal.md) for pending GUI checks.
+
+## How is a custom item different from a catalogue product?
+
+The custom-item dialog supplies a description and positive unit price. The
+draft gives it a generated MAN-prefixed acronym, count unit and zero tax/
+discount. It has no catalogue product ID and does not reduce catalogue stock.
+AppState builds a temporary CUSTOM-prefixed snapshot for this checkout so
+billing can still resolve the line and persist its amount.
+
+The full custom description is session metadata. After restart, a historical
+custom line can fall back to the saved acronym because the bill schema does
+not store a complete product name. A manual line therefore demonstrates billing
+flexibility, rather than catalogue creation or inventory replenishment.
+Evidence: [custom dialog](../../../Frontend/src/ui/Dialogs.cpp),
+[draft conversion](../../../Frontend/src/ui/RecordOrderPage.cpp), and
+[AppState snapshots](../../../Frontend/src/ui/AppState.cpp).
