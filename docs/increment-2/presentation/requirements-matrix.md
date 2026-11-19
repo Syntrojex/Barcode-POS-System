@@ -3,7 +3,9 @@
 Use this table with the [increment plan](../../../Project%20Planning/Increment-2.md).
 "Source" means the implementation was inspected. "Backend test" means a
 registered CTest suite passed; it does not imply that a Qt widget or camera ran.
-The current GUI build blocker applies to every screen-oriented row.
+The Qt build now passes with `CAMERA=OFF` at `883425c`; every screen-oriented row
+still needs interactive verification. The earlier header mismatch was repaired
+in a separate existing commit, outside this documentation work.
 
 | Planned responsibility | Implementation evidence | Verification and qualification |
 | --- | --- | --- |
@@ -20,7 +22,7 @@ The current GUI build blocker applies to every screen-oriented row.
 | Eight-digit Order IDs | `OrderManager::generateOrderId` | Order suite passes; daily sequence is limited to 99. |
 | Save order header | `OrderManager::createOrder`, `writeOrdersTo` | Order and checkout suites pass for normal persistence. |
 | Save order item quantities | `OrderDetail`, `writeDetailsTo` | Order and integration suites pass; details do not snapshot prices. |
-| POS GUI | `MainWindow` and seven pages | Source inspected; build currently fails in `RecordOrderPage`. |
+| POS GUI | `MainWindow` and seven pages | Source inspected; camera-disabled Qt build passes at `883425c`; interactive checks pending. |
 | Calculate bills | `BillCalculator::calculate` | Billing/checkout tests pass; tax and discount are PKR amounts per unit. |
 | Description button | Record Order Description / Products Details | Source only; F4 opens product browsing rather than this description dialog. |
 | Save `Bill.txt` | `BillRecordCodec`, `BillRepository` | Billing and checkout suites pass; one row per item, grouped by bill ID. |
