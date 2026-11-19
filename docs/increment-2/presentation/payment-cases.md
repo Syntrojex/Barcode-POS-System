@@ -57,3 +57,19 @@ additionally orchestrates stock restoration and removal of the new unpaid order.
 two-unit bill totaling 505: tender 500 fails, tender 510 returns 5, and repeat
 checkout fails. [billing_tests.cpp](../../../tests/billing_tests.cpp) covers
 cash, merchant validation and default strategies. Neither proves bank settlement.
+
+## Explain the three cash amounts separately
+
+For the milk-and-bread rehearsal, payable is PKR 938. If the customer hands over
+PKR 1,000, change is PKR 62. The paid order records paymentAmount as 938, not
+1,000. The bill repeats the payable total; neither file stores tender or change.
+
+| Value | Current-session receipt | Restored transaction |
+| --- | --- | --- |
+| Amount payable | 938 | Saved as 938 |
+| Cash received | 1,000 | Not persisted |
+| Change | 62 | Cannot be recovered uniquely from saved totals |
+
+This explains why a historical receipt can show the sale total but cannot
+prove how much cash was handed over. See the assignment to
+paidOrder.paymentAmount in [BillingService](../../../Backend/src/billing/BillingService.cpp).
