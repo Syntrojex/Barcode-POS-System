@@ -68,6 +68,7 @@ out/
 *.log
 *.tmp
 *.bak
+*.lnk
 Thumbs.db
 Desktop.ini
 build/
