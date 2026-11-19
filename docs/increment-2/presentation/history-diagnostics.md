@@ -58,3 +58,16 @@ Sources: [history loader](../../../Frontend/src/ui/AppState.cpp),
 [Orders/Bills filtering](../../../Frontend/src/ui/OtherPages.cpp),
 [detail and receipt views](../../../Frontend/src/ui/Dialogs.cpp),
 and [record format reference](../records.md).
+
+## Worked example of positional reconstruction
+
+Suppose one saved order has detail rows [milk, bread], and its bill lines store
+[milk at 340, bread at 260]. The normal row ordering pairs those amounts with
+the intended products. Reversing only the detail rows to [bread, milk] makes
+the loader use the first saved bill line for bread and the second for milk.
+
+The aggregate payable can still come directly from the bill and look correct.
+Use this as an explanation of a source limitation; do not reorder real records
+to demonstrate it. An actual failure reproduction would need a disposable data
+copy and a running GUI, neither of which was exercised for this case.
+See detailIndex in [history reconstruction](../../../Frontend/src/ui/AppState.cpp).
