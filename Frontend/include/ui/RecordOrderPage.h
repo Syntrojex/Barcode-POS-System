@@ -38,7 +38,7 @@ public:
     explicit RecordOrderPage(QWidget* parent = nullptr);
 
 public slots:
-    /** @brief Shifts keyboard focus to the barcode input field. */
+    /** @brief Shifts keyboard focus to the barcode input field (F2). */
     void focusInput();
 
     /** @brief Initiates camera barcode scanning or simulates a scan input (F9 shortcut). */
@@ -88,23 +88,29 @@ private:
 
     QVector<CartLine> m_cart;
     std::optional<ProductInfo> m_preview;
+    int m_nextCustomLine = 1;
 
-    QLineEdit* m_codeEdit = nullptr;
-    QLineEdit* m_custName = nullptr;
-    QLineEdit* m_custContact = nullptr;
-    QLabel* m_pName = nullptr;
-    QLabel* m_pAcronym = nullptr;
-    QLabel* m_pPrice = nullptr;
-    QLabel* m_pTax = nullptr;
-    QLabel* m_pDiscount = nullptr;
-    QLabel* m_pStock = nullptr;
-    QLabel* m_pBarcodeImg = nullptr;
-    QPushButton* m_descBtn = nullptr;
-    QPushButton* m_addBtn = nullptr;
-    QTableWidget* m_table = nullptr;
-    QLabel* m_subtotalLabel = nullptr;
-    QLabel* m_taxLabel = nullptr;
-    QLabel* m_discountLabel = nullptr;
-    QLabel* m_payableLabel = nullptr;
-    CameraFeedWidget* m_camera = nullptr;
+    QLineEdit* m_customer;
+    QLineEdit* m_contact;
+    QLineEdit* m_manual;
+    QLabel* m_sessionId;
+
+    CameraFeedWidget* m_feed;
+    QPushButton* m_camToggle;
+    QPushButton* m_addBtn;
+    QPushButton* m_descBtn;
+    QLabel* m_pName;
+    QLabel* m_pPrice;
+    QLabel* m_pMeta;
+    QLabel* m_pStock;
+    QLabel* m_pThumb;
+    QLabel* m_pBadge;
+
+    QTableWidget* m_table;
+    QLabel* m_itemsBadge;
+    QLabel* m_gross;
+    QLabel* m_disc;
+    QLabel* m_tax;
+    QLabel* m_total;
+    QPushButton* m_checkout;
 };
