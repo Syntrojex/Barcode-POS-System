@@ -28,6 +28,15 @@ All notable changes to **BarcodeHub** are documented in this file.
 
 ## [2.0.0] — Increment 2: Point of Sale System
 
+### Completed — Billing & POS Subsystem (Ali Abdullah)
+- Developed arithmetic calculation engine (`BillCalculator`) with subtotal, sales tax, discount, and net payable calculations conforming to 2-decimal monetary rules.
+- Implemented Extensible Payment Strategy Pattern (`IPaymentMethod`, `CashPayment`, `CardPayment`, `WalletPayment`, `PaymentMethodRegistry`) adhering to the Open-Closed Principle.
+- Built flat-file serialization and parsing codec (`BillRecordCodec`) conforming to the 12-field `Bill.txt` specification with terminal `#` delimiter.
+- Built atomic file persistence repository (`BillRepository`) utilizing write-through-temp-file pattern and sequential 9-digit Bill ID generator (`YYMMDD###`).
+- Designed checkout and payment modal dialogs (`Dialogs::payment`) supporting Cash change calculation and Card/Wallet merchant validation.
+- Integrated Product Description dialog (`Dialogs::productDescription`) and receipt text generator (`Dialogs::receiptText`).
+- Implemented comprehensive unit test suite in `tests/billing_tests.cpp` covering 19 distinct verification assertions across calculations, rounding, boundary conditions, payment strategies, codec parsing, and repository persistence.
+
 ### Planned
 
 - Introduce a GUI-based Point of Sale (POS) workflow.

@@ -178,6 +178,18 @@ if(BUILD_TESTING)
 
     add_test(NAME checkout COMMAND checkout_test)
 
+    add_executable(billing_tests
+        tests/billing_tests.cpp
+    )
+
+    target_link_libraries(billing_tests PRIVATE billing_core)
+
+    add_test(NAME billing COMMAND billing_tests)
+
+    set_tests_properties(billing PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+
 endif()
 
 if(BACKEND_ONLY)
@@ -292,6 +304,7 @@ endif()
 
 set(UI_SOURCES
     Frontend/src/ui/AppState.cpp
+    Frontend/src/ui/DarkModeManager.cpp
     Frontend/src/ui/DashboardPage.cpp
     Frontend/src/ui/Dialogs.cpp
     Frontend/src/ui/MainWindow.cpp

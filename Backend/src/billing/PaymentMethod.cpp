@@ -8,7 +8,9 @@ namespace barcodehub::billing {
 namespace {
 
 bool validMerchant(const std::string& name) {
-    return !name.empty() && name.find('#') == std::string::npos;
+    const auto first = name.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return false;
+    return name.find('#') == std::string::npos;
 }
 
 PaymentResult electronic(const PaymentRequest& request, const char* what) {
@@ -25,7 +27,11 @@ PaymentResult electronic(const PaymentRequest& request, const char* what) {
 
 PaymentResult CashPayment::process(const PaymentRequest& request, double payable) const {
     PaymentResult result;
-    if (!std::isfinite(request.amountTendered) || request.amountTendered + 1e-9 < payable) {
+    if (!std::isfinite(request.amountTendered) || request.amountTendered < 0.0) {
+        result.error = "Invalid cash amount tendered.";
+        return result;
+    }
+    if (request.amountTendered + 1e-9 < payable) {
         result.error = "Cash received is less than the amount payable.";
         return result;
     }

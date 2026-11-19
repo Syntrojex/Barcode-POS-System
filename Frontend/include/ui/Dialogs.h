@@ -1,4 +1,17 @@
 #pragma once
+
+/**
+ * @file Dialogs.h
+ * @brief Modal dialog windows and receipt generation utilities for the POS GUI.
+ * @author Ali Abdullah (25L-3022)
+ *
+ * Implements the interactive dialog workflows assigned for Increment 2:
+ * - Payment selection modal (supporting Cash, Card, and Mobile Wallet).
+ * - Receipt viewer modal (displaying finalized bill details and printable format).
+ * - Product Description modal (displaying specifications, stock, and barcode graphic).
+ * - Order details inspector.
+ */
+
 #include "AppState.h"
 #include <QString>
 
@@ -6,16 +19,61 @@ class QWidget;
 
 namespace Dialogs
 {
-    // Payment chooser (Cash / Card / Wallet). Returns false when cancelled.
+    /**
+     * @brief Launches the payment settlement dialog allowing the cashier to complete an order.
+     *
+     * Provides radio options for Cash, Card, and Wallet. Dynamically adjusts input fields
+     * to accept tendered cash (calculating live change) or bank/merchant provider name.
+     *
+     * @param[in] parent Owning parent widget for modal centering.
+     * @param[in] total Total bill amount payable in PKR.
+     * @param[out] mode Selected payment method string ("Cash", "Card", "Wallet").
+     * @param[out] tendered Physical currency amount entered if Cash mode was selected.
+     * @param[out] merchant Bank or digital wallet identifier if Card/Wallet mode was selected.
+     * @return True if customer confirmed payment; false if checkout was cancelled.
+     */
     bool payment(QWidget *parent, double total, QString &mode, double &tendered, QString &merchant);
-    // Printable-style bill for an order.
+
+    /**
+     * @brief Displays a clean printable-style receipt preview dialog for a finalized order.
+     * @param parent Owning parent widget.
+     * @param order Fully recorded order with items, customer details, and payment metadata.
+     */
     void receipt(QWidget *parent, const OrderRecord &order);
-    // Order summary with line items.
+
+    /**
+     * @brief Displays detailed line items, timestamps, and customer metadata for an order.
+     * @param parent Owning parent widget.
+     * @param order Target OrderRecord to inspect.
+     */
     void orderDetails(QWidget *parent, const OrderRecord &order);
-    // Product description (name, barcode, unit, price, tax, discount, stock, barcode image).
+
+    /**
+     * @brief Displays the Product Description popup dialog.
+     *
+     * Fulfills Increment 2 requirement: Cashier can inspect comprehensive product
+     * attributes (acronym, description, pricing, tax, discount, available inventory)
+     * along with rendered barcode graphic.
+     *
+     * @param parent Owning parent widget.
+     * @param productId Numeric identifier of the product to query.
+     */
     void productDescription(QWidget *parent, int productId);
-    // Lists the lines of Product.txt that were rejected or flagged while loading.
+
+    /**
+     * @brief Displays any syntax or data integrity issues detected during Product.txt parsing.
+     * @param parent Owning parent widget.
+     */
     void loadIssues(QWidget *parent);
-    // Text receipt body (also used for the bill preview).
+
+    /**
+     * @brief Generates formatted monospace text representation of an order's finalized bill receipt.
+     *
+     * Contains business header, itemized quantities, unit prices, discounts, taxes,
+     * total payable, amount tendered, change returned, and payment method details.
+     *
+     * @param order Recorded order data.
+     * @return Formatted multi-line receipt text.
+     */
     QString receiptText(const OrderRecord &order);
 }

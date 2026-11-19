@@ -18,6 +18,9 @@
 
 ## 📌 Project Overview
 
+For the current implementation review, build results, known limitations, and
+presentation walkthrough, see the [Increment 2 inspection guide](docs/increment-2/README.md).
+
 **BarcodeHub** is a C++ desktop application being developed as a barcode-based Point of Sale (POS) system.
 
 The project extends its initial barcode generation and reading capabilities into a GUI-based retail workflow, allowing cashiers to scan products, retrieve product information, manage orders, and generate bills.

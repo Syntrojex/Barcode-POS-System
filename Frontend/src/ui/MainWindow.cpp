@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AppState.h"
+#include "DarkModeManager.h"
 #include "DashboardPage.h"
 #include "OtherPages.h"
 #include "RecordOrderPage.h"
@@ -201,6 +202,15 @@ QWidget *MainWindow::buildTopBar()
     t->addStretch();
     h->addLayout(t);
     h->addStretch();
+
+    // Dark Mode Toggle Button (from dedicated DarkModeManager module)
+    auto *darkToggle = barcodehub::ui::DarkModeManager::instance().createTopBarToggle(bar);
+    h->addWidget(darkToggle, 0, Qt::AlignVCenter);
+
+    connect(&barcodehub::ui::DarkModeManager::instance(), &barcodehub::ui::DarkModeManager::themeChanged,
+            this, [this](bool isDark) {
+                showToast(isDark ? "Switched to Dark Mode" : "Switched to Light Mode");
+            });
 
     auto *chip = new QFrame;
     chip->setObjectName("chip");
