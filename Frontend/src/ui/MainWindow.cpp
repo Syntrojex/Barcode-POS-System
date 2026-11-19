@@ -31,7 +31,8 @@ namespace
                           "Printable bills for paid orders", "Tax, discount and scanning preferences"};
 }
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
+MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
+    : QMainWindow(parent), m_role(role), m_userName(userName.isEmpty() ? RolePolicy::name(role) : userName)
 {
     setWindowTitle("BarcodeHub - SmartPOS");
     setMinimumSize(1100, 700);
@@ -62,6 +63,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     for (QWidget *w : QList<QWidget *>{m_dashboard, m_record, m_orders, m_products, m_scanner, m_bills, m_settings})
         m_stack->addWidget(w);
     rv->addWidget(m_stack, 1);
+    // Manager can only view products: no buttons that add to an order.
+    const bool viewOnly = !RolePolicy::canOpen(m_role, RecordOrder);
+    m_products->setViewOnly(viewOnly);
+    m_scanner->setViewOnly(viewOnly);
     h->addWidget(right, 1);
 
     m_toast = new QLabel(root);
@@ -81,9 +86,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         if (AppState::instance().findByCode(text)) { m_products->setSearch(text); goTo(Products); }
         else { m_orders->setSearch(text); goTo(Orders); } });
     connect(m_products, &ProductsPage::addToOrder, this, [this](const QString &ean)
-            { goTo(RecordOrder); m_record->showCode(ean, true); });
+            { if (goTo(RecordOrder)) m_record->showCode(ean, true); });
     connect(m_scanner, &ScannerPage::sendToOrder, this, [this](const QString &ean)
-            { goTo(RecordOrder); m_record->showCode(ean, true); });
+            { if (goTo(RecordOrder)) m_record->showCode(ean, true); });
 
     // F-keys
     for (int n : {1, 2, 3, 4, 5, 6, 9, 10})
@@ -95,12 +100,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     }
     auto *k = new QShortcut(QKeySequence("Ctrl+K"), this);
     connect(k, &QShortcut::activated, this, [this]
-            { goTo(Dashboard); m_dashboard->focusLookup(); });
+            { if (goTo(Dashboard)) m_dashboard->focusLookup(); });
     auto *nd = new QShortcut(QKeySequence("Ctrl+N"), this);
     connect(nd, &QShortcut::activated, this, [this]
-            { goTo(RecordOrder); m_record->newDraft(); });
+            { if (goTo(RecordOrder)) m_record->newDraft(); });
 
-    goTo(RecordOrder);
+    goTo(RolePolicy::startPage(m_role));
 }
 
 QWidget *MainWindow::buildSidebar()
@@ -154,6 +159,7 @@ QWidget *MainWindow::buildSidebar()
         bh->addWidget(tx, 1);
         v->addWidget(b);
         m_nav << b;
+        b->setVisible(RolePolicy::canOpen(m_role, i)); // hide pages this role cannot use
         connect(b, &QPushButton::clicked, this, [this, i]
                 { goTo(i); });
     }
@@ -163,18 +169,26 @@ QWidget *MainWindow::buildSidebar()
     auto *uh = new QHBoxLayout(user);
     uh->setContentsMargins(10, 9, 10, 9);
     uh->setSpacing(10);
-    auto *av = new QLabel("AR");
+    auto *av = new QLabel(m_userName.left(1).toUpper());
     av->setObjectName("avatar");
     av->setFixedSize(34, 34);
     av->setAlignment(Qt::AlignCenter);
     uh->addWidget(av);
     auto *un = new QVBoxLayout;
     un->setSpacing(0);
-    un->addWidget(W::label("Alex Rivera", "userName"));
-    un->addWidget(W::label("Cashier • Terminal 04", "userRole"));
+    un->addWidget(W::label(m_userName, "userName"));
+    un->addWidget(W::label(RolePolicy::name(m_role), "userRole"));
     uh->addLayout(un, 1);
     v->addWidget(user);
     v->addSpacing(4);
+    auto *logoutB = new QPushButton("  Log out");
+    logoutB->setObjectName("exitBtn");
+    logoutB->setIcon(Theme::icon("user", QColor("#c9d3ee"), 16));
+    logoutB->setCursor(Qt::PointingHandCursor);
+    v->addWidget(logoutB);
+    v->addSpacing(4);
+    connect(logoutB, &QPushButton::clicked, this, [this]
+            { m_loggedOut = true; if (!close()) m_loggedOut = false; });
     auto *exitB = new QPushButton("  Exit");
     exitB->setObjectName("exitBtn");
     exitB->setIcon(Theme::icon("logout", QColor("#c9d3ee"), 16));
@@ -239,10 +253,15 @@ QWidget *MainWindow::buildTopBar()
     return bar;
 }
 
-void MainWindow::goTo(int page)
+bool MainWindow::goTo(int page)
 {
     if (page < 0 || page >= PageCount)
-        return;
+        return false;
+    if (!RolePolicy::canOpen(m_role, page))
+    {
+        showToast(RolePolicy::name(m_role) + " can only view products.");
+        return false;
+    }
     m_stack->setCurrentIndex(page);
     m_title->setText(kNav[page].text);
     m_subtitle->setText(kSub[page]);
@@ -257,6 +276,7 @@ void MainWindow::goTo(int page)
     }
     if (page == RecordOrder)
         m_record->focusInput();
+    return true;
 }
 
 QPixmap MainWindow::grabPage(int page)
@@ -281,7 +301,7 @@ void MainWindow::handleFKey(int n)
     case 5: goTo(Scanner); break;
     case 6: goTo(Bills); break;
     case 9:
-        if (!onRecord) goTo(RecordOrder);
+        if (!onRecord && !goTo(RecordOrder)) break;
         m_record->simulateScan();
         break;
     case 10:
@@ -317,7 +337,9 @@ void MainWindow::resizeEvent(QResizeEvent *e)
 
 void MainWindow::closeEvent(QCloseEvent *e)
 {
-    const auto r = QMessageBox::question(this, "Exit Terminal", "Close SmartPOS? The current draft will be lost.");
+    const auto r = m_loggedOut
+        ? QMessageBox::question(this, "Log out", "Log out and return to the sign-in screen? The current draft will be lost.")
+        : QMessageBox::question(this, "Exit Terminal", "Close SmartPOS? The current draft will be lost.");
     if (r == QMessageBox::Yes)
         e->accept();
     else

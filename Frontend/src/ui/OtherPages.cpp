@@ -310,20 +310,23 @@ void ProductsPage::rebuild()
         const bool low = p.stock <= limit;
         m_table->setItem(r, 8, item(QString::number(p.stock), Qt::AlignRight | Qt::AlignVCenter, low ? "#ba1a1a" : "", low));
         m_table->setCellWidget(r, 9, wrapW(W::badge(p.stock == 0 ? "Out" : low ? "Low" : "OK", p.stock == 0 ? "red" : low ? "amber" : "green")));
-        auto* b = W::button("Add", "mini");
-        b->setEnabled(p.stock > 0);
         auto* d = W::button("Details", "soft");
         auto* cell = new QWidget;
         auto* cl = new QHBoxLayout(cell);
         cl->setContentsMargins(0, 0, 4, 0);
         cl->setSpacing(6);
         cl->addWidget(d);
-        cl->addWidget(b);
-        m_table->setCellWidget(r, 10, cell);
         const QString ean = p.ean;
         const int pid = p.id;
-        connect(b, &QPushButton::clicked, this, [this, ean]
-            { emit addToOrder(ean); });
+        if (!m_viewOnly) // Manager views products only: no "Add" button
+        {
+            auto* b = W::button("Add", "mini");
+            b->setEnabled(p.stock > 0);
+            cl->addWidget(b);
+            connect(b, &QPushButton::clicked, this, [this, ean]
+                { emit addToOrder(ean); });
+        }
+        m_table->setCellWidget(r, 10, cell);
         connect(d, &QPushButton::clicked, this, [this, pid]
             { Dialogs::productDescription(this, pid); });
     }
@@ -548,4 +551,15 @@ SettingsPage::SettingsPage(QWidget* parent) : QWidget(parent)
             emit toast("Settings applied"); });
     root->addWidget(card);
     root->addStretch();
+}
+void ProductsPage::setViewOnly(bool on)
+{
+    m_viewOnly = on;
+    m_table->setRowCount(0); // drop the old rows (with their buttons) before rebuilding
+    rebuild();
+}
+
+void ScannerPage::setViewOnly(bool on)
+{
+    m_send->setVisible(!on);
 }
