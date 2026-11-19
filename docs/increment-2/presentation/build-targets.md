@@ -57,3 +57,17 @@ remain unverified. See [verification](../verification.md).
 Sources: [CMakeLists.txt](../../../CMakeLists.txt),
 [presets](../../../CMakePresets.json), [current main](../../../Frontend/src/main.cpp),
 and [older regression](../../../tests/regression.cpp).
+
+## Match a command to a defensible claim
+
+| Command/target result | Supported claim | Remaining gap |
+| --- | --- | --- |
+| Configure with BACKEND_ONLY=ON and CAMERA=OFF | Required backend toolchain was found | No compilation or assertions yet |
+| Build the backend test executables | Backend source compiles and links | Tests must still execute |
+| CTest reports five passes | Those registered backend assertions passed | No Qt checkout or camera coverage |
+| Build BarcodeHub with CAMERA=OFF | Qt application compiles and links | No live UI or OpenCV capture verified |
+| Build BarcodeHub_deploy | Deployment tool completed for that build | Copied package must still be launched |
+| Launch CameraDemo | That separate widget can start | Main POS widget has different capture handling |
+
+Always record the source revision, option values and build directory with the
+result. Reusing an old executable is not evidence that a new source tree built.
