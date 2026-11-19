@@ -2,12 +2,13 @@
 
 This supplement turns the [implementation inspection](../README.md) into
 requirements evidence, viva answers, and manual rehearsal cases. Reviewed on
-19 November 2026 from `ali` at `1b16a70` for the 20 November presentation.
+19 November 2026 from `ali` at `1b16a70`, then rechecked at `883425c`, for the
+20 November presentation.
 
-**Current readiness:** backend tests pass (5/5). The current GUI build fails in
-`RecordOrderPage.cpp` because its header does not declare members used by the
-implementation. Screen and camera cases below are rehearsal instructions, not
-claims of a successful runtime test. See [review results](review-results.md).
+**Current readiness:** backend tests pass (5/5), and the Qt GUI builds with
+camera support disabled after the independently committed header repair at
+`883425c`. Screen and camera cases below are rehearsal instructions, not claims
+of a successful runtime test. See [review results](review-results.md).
 
 ## Suggested reading order
 

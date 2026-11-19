@@ -4,10 +4,12 @@ Reviewed on 19 November 2026 against branch `ali`, starting at `2d3c58d`.
 These notes describe the checked-in implementation and its verification results;
 older planning documents describe intended requirements and can differ from the code.
 
-**Readiness:** all five backend CTest suites passed. The current Qt frontend fails
-to compile because `RecordOrderPage.h` does not declare members used by its `.cpp`.
-Camera capture and the live checkout UI were not tested. See [verification](verification.md)
-and [limitations](limitations.md) before preparing a demonstration.
+**Latest readiness, 19 November:** all five backend CTest suites passed again.
+The Qt frontend now compiles with `CAMERA=OFF` after the independently committed
+header repair at `883425c`. Camera capture and the live checkout UI were not
+tested. See the [follow-up results](presentation/review-results.md) and the
+[presentation preparation pack](presentation/README.md) for the current evidence,
+viva questions, requirements matrix, and pending rehearsal cases.
 
 ## Reading map
 
@@ -34,7 +36,7 @@ and [limitations](limitations.md) before preparing a demonstration.
 | Area | Evidence |
 | --- | --- |
 | Products, orders, billing, payment validation | Source reviewed; registered backend tests passed |
-| Frontend checkout, history and dashboard | Source reviewed; GUI compilation blocked |
+| Frontend checkout, history and dashboard | Source reviewed; camera-disabled GUI build passes at `883425c`; interactive checks pending |
 | Camera scanner | Source reviewed; OpenCV/camera runtime not verified |
 | Card and wallet payments | Local merchant validation and recording; no gateway integration |
 | Barcode generation and image upload | Historical requirements; not active screens in the current POS target |
