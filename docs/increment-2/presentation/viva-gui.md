@@ -60,7 +60,7 @@ and [screen rehearsal](screen-rehearsal.md) for pending GUI checks.
 ## How is a custom item different from a catalogue product?
 
 The custom-item dialog supplies a description and positive unit price. The
-draft gives it a generated MAN-prefixed acronym, count unit and zero tax/
+draft gives it a generated CUSTOM-prefixed acronym, count unit and zero tax/
 discount. It has no catalogue product ID and does not reduce catalogue stock.
 AppState builds a temporary CUSTOM-prefixed snapshot for this checkout so
 billing can still resolve the line and persist its amount.
