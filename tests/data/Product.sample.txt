@@ -1,4 +1,4 @@
-1 40000019 MILK Whole_Milk_1L count 280.00 14.00 10.00 40 assets/barcodes/milk.png#
-2 40000026 BREAD Wheat_Bread_600g count 180.00 9.00 0.00 25 assets/barcodes/bread.png#
-3 40000033 RICE Basmati_Rice_5kg weight 1450.00 72.50 50.00 12 assets/barcodes/rice.png#
-4 40000040 EGGS Fresh_Eggs_12pk count 420.00 21.00 0.00 0 assets/barcodes/eggs.png#
+1 01000016 MILK Whole_Milk_1L count 280.00 14.00 10.00 40 assets/barcodes/milk.png#
+2 01000023 BREAD Wheat_Bread_600g count 180.00 9.00 0.00 25 assets/barcodes/bread.png#
+3 01000030 RICE Basmati_Rice_5kg weight 1450.00 72.50 50.00 12 assets/barcodes/rice.png#
+4 01000047 EGGS Fresh_Eggs_12pk count 420.00 21.00 0.00 0 assets/barcodes/eggs.png#

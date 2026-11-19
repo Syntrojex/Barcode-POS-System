@@ -58,7 +58,10 @@ RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
 
     connect(&AppState::instance(), &AppState::scanned, this, [this](const QString& ean)
         { showCode(ean, true); });
-    connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [](const QString& ean) {
+    connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString& ean) {
+        const auto product = AppState::instance().findByCode(ean);
+        if (product) m_feed->showResult(ean + "  -  " + product->name, true);
+        else m_feed->showResult(ean + "  -  not in Product.txt", false);
         AppState::instance().emitScan(ean);
         });
     connect(m_feed, &CameraFeedWidget::scanError, this, &RecordOrderPage::toast);

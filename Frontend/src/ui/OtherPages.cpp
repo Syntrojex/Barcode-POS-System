@@ -455,8 +455,8 @@ ScannerPage::ScannerPage(QWidget* parent) : QWidget(parent)
     connect(m_feed, &CameraFeedWidget::scanError, this, &ScannerPage::toast);
     connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString& code) {
         const auto product = AppState::instance().findByCode(code);
-        if (product) show(*product);
-        else emit toast("Barcode " + code + " not found in Product.txt");
+        if (product) { m_feed->showResult(code + "  -  " + product->name, true); show(*product); }
+        else { m_feed->showResult(code + "  -  not in Product.txt", false); emit toast("Barcode " + code + " not found in Product.txt"); }
         });
     auto lookup = [this]
         {

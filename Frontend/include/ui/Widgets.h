@@ -2,6 +2,7 @@
 // Small reusable widgets and helpers shared by all pages.
 #include <QFrame>
 #include <QImage>
+#include <QMouseEvent>
 #include <QElapsedTimer>
 #include <memory>
 #include <QLabel>
@@ -53,7 +54,10 @@ namespace W
                            QWidget *rightWidget = nullptr);
 }
 
-// Actual OpenCV camera capture when built with CAMERA=ON; otherwise an honest disabled view.
+class QVideoFrame;
+
+// Live camera feed (Qt Multimedia) with barcode detection by the pure-C++ Decoder.
+// Without Qt Multimedia the widget shows a clear "camera unavailable" message.
 class CameraFeedWidget : public QWidget
 {
     Q_OBJECT
@@ -63,6 +67,8 @@ public:
     bool running() const { return m_running; }
     void setRunning(bool on);
     void setCode(const QString &code); // barcode digits shown in the viewfinder
+    // Green confirmation banner on the live picture (e.g. "40001029 - Olpers Milk"); fades after ~3 s.
+    void showResult(const QString &text, bool ok = true);
 signals:
     void barcodeDetected(const QString &ean);
     void scanError(const QString &error);
@@ -73,16 +79,33 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *) override;
+    void mousePressEvent(QMouseEvent *e) override;
+    void mouseMoveEvent(QMouseEvent *e) override;
+    void mouseReleaseEvent(QMouseEvent *e) override;
 
 private:
+    bool nearLine(const QPoint &p) const;
+    void moveLine(const QPoint &p);
+    double m_lineFrac = 0.5; // aiming line height, 0..1 of the picture (drag it with the mouse)
+    bool m_drag = false;
+    double m_sweepPhase = 0;
+    QString m_result;
+    bool m_resultOk = true;
+    QElapsedTimer m_resultClock;
     bool m_running = false;
     QString m_code;
     QString m_lastDetected;
     QElapsedTimer m_lastEmit;
     QImage m_frame;
+    QRectF m_hitBox;       // where the barcode was found, in camera-picture pixels
+    QString m_hitText;     // the code that was read
+    QElapsedTimer m_hitClock;
     QTimer m_timer;
 #ifdef WITH_CAMERA
-    std::unique_ptr<class cameraScanner> m_camera;
+    struct CameraRig;
+    void onImage(const QImage &image); // show + decode one camera picture
+    std::unique_ptr<CameraRig> m_rig;
+    QElapsedTimer m_decodeClock;
 #endif
 };
 

@@ -11,6 +11,7 @@
       "displayName": "Qt 6 MinGW 64-bit (Default)",
       "description": "Qt 6 MinGW 64-bit + Ninja (frontend + backend)",
       "generator": "Ninja",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-qt-mingw.cmake",
       "binaryDir": "${sourceDir}/build/qt-mingw",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
