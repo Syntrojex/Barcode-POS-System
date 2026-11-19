@@ -27,7 +27,7 @@ int main() {
     CHECK(catalogue.getProducts().size() == 14);
 
     // 2. A scanned barcode finds the product.
-    const Product* found = catalogue.searchByBarcode("40001029");
+    const Product* found = catalogue.searchByBarcode("01001020");
     CHECK(found != nullptr);
 
     // 3. The adapter hands it to the Order module, which fills the cart.
@@ -47,11 +47,11 @@ int main() {
     CHECK(created.id.size() == 8);
     std::vector<order::OrderDetail> lines;
     CHECK(orders.loadOrderDetails(created.id, lines, &error));
-    CHECK(lines.size() == 1 && lines[0].productBarcode == "40001029");
+    CHECK(lines.size() == 1 && lines[0].productBarcode == "01001020");
 
     // 5. Stock is reduced through the Product module.
     CHECK(catalogue.deductStock(found->getProductID(), 3));
-    CHECK(catalogue.searchByBarcode("40001029")->getAvailableQuantity() == 39);
+    CHECK(catalogue.searchByBarcode("01001020")->getAvailableQuantity() == 39);
 
     std::filesystem::remove_all(dir);
     std::cout << "integration OK, order " << created.id << "\n";

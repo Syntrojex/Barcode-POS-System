@@ -1,171 +1,191 @@
-#include <iostream>
-#include <cmath>
-#include <opencv2/imgproc.hpp>
 #include "decoder.h"
-using namespace std;
-// patterns representing numbers 0-9
+
+#include <algorithm>
+#include <cmath>
+
 const char *const Decoder::patterns[10] = {"0001101", "0011001", "0010011", "0111101", "0100011",
                                            "0110001", "0101111", "0111011", "0110111", "0001011"};
-// store weights at each line
-std::vector<double> Decoder::scanLineRuns(const cv::Mat &barcode) const
+
+std::vector<double> Decoder::lineRuns(const std::vector<float> &line, double &firstEdge) const
 {
-    if (barcode.empty() || barcode.type() != CV_8UC1 || barcode.rows < 5)
-    {
+    firstEdge = 0;
+    if (line.size() < 3)
         return {};
-    }
-    int y0 = barcode.rows * 4 / 10;
-    int y1 = barcode.rows * 6 / 10;
-    cv::Mat line;
-    cv::reduce(barcode.rowRange(y0, y1), line, 0, cv::REDUCE_AVG, CV_32F);
-    double low, high;
-    cv::minMaxLoc(line, &low, &high);
-    float T = (float)((low + high) / 2);
-    vector<double> edges;
-    for (int i = 0; i + 1 < line.cols; i++)
+    const auto mm = std::minmax_element(line.begin(), line.end());
+    if (*mm.second - *mm.first < 25.0f) // flat picture: no bars here
+        return {};
+    const float T = (*mm.first + *mm.second) / 2.0f;
+    std::vector<double> edges;
+    for (std::size_t i = 0; i + 1 < line.size(); ++i)
     {
-        float a = line.at<float>(0, i);
-        float b = line.at<float>(0, i + 1);
+        const float a = line[i], b = line[i + 1];
         if ((a < T) != (b < T))
-        {
-            edges.push_back(i + (T - a) / (b - a));
-        }
+            edges.push_back(static_cast<double>(i) + (T - a) / (b - a));
     }
     if (edges.size() < 2)
         return {};
-    // add in the new vector
-    vector<double> runs;
-    for (size_t j = 0; j + 1 < edges.size(); j++)
-    {
+    firstEdge = edges.front();
+    std::vector<double> runs;
+    for (std::size_t j = 0; j + 1 < edges.size(); ++j)
         runs.push_back(edges[j + 1] - edges[j]);
-    }
     return runs;
 }
-// converting 43 stripes to modules (between 1 and 4)
+
 std::string Decoder::runsToModules(const std::vector<double> &runs) const
 {
-    if (runs.size() != stripes)
+    if (runs.size() != static_cast<std::size_t>(stripes))
         return "";
     double total = 0;
     for (double r : runs)
         total += r;
-    double module = total / modules;
-    string bits;
-    for (size_t i = 0; i < runs.size(); i++)
+    const double module = total / modules;
+    std::string bits;
+    for (std::size_t i = 0; i < runs.size(); ++i)
     {
-        int n = (int)lround(runs[i] / module);
+        const int n = static_cast<int>(std::lround(runs[i] / module));
         if (n < 1 || n > 4)
             return "";
-        bits += string(n, i % 2 == 0 ? '1' : '0');
+        bits += std::string(static_cast<std::size_t>(n), i % 2 == 0 ? '1' : '0');
     }
-    return (bits.size() == modules) ? bits : "";
+    return bits.size() == static_cast<std::size_t>(modules) ? bits : "";
 }
-// matching digit with the given pattern
+
 int Decoder::digitMatch(const std::string &seven, bool right)
 {
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 10; ++i)
     {
-        string pattern = patterns[i];
+        std::string pattern = patterns[i];
         if (right)
-        {
             for (char &c : pattern)
                 c = (c == '1') ? '0' : '1';
-        }
         if (pattern == seven)
             return i;
     }
     return -1;
 }
-// converting modules to digits
+
 std::string Decoder::modulesToDigits(const std::string &bits) const
 {
-    if (bits.size() != modules || bits.substr(0, 3) != "101" || bits.substr(64, 3) != "101" || bits.substr(31, 5) != "01010")
+    if (bits.size() != static_cast<std::size_t>(modules) || bits.compare(0, 3, "101") != 0 ||
+        bits.compare(64, 3, "101") != 0 || bits.compare(31, 5, "01010") != 0)
         return "";
-    string digits;
-    // left slot of barcode
-    for (int i = 0; i < 4; i++)
+    std::string digits;
+    for (int i = 0; i < 4; ++i)
     {
-        int d = digitMatch(bits.substr(3 + 7 * i, 7), false);
+        const int d = digitMatch(bits.substr(3 + 7 * i, 7), false);
         if (d < 0)
             return "";
-        digits += char('0' + d);
+        digits += static_cast<char>('0' + d);
     }
-    // right slot of barcode
-    for (int j = 0; j < 4; j++)
+    for (int j = 0; j < 4; ++j)
     {
-        int d = digitMatch(bits.substr(36 + 7 * j, 7), true);
+        const int d = digitMatch(bits.substr(36 + 7 * j, 7), true);
         if (d < 0)
             return "";
-        digits += char('0' + d);
+        digits += static_cast<char>('0' + d);
     }
     return digits;
 }
-// is the check digit valid or not?
-bool Decoder::isCheckDigit(const std::string &d) const
-{ // 0482915 7
+
+bool Decoder::hasValidCheckDigit(const std::string &d)
+{
+    if (d.size() != 8)
+        return false;
     int sum = 0;
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < 7; ++i)
         sum += (d[i] - '0') * ((i % 2 == 0) ? 3 : 1);
-    // eg 73 -> 80 80-73 =7
     return (10 - sum % 10) % 10 == d[7] - '0';
 }
-// store the six digits
-bool Decoder::decodeSix(const std::string &bits, std::string &six) const
+
+bool Decoder::decodeModules(const std::string &bits, std::string &ean8) const
 {
-    six.clear();
-    badCheckDigit = false;
-    // 2 attempts
-    for (int a = 0; a < 2; a++)
-    { // straight and upside down case
-        string b = (a == 0) ? bits : string(bits.rbegin(), bits.rend());
-        string d = modulesToDigits(b);
+    ean8.clear();
+    for (int attempt = 0; attempt < 2; ++attempt) // straight, then upside down
+    {
+        const std::string b = attempt == 0 ? bits : std::string(bits.rbegin(), bits.rend());
+        const std::string d = modulesToDigits(b);
         if (d.size() != 8)
             continue;
-        if (!isCheckDigit(d))
+        if (!hasValidCheckDigit(d))
         {
             badCheckDigit = true;
             continue;
         }
-        // Product.txt stores the full eight-digit EAN-8, not the six-digit payload.
-        six = d;
+        ean8 = d;
         badCheckDigit = false;
         return true;
     }
     return false;
 }
-// calls the above functions
-bool Decoder::decodeCropping(const cv::Mat &gray, std::string &six) const
+
+// Average a thin band of lines (tolerates slightly tilted bars), pad with white, find the runs.
+bool Decoder::scanLines(const GrayImage &g, bool vertical, std::string &ean8, int preferredPercent) const
 {
+    const int across = vertical ? g.height : g.width; // length of the scan line
+    const int lines = vertical ? g.width : g.height;  // how many lines are available
+    constexpr int pad = 12;
+    std::vector<int> order{preferredPercent, preferredPercent - 4, preferredPercent + 4, preferredPercent - 8,
+                           preferredPercent + 8, 50, 40, 60, 30, 70, 20, 80, 10, 90};
+    for (int percent : order)
+    {
+        if (percent < 2 || percent > 98)
+            continue;
+        const int centre = lines * percent / 100;
+        const int from = std::max(0, centre - 3), to = std::min(lines, centre + 4);
+        if (to <= from)
+            continue;
+        std::vector<float> line(static_cast<std::size_t>(across) + 2 * pad, 255.0f);
+        for (int i = 0; i < across; ++i)
+        {
+            float sum = 0;
+            for (int k = from; k < to; ++k)
+                sum += vertical ? g.at(k, i) : g.at(i, k);
+            line[static_cast<std::size_t>(i) + pad] = sum / static_cast<float>(to - from);
+        }
+        // light smoothing against camera noise
+        std::vector<float> smooth(line);
+        for (std::size_t i = 1; i + 1 < line.size(); ++i)
+            smooth[i] = (line[i - 1] + 2 * line[i] + line[i + 1]) / 4.0f;
+
+        double firstEdge = 0;
+        const auto runs = lineRuns(smooth, firstEdge);
+        // other dark objects may share the line: try every starting dark stripe
+        for (std::size_t start = 0; start + stripes <= runs.size(); start += 2)
+        {
+            const std::vector<double> candidate(runs.begin() + static_cast<long>(start),
+                                                runs.begin() + static_cast<long>(start) + stripes);
+            const std::string bits = runsToModules(candidate);
+            if (!bits.empty() && decodeModules(bits, ean8))
+            {
+                double before = 0, len = 0;
+                for (std::size_t k = 0; k < start; ++k) before += runs[k];
+                for (double r : candidate) len += r;
+                const double a = firstEdge + before - pad, b = a + len; // along the scan line
+                const double mid = (from + to) / 2.0, half = len * 0.28; // box height ~ barcode aspect
+                hit_.valid = true;
+                if (vertical) { hit_.x0 = mid - half; hit_.x1 = mid + half; hit_.y0 = a; hit_.y1 = b; }
+                else { hit_.x0 = a; hit_.x1 = b; hit_.y0 = mid - half; hit_.y1 = mid + half; }
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool Decoder::decodeCropping(const GrayImage &gray, std::string &ean8, double lineFraction) const
+{
+    ean8.clear();
     badCheckDigit = false;
-    six.clear();
-    if (gray.empty() || gray.type() != CV_8UC1)
+    hit_ = Hit{};
+    if (gray.empty())
         return false;
     bool badCheck = false;
-    // Thin bands tolerate tilted bars, avoids text/scratches crossing one row.
-    for (int percent : {50, 40, 60, 30, 70, 20, 80})
+    for (bool vertical : {false, true})
     {
-        const int y = gray.rows * percent / 100;
-        const int top = std::max(0, y - 3);
-        const int bottom = std::min(gray.rows, y + 4);
-        cv::Mat band;
-        cv::copyMakeBorder(gray.rowRange(top, bottom), band, 3, 3, 12, 12,
-                           cv::BORDER_CONSTANT, cv::Scalar(255));
-        const auto runs = scanLineRuns(band);
-        // A barcode can be surrounded by other dark objects on the scan line.
-        for (size_t start = 0; start + stripes <= runs.size(); start += 2)
-        {
-            const vector<double> candidate(runs.begin() + start, runs.begin() + start + stripes);
-            const string bits = runsToModules(candidate);
-            if (!bits.empty() && decodeSix(bits, six))
-                return true;
-            badCheck = badCheck || badCheckDigit;
-        }
+        if (scanLines(gray, vertical, ean8, vertical ? 50 : static_cast<int>(lineFraction * 100.0 + 0.5)))
+            return true;
+        badCheck = badCheck || badCheckDigit;
     }
     badCheckDigit = badCheck;
     return false;
-}
-// displays 'badCheck' for a bad check digit
-// else shows error in terminal
-bool Decoder::isBadCheck() const
-{
-    return badCheckDigit;
 }

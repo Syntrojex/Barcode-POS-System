@@ -1,14 +1,38 @@
 cmake_minimum_required(VERSION 3.21)
 
+# Windows + Ninja: Qt Creator sometimes hands CMake Visual Studio's cl.exe together with a MinGW
+# Qt kit, which cannot compile. Unless an MSVC Qt is being used, switch to Qt's own MinGW g++.
+if(WIN32 AND NOT CMAKE_GENERATOR MATCHES "Visual Studio"
+   AND (NOT CMAKE_CXX_COMPILER OR CMAKE_CXX_COMPILER MATCHES "[cC][lL]\\.exe$")
+   AND NOT "${CMAKE_PREFIX_PATH}${Qt6_DIR}${QT_DIR}" MATCHES "[mM][sS][vV][cC]")
+    include("${CMAKE_CURRENT_LIST_DIR}/cmake/toolchain-qt-mingw.cmake")
+endif()
+
 project(BarcodePOS LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    # Qt 6 needs a correct __cplusplus value; also read sources as UTF-8.
+    add_compile_options(/Zc:__cplusplus /utf-8 /permissive-)
+endif()
+
 option(BACKEND_ONLY "Build backend and tests without Qt" OFF)
 
-set(CAMERA ON CACHE STRING "OpenCV camera: OFF, ON, AUTO")
-set_property(CACHE CAMERA PROPERTY STRINGS OFF ON AUTO)
+# Camera support uses Qt Multimedia (shipped with Qt; no OpenCV needed):
+#   AUTO (default) - camera if the Qt Multimedia component is installed, otherwise built without it
+#   ON             - camera required: configuring fails if Qt Multimedia is missing
+#   OFF            - no camera (typed barcode lookup only)
+set(CAMERA_MODE AUTO CACHE STRING "Camera: AUTO, ON, OFF")
+set_property(CACHE CAMERA_MODE PROPERTY STRINGS AUTO ON OFF)
+# Which library grabs the pictures (the barcode decoder itself is always the same pure C++ code):
+#   AUTO   - OpenCV if a build matching the compiler is found, otherwise Qt Multimedia
+#   QT     - Qt Multimedia only
+#   OPENCV - OpenCV only (set OpenCV_DIR; it must be built for the SAME compiler as Qt:
+#            the official OpenCV Windows download is MSVC-only -> use it with the MSVC kit)
+set(CAMERA_BACKEND AUTO CACHE STRING "Camera library: AUTO, QT, OPENCV")
+set_property(CACHE CAMERA_BACKEND PROPERTY STRINGS AUTO QT OPENCV)
 
 # ============================================================
 # BACKEND LIBRARIES
@@ -87,83 +111,16 @@ target_link_libraries(backend_core INTERFACE
 )
 
 # ============================================================
-# OPTIONAL OPENCV CAMERA SUPPORT
+# BARCODE DECODER (pure C++17: no OpenCV, no Qt)
 # ============================================================
 
-set(CAMERA_ENABLED OFF)
+add_library(scanner_core STATIC
+    Backend/src/scanner/decoder.cpp
+)
 
-if(NOT CAMERA STREQUAL "OFF")
-
-    if(NOT OpenCV_DIR)
-        foreach(_candidate
-            "${CMAKE_SOURCE_DIR}/build/deps/opencv"
-            "${CMAKE_SOURCE_DIR}/build/deps/opencv/x64/mingw/lib"
-        )
-            if(EXISTS "${_candidate}/OpenCVConfig.cmake")
-                set(OpenCV_DIR "${_candidate}"
-                    CACHE PATH "OpenCV installation" FORCE)
-                break()
-            endif()
-        endforeach()
-    endif()
-
-    if(CAMERA STREQUAL "ON")
-        find_package(OpenCV 4 REQUIRED COMPONENTS
-            core imgproc imgcodecs videoio)
-    else()
-        find_package(OpenCV 4 QUIET COMPONENTS
-            core imgproc imgcodecs videoio)
-    endif()
-
-    if(OpenCV_FOUND)
-        set(CAMERA_ENABLED ON)
-    endif()
-
-endif()
-
-if(CAMERA_ENABLED)
-
-    # Find the OpenCV header folder ourselves (and print what was found), so the
-    # compiler always gets it, whatever OpenCVConfig.cmake reports.
-    find_path(OPENCV_HEADER_DIR opencv2/core.hpp
-        HINTS ${OpenCV_INCLUDE_DIRS}
-              "${OpenCV_DIR}/../../../include"
-              "${OpenCV_DIR}/../../include"
-              "${OpenCV_DIR}/../include"
-              "${OpenCV_DIR}/include"
-              "${CMAKE_SOURCE_DIR}/build/deps/opencv/include"
-        PATH_SUFFIXES opencv4
-        NO_DEFAULT_PATH)
-    message(STATUS "OpenCV_DIR     = ${OpenCV_DIR}")
-    message(STATUS "OpenCV headers = ${OPENCV_HEADER_DIR}")
-    message(STATUS "OpenCV libs    = ${OpenCV_LIBS}")
-    if(NOT OPENCV_HEADER_DIR)
-        message(FATAL_ERROR
-            "opencv2/core.hpp not found near ${OpenCV_DIR}. "
-            "Run scripts/build-windows.ps1 to build OpenCV first.")
-    endif()
-
-    add_library(scanner_core STATIC
-        Backend/src/scanner/cameraScanner.cpp
-        Backend/src/scanner/decoder.cpp
-    )
-
-    target_include_directories(scanner_core PUBLIC
-        Backend/include/scanner
-        ${OPENCV_HEADER_DIR}
-        ${OpenCV_INCLUDE_DIRS}
-    )
-
-    target_link_libraries(scanner_core PUBLIC
-        ${OpenCV_LIBS}
-    )
-
-    if(WIN32)
-        target_link_libraries(scanner_core PUBLIC
-            ole32 oleaut32 strmiids)
-    endif()
-
-endif()
+target_include_directories(scanner_core PUBLIC
+    Backend/include/scanner
+)
 
 # ============================================================
 # BACKEND TESTS
@@ -184,6 +141,14 @@ if(BUILD_TESTING)
     set_tests_properties(product PROPERTIES
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+
+    add_executable(scanner_tests
+        tests/scanner_tests.cpp
+    )
+
+    target_link_libraries(scanner_tests PRIVATE scanner_core)
+
+    add_test(NAME scanner COMMAND scanner_tests)
 
     add_executable(order_tests
         tests/OrderManagementSmokeTest.cpp
@@ -270,6 +235,69 @@ find_package(Qt${QT_VERSION_MAJOR}
     REQUIRED COMPONENTS Widgets
 )
 
+# A MinGW build of Qt cannot be compiled with MSVC (this is what "Qt requires a C++17 compiler ...
+# /Zc:__cplusplus" means: the kit picked cl.exe). Stop early with the fix instead of 100 errors.
+if(MSVC AND "${Qt${QT_VERSION_MAJOR}_DIR}" MATCHES "mingw")
+    message(FATAL_ERROR
+        "Qt is a MinGW build (${Qt${QT_VERSION_MAJOR}_DIR}) but the compiler is MSVC (${CMAKE_CXX_COMPILER}).\n"
+        "Fix: Qt Creator > Projects > Build & Run > use the kit 'Desktop Qt 6.x.x MinGW 64-bit' "
+        "(its compiler must be 'MinGW ... 64-bit', not 'Microsoft Visual C++'), delete the build folder, "
+        "and configure again. Or use the 'Desktop Qt 6.x.x MSVC2022 64-bit' kit instead.")
+endif()
+
+set(CAMERA_ENABLED OFF)
+set(CAMERA_LIB "")
+if(NOT CAMERA_MODE STREQUAL "OFF")
+    if(NOT CAMERA_BACKEND STREQUAL "QT")
+        # MinGW: first look for an OpenCV config built for MinGW (x64/mingw/lib), then for loose
+        # headers + libopencv_*.dll files. (The official Windows download is MSVC-only.)
+        if(MINGW)
+            file(GLOB_RECURSE _mingw_cfg "$ENV{USERPROFILE}/Downloads/opencv/*mingw*/OpenCVConfig.cmake"
+                                         "${OpenCV_DIR}/*mingw*/OpenCVConfig.cmake" "C:/opencv/*mingw*/OpenCVConfig.cmake")
+            if(_mingw_cfg AND NOT OpenCV_DIR)
+                list(GET _mingw_cfg 0 _first_cfg)
+                get_filename_component(_cfg_dir "${_first_cfg}" DIRECTORY)
+                set(OpenCV_DIR "${_cfg_dir}" CACHE PATH "OpenCV (MinGW)" FORCE)
+            endif()
+        endif()
+        find_package(OpenCV 4 QUIET COMPONENTS core imgproc videoio)
+        if(OpenCV_FOUND)
+            set(CAMERA_ENABLED ON)
+            set(CAMERA_LIB OPENCV)
+            message(STATUS "Camera: OpenCV ${OpenCV_VERSION} (${OpenCV_DIR})")
+        elseif(MINGW)
+            list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+            include(FindMinGWOpenCV)
+            if(MINGW_OPENCV_FOUND)
+                set(OpenCV_INCLUDE_DIRS "${MINGW_OPENCV_INCLUDE}")
+                set(OpenCV_LIBS ${MINGW_OPENCV_LIBS})
+                set(OPENCV_DLL_DIR "${MINGW_OPENCV_DLL_DIR}")
+                set(CAMERA_ENABLED ON)
+                set(CAMERA_LIB OPENCV)
+                message(STATUS "Camera: OpenCV (MinGW files found without a CMake config)")
+            endif()
+        endif()
+    endif()
+    if(NOT CAMERA_ENABLED AND NOT CAMERA_BACKEND STREQUAL "OPENCV" AND QT_VERSION_MAJOR EQUAL 6)
+        find_package(Qt6 QUIET COMPONENTS Multimedia)
+        if(TARGET Qt6::Multimedia)
+            set(CAMERA_ENABLED ON)
+            set(CAMERA_LIB QT)
+            message(STATUS "Camera: Qt Multimedia ${Qt6Multimedia_VERSION}")
+        endif()
+    endif()
+    if(NOT CAMERA_ENABLED)
+        set(_why "No usable camera library: install Qt Multimedia (Qt Maintenance Tool > Add or remove components > "
+                 "Additional Libraries > Qt Multimedia), or give OpenCV_DIR an OpenCV built for THIS compiler "
+                 "(the official OpenCV Windows download only works with the MSVC kit, not MinGW).")
+        if(CAMERA_MODE STREQUAL "ON")
+            message(FATAL_ERROR ${_why})
+        else()
+            message(STATUS "Camera disabled. ${_why}")
+        endif()
+    endif()
+endif()
+
 # ============================================================
 # FRONTEND
 # ============================================================
@@ -315,9 +343,17 @@ target_compile_definitions(barcode_ui PRIVATE
     BARCODEHUB_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
 )
 
+target_link_libraries(barcode_ui PUBLIC scanner_core)
 if(CAMERA_ENABLED)
-    target_link_libraries(barcode_ui PUBLIC scanner_core)
     target_compile_definitions(barcode_ui PUBLIC WITH_CAMERA)
+    if(CAMERA_LIB STREQUAL "QT")
+        target_link_libraries(barcode_ui PUBLIC Qt6::Multimedia)
+        target_compile_definitions(barcode_ui PUBLIC WITH_CAMERA_QT)
+    else()
+        target_include_directories(barcode_ui PUBLIC ${OpenCV_INCLUDE_DIRS})
+        target_link_libraries(barcode_ui PUBLIC ${OpenCV_LIBS})
+        target_compile_definitions(barcode_ui PUBLIC WITH_CAMERA_OPENCV)
+    endif()
 endif()
 
 # ============================================================
@@ -332,21 +368,18 @@ target_link_libraries(BarcodeHub PRIVATE
     barcode_ui
 )
 
-# Camera build on Windows: copy the OpenCV runtime DLLs next to BarcodeHub.exe,
-# otherwise the exe cannot start outside a shell that has OpenCV on PATH.
-if(WIN32 AND CAMERA_ENABLED)
+# OpenCV camera build on Windows: copy the OpenCV runtime DLLs next to BarcodeHub.exe.
+if(WIN32 AND CAMERA_LIB STREQUAL "OPENCV")
     file(GLOB _opencv_dlls
-        "${OpenCV_DIR}/../bin/*.dll"
-        "${OpenCV_DIR}/../../bin/*.dll")
+        "${OpenCV_DIR}/x64/vc16/bin/*.dll" "${OpenCV_DIR}/x64/vc17/bin/*.dll"
+        "${OpenCV_DIR}/../bin/*.dll" "${OpenCV_DIR}/../../bin/*.dll"
+        "${OPENCV_DLL_DIR}/*.dll" "${OPENCV_DLL_DIR}/../bin/*.dll")
     if(_opencv_dlls)
         add_custom_command(TARGET BarcodeHub POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${_opencv_dlls} "$<TARGET_FILE_DIR:BarcodeHub>"
-            VERBATIM
-            COMMENT "Copying OpenCV runtime DLLs"
-        )
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_opencv_dlls} "$<TARGET_FILE_DIR:BarcodeHub>"
+            VERBATIM COMMENT "Copying OpenCV runtime DLLs")
     else()
-        message(WARNING "No OpenCV DLLs found near ${OpenCV_DIR}; add OpenCV bin to PATH to run the exe.")
+        message(WARNING "No OpenCV DLLs found near ${OpenCV_DIR}; add the OpenCV bin folder to PATH to run the exe.")
     endif()
 endif()
 
@@ -360,31 +393,6 @@ add_custom_command(TARGET BarcodeHub POST_BUILD
         -P "${CMAKE_SOURCE_DIR}/cmake/seed-data.cmake"
     VERBATIM
 )
-
-# ============================================================
-# OPTIONAL CAMERA DEMO
-# ============================================================
-
-if(CAMERA_ENABLED AND EXISTS
-    "${CMAKE_SOURCE_DIR}/tests/camera_demo.cpp")
-
-    add_executable(CameraDemo WIN32
-        tests/camera_demo.cpp
-        Frontend/src/ui/CameraWidget.cpp
-        Frontend/include/ui/CameraWidget.h
-    )
-
-    target_include_directories(CameraDemo PRIVATE
-        Frontend/include/ui
-        Backend/include/scanner
-    )
-
-    target_link_libraries(CameraDemo PRIVATE
-        Qt${QT_VERSION_MAJOR}::Widgets
-        scanner_core
-    )
-
-endif()
 
 # ============================================================
 # WINDOWS DEPLOYMENT (OPTIONAL)

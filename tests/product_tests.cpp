@@ -15,7 +15,7 @@ static int failures = 0;
         else { std::cout << "FAIL " << #cond << "  (line " << __LINE__ << ")\n"; ++failures; } \
     } while (0)
 
-static const char *kGood = "1 40001029 OLPMILK Olpers Full Cream Milk 1L count 340.00 0.00 10.00 42 data/barcodes/40001029.png#";
+static const char *kGood = "1 01001020 OLPMILK Olpers Full Cream Milk 1L count 340.00 0.00 10.00 42 data/barcodes/01001020.png#";
 
 static ProductLoadResult loadText(const std::string &text)
 {
@@ -31,23 +31,26 @@ int main()
     CHECK(p.ok());
     CHECK(p.product->getProductName() == "Olpers Full Cream Milk 1L");   // multi-word name
     CHECK(p.product->getAvailableQuantity() == 42 && p.product->getMeasurementUnit() == MeasurementUnit::Count);
-    CHECK(!parser.parseLine("1 40001029 OLP Milk count 340 0 10 42 a.png").ok());          // no '#'
-    CHECK(!parser.parseLine("1 40001029 OLP Milk each 340 0 10 42 a.png#").ok());          // bad unit
-    CHECK(!parser.parseLine("1 40001029 OLP Milk count abc 0 10 42 a.png#").ok());         // bad number
-    CHECK(!parser.parseLine("1 40001029 OLP count 340 0 10 42 a.png#").ok());              // too few fields
+    CHECK(!parser.parseLine("1 01001020 OLP Milk count 340 0 10 42 a.png").ok());          // no '#'
+    CHECK(!parser.parseLine("1 01001020 OLP Milk each 340 0 10 42 a.png#").ok());          // bad unit
+    CHECK(!parser.parseLine("1 01001020 OLP Milk count abc 0 10 42 a.png#").ok());         // bad number
+    CHECK(!parser.parseLine("1 01001020 OLP count 340 0 10 42 a.png#").ok());              // too few fields
 
     // ---- validation + loader
     CHECK(loadText(std::string(kGood) + "\n").products.size() == 1);
-    CHECK(loadText("1 40001029 TOOLONGACRO Milk count 340 0 10 42 a.png#\n").products.empty());   // acronym > 8
+    CHECK(loadText("1 01001020 TOOLONGACRO Milk count 340 0 10 42 a.png#\n").products.empty());   // acronym > 8
+    CHECK(loadText("1 40001029 OLP Milk count 100 0 0 5 a.png#\n").products.empty());           // must start with 0
+    CHECK(loadText("1 00001020 OLP Milk count 100 0 0 5 a.png#\n").products.empty());           // 00xxxxxx not allowed
+    CHECK(loadText("1 01001020 OLP Milk count 100 0 0 5 a.png#\n").products.size() == 1);       // 01xxxxxx is fine
     CHECK(loadText("1 4000 OLP Milk count 340 0 10 42 a.png#\n").products.empty());              // barcode not 8 digits
-    CHECK(loadText("1 40001029 OLP Milk count -5 0 0 42 a.png#\n").products.empty());            // negative price
-    CHECK(loadText("1 40001029 OLP Milk count 100 0 150 42 a.png#\n").products.empty());         // discount > price
-    CHECK(loadText("0 40001029 OLP Milk count 100 0 0 42 a.png#\n").products.empty());           // id 0
-    auto dup = loadText(std::string(kGood) + "\n2 40001029 OTHER Other count 10 0 0 1 b.png#\n");
+    CHECK(loadText("1 01001020 OLP Milk count -5 0 0 42 a.png#\n").products.empty());            // negative price
+    CHECK(loadText("1 01001020 OLP Milk count 100 0 150 42 a.png#\n").products.empty());         // discount > price
+    CHECK(loadText("0 01001020 OLP Milk count 100 0 0 42 a.png#\n").products.empty());           // id 0
+    auto dup = loadText(std::string(kGood) + "\n2 01001020 OTHER Other count 10 0 0 1 b.png#\n");
     CHECK(dup.products.size() == 1 && dup.errorCount() == 1);                                   // duplicate barcode
-    auto mixed = loadText(std::string(kGood) + "\ngarbage line\n\n3 40002149 BRD Bread count 260 18 0 5 b.png#\n");
+    auto mixed = loadText(std::string(kGood) + "\ngarbage line\n\n3 01002140 BRD Bread count 260 18 0 5 b.png#\n");
     CHECK(mixed.products.size() == 2 && mixed.rejectedLines == 1);                              // good lines survive
-    CHECK(loadText("1 40001020 OLP Milk count 100 0 0 5 a.png#\n").warningCount() == 1);       // bad check digit = warning only
+    CHECK(loadText("1 01001021 OLP Milk count 100 0 0 5 a.png#\n").warningCount() == 1);       // bad check digit = warning only
     CHECK(!ProductFileLoader().load("no/such/file.txt").fileOpened);
 
     // ---- open/closed: a new rule is added without editing the validator
@@ -66,11 +69,11 @@ int main()
     ProductManager pm;
     CHECK(pm.loadProducts("data/Product.txt"));
     CHECK(pm.getProducts().size() == 14);
-    CHECK(pm.searchByBarcode("40001029") && pm.searchByBarcode("40001029")->getProductID() == 1);
+    CHECK(pm.searchByBarcode("01001020") && pm.searchByBarcode("01001020")->getProductID() == 1);
     CHECK(pm.searchByBarcode("12345678") == nullptr);
     CHECK(pm.searchByID(5) && pm.searchByID(5)->getAcronym() == "BASMATI");
     CHECK(pm.searchByID(99) == nullptr);
-    CHECK(pm.searchByCode("olpmilk") && pm.searchByCode("7") && pm.searchByCode("40001029"));
+    CHECK(pm.searchByCode("olpmilk") && pm.searchByCode("7") && pm.searchByCode("01001020"));
     CHECK(pm.searchByText("tea").size() == 1);
     CHECK(pm.deductStock(1, 2) && pm.searchByID(1)->getAvailableQuantity() == 40);
     CHECK(!pm.deductStock(1, 9999) && pm.searchByID(1)->getAvailableQuantity() == 40);

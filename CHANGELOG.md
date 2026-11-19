@@ -8,7 +8,7 @@ All notable changes to **BarcodeHub** are documented in this file.
 - Order/OrderDetail model definitions and validation reconstructed from existing OrderManager tests.
 - Qt-to-backend checkout bridge; file-backed order and bill history; actual payment merchant entry.
 - Order ID preview, unpaid-order rollback helper, data seeding script and checkout test.
-- Optional camera-backed barcode scanning via OpenCV (`CAMERA=ON`).
+- Camera barcode scanning via Qt Multimedia + a pure C++ EAN-8 decoder (`CAMERA_MODE=AUTO|ON|OFF`); OpenCV removed, works with Qt MinGW and MSVC.
 
 ### Fixed
 - CMake referred to missing product headers and quietly skipped order/billing modules.
@@ -24,7 +24,7 @@ All notable changes to **BarcodeHub** are documented in this file.
 
 ### Verification
 - Backend: 4/4 CTest tests passed.
-- Qt/OpenCV desktop runtime and Windows package: not tested on this Linux machine (dependencies absent).
+- Qt desktop runtime and Windows package: not tested on this Linux machine (dependencies absent).
 
 ## [2.0.0] — Increment 2: Point of Sale System
 

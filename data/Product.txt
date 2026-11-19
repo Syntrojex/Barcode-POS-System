@@ -1,14 +1,14 @@
-1 40001029 OLPMILK Olpers Full Cream Milk 1L count 340.00 0.00 10.00 42 data/barcodes/40001029.png#
-2 40002149 NBREAD National Whole Wheat Bread count 260.00 18.00 0.00 34 data/barcodes/40002149.png#
-3 40003511 TAPALTEA Tapal Danedar Tea 190g count 210.00 15.00 5.00 60 data/barcodes/40003511.png#
-4 40004679 DALDA1L Dalda Cooking Oil 1L count 620.00 45.00 20.00 25 data/barcodes/40004679.png#
-5 40005126 BASMATI Guard Basmati Rice per kg weight 430.00 0.00 10.00 120 data/barcodes/40005126.png#
-6 40006284 SUGAR Fine Sugar per kg weight 155.00 0.00 0.00 200 data/barcodes/40006284.png#
-7 40007359 EGGS12 Farm Fresh Eggs Dozen count 390.00 0.00 0.00 4 data/barcodes/40007359.png#
-8 40008417 NESTWATR Nestle Pure Life Water 1.5L count 110.00 8.00 0.00 150 data/barcodes/40008417.png#
-9 40009568 LAYSCHIP Lays Classic Chips 80g count 90.00 7.00 0.00 6 data/barcodes/40009568.png#
-10 40010649 SURFEXL Surf Excel Detergent 1kg count 780.00 55.00 30.00 18 data/barcodes/40010649.png#
-11 40011721 COLA15 Coca Cola 1.5L count 230.00 18.00 0.00 0 data/barcodes/40011721.png#
-12 40012896 LUXSOAP Lux Soap Bar 140g count 150.00 12.00 5.00 75 data/barcodes/40012896.png#
-13 40013961 PEPSI225 Pepsi 2.25L count 270.00 21.00 0.00 9 data/barcodes/40013961.png#
-14 40014036 SHAN Shan Biryani Masala 50g count 120.00 9.00 0.00 48 data/barcodes/40014036.png#
+1 01001020 OLPMILK Olpers Full Cream Milk 1L count 340.00 0.00 10.00 42 data/barcodes/01001020.png#
+2 01002140 NBREAD National Whole Wheat Bread count 260.00 18.00 0.00 34 data/barcodes/01002140.png#
+3 01003512 TAPALTEA Tapal Danedar Tea 190g count 210.00 15.00 5.00 60 data/barcodes/01003512.png#
+4 01004670 DALDA1L Dalda Cooking Oil 1L count 620.00 45.00 20.00 25 data/barcodes/01004670.png#
+5 01005127 BASMATI Guard Basmati Rice per kg weight 430.00 0.00 10.00 120 data/barcodes/01005127.png#
+6 01006285 SUGAR Fine Sugar per kg weight 155.00 0.00 0.00 200 data/barcodes/01006285.png#
+7 01007350 EGGS12 Farm Fresh Eggs Dozen count 390.00 0.00 0.00 4 data/barcodes/01007350.png#
+8 01008418 NESTWATR Nestle Pure Life Water 1.5L count 110.00 8.00 0.00 150 data/barcodes/01008418.png#
+9 01009569 LAYSCHIP Lays Classic Chips 80g count 90.00 7.00 0.00 6 data/barcodes/01009569.png#
+10 01010640 SURFEXL Surf Excel Detergent 1kg count 780.00 55.00 30.00 18 data/barcodes/01010640.png#
+11 01011722 COLA15 Coca Cola 1.5L count 230.00 18.00 0.00 0 data/barcodes/01011722.png#
+12 01012897 LUXSOAP Lux Soap Bar 140g count 150.00 12.00 5.00 75 data/barcodes/01012897.png#
+13 01013962 PEPSI225 Pepsi 2.25L count 270.00 21.00 0.00 9 data/barcodes/01013962.png#
+14 01014037 SHAN Shan Biryani Masala 50g count 120.00 9.00 0.00 48 data/barcodes/01014037.png#

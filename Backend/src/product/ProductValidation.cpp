@@ -20,6 +20,11 @@ void BarcodeRule::check(const Product &p, ValidationReport &r) const
         r.errors.push_back("barcode '" + b + "' must be exactly 8 digits (EAN-8)");
         return;
     }
+    // Store rule: a product barcode starts with 0, and the digit after it is 1-9 (never 00xxxxxx).
+    if (b[0] != '0')
+        r.errors.push_back("barcode '" + b + "' must start with 0");
+    else if (b[1] == '0')
+        r.errors.push_back("barcode '" + b + "' cannot start with 00 (the digit after the leading 0 must be 1-9)");
     if (!ean8::hasValidCheckDigit(b))
         r.warnings.push_back("barcode '" + b + "' has an invalid EAN-8 check digit");
 }

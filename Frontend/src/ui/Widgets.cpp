@@ -1,10 +1,28 @@
 #include "Widgets.h"
 #include "Theme.h"
 #ifdef WITH_CAMERA
-#include "cameraScanner.h"
+#include "decoder.h"
+#ifdef WITH_CAMERA_OPENCV
 #include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
 #endif
+#ifdef WITH_CAMERA_QT
+#include <QCamera>
+#include <QCameraDevice>
+#include <QCoreApplication>
+#include <QMediaCaptureSession>
+#include <QMediaDevices>
+#include <QVideoFrame>
+#include <QVideoSink>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+#include <QPermission>
+#endif
+#endif // WITH_CAMERA_QT
+#endif // WITH_CAMERA
 #include <QHBoxLayout>
+#include <QTimer>
+#include <cstdlib>
+#include <cmath>
 #include <QLinearGradient>
 #include <QLocale>
 #include <QPainter>
@@ -192,69 +210,215 @@ void Card::paintEvent(QPaintEvent *)
 }
 
 // ------------------------------------------------------------------ CameraFeedWidget
+#ifdef WITH_CAMERA_QT
+struct CameraFeedWidget::CameraRig
+{
+    explicit CameraRig(const QCameraDevice &dev) : camera(dev) {}
+    QCamera camera;
+    QMediaCaptureSession session;
+    QVideoSink sink;
+    Decoder decoder;
+};
+#endif
+#ifdef WITH_CAMERA_OPENCV
+struct CameraFeedWidget::CameraRig
+{
+    cv::VideoCapture capture;
+    QTimer timer;
+    Decoder decoder;
+};
+#endif
+
 CameraFeedWidget::CameraFeedWidget(QWidget *parent) : QWidget(parent)
 {
     setMinimumHeight(150);
-#ifdef WITH_CAMERA
-    connect(&m_timer, &QTimer::timeout, this, [this] {
-        if (!m_camera) return;
-        cv::Mat bgr;
-        if (!m_camera->readFrame(bgr) || bgr.empty()) {
-            const QString why = QString::fromStdString(m_camera->errMessage());
-            setRunning(false);
-            emit scanError(why.isEmpty() ? "Camera stopped sending frames" : why);
-            return;
-        }
-        std::string code;
-        cv::Rect box;
-        if (m_camera->frameRead(code, box, bgr) && !code.empty()) {
-            if (box.area() > 0) cv::rectangle(bgr, box, cv::Scalar(0, 255, 0), 2);
-            const QString value = QString::fromStdString(code);
-            if (value != m_lastDetected || !m_lastEmit.isValid() || m_lastEmit.elapsed() > 3000) {
-                m_lastDetected = value;
-                m_lastEmit.restart();
-                emit barcodeDetected(value);
-            }
-        }
-        cv::Mat rgb;
-        cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
-        m_frame = QImage(rgb.data, rgb.cols, rgb.rows, static_cast<int>(rgb.step), QImage::Format_RGB888).copy();
+    setMouseTracking(true);
+    m_resultClock.invalidate();
+    // repaint while the confirmation banner is visible so it disappears on time
+    auto *t = new QTimer(this);
+    connect(t, &QTimer::timeout, this, [this] { if (m_resultClock.isValid()) update(); });
+    t->start(300);
+    // the red scan line sweeps up and down by itself while the camera runs
+    auto *sweep = new QTimer(this);
+    connect(sweep, &QTimer::timeout, this, [this] {
+        if (!m_running || m_frame.isNull()) return;
+        m_sweepPhase += 0.045;
+        m_lineFrac = 0.5 + 0.4 * std::sin(m_sweepPhase);
         update();
     });
-#endif
+    sweep->start(30);
 }
 CameraFeedWidget::~CameraFeedWidget() = default;
 
+// The picture is letter-boxed inside the widget; these map the aiming line to widget coordinates.
+static QRect pictureRect(const QWidget *w, const QImage &img)
+{
+    if (img.isNull()) return w->rect();
+    const QSize s = img.size().scaled(w->rect().adjusted(1, 1, -1, -1).size(), Qt::KeepAspectRatio);
+    return QRect(QPoint((w->width() - s.width()) / 2, (w->height() - s.height()) / 2), s);
+}
+
+bool CameraFeedWidget::nearLine(const QPoint &p) const
+{
+    if (m_frame.isNull()) return false;
+    const QRect pic = pictureRect(this, m_frame);
+    const int y = pic.top() + static_cast<int>(pic.height() * m_lineFrac);
+    return pic.contains(p) && std::abs(p.y() - y) <= 14;
+}
+
+void CameraFeedWidget::moveLine(const QPoint &p)
+{
+    const QRect pic = pictureRect(this, m_frame);
+    m_lineFrac = qBound(0.05, double(p.y() - pic.top()) / qMax(1, pic.height()), 0.95);
+    update();
+}
+
+void CameraFeedWidget::mousePressEvent(QMouseEvent *e)
+{
+    Q_UNUSED(e); // the line moves by itself now
+}
+void CameraFeedWidget::mouseMoveEvent(QMouseEvent *e)
+{
+    Q_UNUSED(e);
+}
+void CameraFeedWidget::mouseReleaseEvent(QMouseEvent *) { m_drag = false; }
+
+void CameraFeedWidget::showResult(const QString &text, bool ok)
+{
+    m_result = text;
+    m_resultOk = ok;
+    m_resultClock.start();
+    update();
+}
+
 void CameraFeedWidget::setRunning(bool on)
 {
-    if (!on) {
-        m_timer.stop();
 #ifdef WITH_CAMERA
-        m_camera.reset();
-#endif
+    if (!on) {
+        m_rig.reset(); // stops the camera and releases the device
         m_running = false;
         m_frame = QImage();
         update();
         return;
     }
-#ifdef WITH_CAMERA
     if (m_running) return;
-    m_camera = std::make_unique<cameraScanner>();
-    if (!m_camera->openCamera()) {
-        const QString why = QString::fromStdString(m_camera->errMessage());
-        m_camera.reset();
-        emit scanError(why);
+
+#ifdef WITH_CAMERA_QT
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    // Needed on macOS/mobile; on Windows it is simply granted.
+    QCameraPermission permission;
+    const auto status = qApp->checkPermission(permission);
+    if (status == Qt::PermissionStatus::Denied) {
+        emit scanError("Camera access is blocked. Allow it in Windows Settings > Privacy > Camera.");
         return;
     }
+    if (status == Qt::PermissionStatus::Undetermined) {
+        qApp->requestPermission(permission, this, [this](const QPermission &p) {
+            if (p.status() == Qt::PermissionStatus::Granted) setRunning(true);
+            else emit scanError("Camera permission was not granted.");
+        });
+        return;
+    }
+#endif
+    const QCameraDevice device = QMediaDevices::defaultVideoInput();
+    if (device.isNull()) {
+        emit scanError("No camera found. Plug in a webcam (and close other apps that use it).");
+        return;
+    }
+    m_rig = std::make_unique<CameraRig>(device);
+    connect(&m_rig->sink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &f) { onImage(f.toImage()); });
+    connect(&m_rig->camera, &QCamera::errorOccurred, this, [this](QCamera::Error, const QString &why) {
+        setRunning(false);
+        emit scanError(why.isEmpty() ? QString("The camera stopped working.") : why);
+    });
+    m_rig->session.setCamera(&m_rig->camera);
+    m_rig->session.setVideoSink(&m_rig->sink);
     m_lastDetected.clear();
     m_lastEmit.invalidate();
+    m_decodeClock.start();
     m_running = true;
-    m_timer.start(40);
+    m_rig->camera.start();
+#endif
+#ifdef WITH_CAMERA_OPENCV
+    m_rig = std::make_unique<CameraRig>();
+#ifdef _WIN32
+    m_rig->capture.open(0, cv::CAP_DSHOW); // DirectShow: fastest to open on Windows
+    if (!m_rig->capture.isOpened()) m_rig->capture.open(0);
 #else
-    emit scanError("Camera support is disabled. Configure with -DCAMERA=ON and install OpenCV 4.");
+    m_rig->capture.open(0);
+#endif
+    if (!m_rig->capture.isOpened()) {
+        m_rig.reset();
+        emit scanError("Cannot open the camera. Plug in a webcam and close other apps that use it.");
+        return;
+    }
+    m_rig->capture.set(cv::CAP_PROP_FRAME_WIDTH, 640);
+    m_rig->capture.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
+    connect(&m_rig->timer, &QTimer::timeout, this, [this] {
+        if (!m_rig) return;
+        cv::Mat bgr;
+        if (!m_rig->capture.read(bgr) || bgr.empty()) {
+            setRunning(false);
+            emit scanError("The camera stopped sending pictures.");
+            return;
+        }
+        cv::Mat rgb;
+        cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
+        onImage(QImage(rgb.data, rgb.cols, rgb.rows, static_cast<int>(rgb.step), QImage::Format_RGB888).copy());
+    });
+    m_lastDetected.clear();
+    m_lastEmit.invalidate();
+    m_decodeClock.start();
+    m_running = true;
+    m_rig->timer.start(33);
 #endif
     update();
+#else
+    if (on)
+        emit scanError("Camera support is not built in. Install the Qt Multimedia component and reconfigure CMake.");
+#endif
 }
+
+#ifdef WITH_CAMERA
+void CameraFeedWidget::onImage(const QImage &img)
+{
+    if (!m_running || !m_rig) return;
+    if (img.isNull()) return;
+    m_frame = img;
+    update();
+    if (m_decodeClock.elapsed() < 120) return; // decode ~8 times a second, show every frame
+    m_decodeClock.restart();
+
+    QImage g = img.convertToFormat(QImage::Format_Grayscale8);
+    if (g.width() > 960) g = g.scaledToWidth(960, Qt::FastTransformation);
+    GrayImage gray;
+    gray.width = g.width();
+    gray.height = g.height();
+    gray.pixels.resize(static_cast<std::size_t>(gray.width) * gray.height);
+    for (int y = 0; y < gray.height; ++y)
+        std::copy(g.constScanLine(y), g.constScanLine(y) + gray.width, gray.pixels.begin() + static_cast<long>(y) * gray.width);
+
+    std::string code;
+    if (m_rig->decoder.decodeCropping(gray, code, m_lineFrac)) {
+        const QString value = QString::fromStdString(code);
+        const auto h = m_rig->decoder.lastHit();
+        if (h.valid) {
+            const double k = static_cast<double>(img.width()) / gray.width; // back to camera-picture pixels
+            m_hitBox = QRectF(QPointF(h.x0 * k, h.y0 * k), QPointF(h.x1 * k, h.y1 * k)).normalized();
+        } else {
+            m_hitBox = QRectF();
+        }
+        m_hitText = value;
+        m_hitClock.start();
+        if (value != m_lastDetected || !m_lastEmit.isValid() || m_lastEmit.elapsed() > 3000) {
+            m_lastDetected = value;
+            m_lastEmit.restart();
+            showResult("Barcode read: " + value, true); // pages replace this with the product name
+            emit barcodeDetected(value);
+        }
+    }
+}
+#endif
 
 void CameraFeedWidget::setCode(const QString &code)
 {
@@ -270,14 +434,67 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
     p.fillRect(r, QColor("#162644"));
     if (!m_frame.isNull()) {
         const QImage scaled = m_frame.scaled(r.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        p.drawImage(QPoint((width() - scaled.width()) / 2, (height() - scaled.height()) / 2), scaled);
+        const QPoint origin((width() - scaled.width()) / 2, (height() - scaled.height()) / 2);
+        p.drawImage(origin, scaled);
+        // aiming line (drag it up/down onto the barcode) + hint
+        const int ly = origin.y() + static_cast<int>(scaled.height() * m_lineFrac);
+        p.setPen(QPen(QColor(255, 60, 60, 220), 2));
+        p.drawLine(origin.x() + 24, ly, origin.x() + scaled.width() - 24, ly);
+        // soft glow trail behind the line
+        for (int k = 1; k <= 10; ++k) {
+            p.setPen(QPen(QColor(255, 60, 60, 24 - k * 2), 2));
+            p.drawLine(origin.x() + 24, ly - k * 2, origin.x() + scaled.width() - 24, ly - k * 2);
+        }
+        p.setPen(Qt::NoPen);
+        p.setPen(Qt::white);
+        p.drawText(r.adjusted(12, 8, -12, 0), Qt::AlignTop | Qt::AlignHCenter,
+                   "Hold the barcode in front of the camera - the red line scans up and down");
+        // "barcode read" confirmation
+        if (m_resultClock.isValid() && m_resultClock.elapsed() < 3000) {
+            const QColor c = m_resultOk ? QColor(34, 197, 94) : QColor(239, 68, 68);
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(c, 4));
+            p.drawRect(QRect(origin, scaled.size()).adjusted(2, 2, -2, -2));
+            QFont f = font();
+            f.setBold(true);
+            f.setPixelSize(16);
+            p.setFont(f);
+            const QRect banner(origin.x(), origin.y() + scaled.height() - 40, scaled.width(), 40);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(c.red(), c.green(), c.blue(), 225));
+            p.drawRect(banner);
+            p.setPen(Qt::white);
+            p.drawText(banner, Qt::AlignCenter, (m_resultOk ? QString::fromUtf8("\u2714  ") : QString("! ")) + m_result);
+        }
+        // the barcode that was just read: green box + code banner for ~2.5 s
+        if (m_hitClock.isValid() && m_hitClock.elapsed() < 2500 && !m_hitText.isEmpty()) {
+            const double k = static_cast<double>(scaled.width()) / m_frame.width();
+            if (m_hitBox.isValid() && !m_hitBox.isEmpty()) {
+                const QRectF box(origin.x() + m_hitBox.x() * k, origin.y() + m_hitBox.y() * k,
+                                 m_hitBox.width() * k, m_hitBox.height() * k);
+                p.setBrush(QColor(40, 200, 90, 45));
+                p.setPen(QPen(QColor(40, 220, 100), 3));
+                p.drawRoundedRect(box.adjusted(-6, -6, 6, 6), 6, 6);
+            }
+            QFont bf = font();
+            bf.setPixelSize(20);
+            bf.setBold(true);
+            p.setFont(bf);
+            const QString text = QString::fromUtf8("\u2713  Scanned: ") + m_hitText;
+            const QRect banner(r.left() + 20, r.bottom() - 52, r.width() - 40, 40);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(20, 150, 70, 230));
+            p.drawRoundedRect(banner, 10, 10);
+            p.setPen(Qt::white);
+            p.drawText(banner, Qt::AlignCenter, text);
+        }
     } else {
         p.setPen(QColor("#c2d0ef"));
 #ifdef WITH_CAMERA
         p.drawText(r, Qt::AlignCenter, "Camera stopped — press Start camera");
 #else
         p.drawText(r.adjusted(15, 0, -15, 0), Qt::AlignCenter | Qt::TextWordWrap,
-                   "Camera unavailable in this build.\nUse barcode lookup or build with CAMERA=ON.");
+                   "Camera unavailable in this build.\nInstall the Qt Multimedia component, then re-run CMake.\nTyped barcode lookup still works.");
 #endif
     }
     if (!m_code.isEmpty()) {
@@ -306,7 +523,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
     p.setRenderHint(QPainter::Antialiasing);
 
     const qreal depth = 7;
-    const QRectF area(40, 12 + depth, width() - 40 - 10 - depth, height() - 12 - depth - 24);
+    const QRectF area(66, 12 + depth, width() - 66 - 10 - depth, height() - 12 - depth - 24);
     double maxV = 1;
     for (double v : m_actual)
         maxV = qMax(maxV, v);
@@ -324,7 +541,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
         p.setPen(QPen(QColor("#e1e8f8"), 1, g == 0 ? Qt::SolidLine : Qt::DashLine));
         p.drawLine(QPointF(area.left(), y), QPointF(area.right() + depth, y));
         p.setPen(Theme::outline);
-        p.drawText(QRectF(0, y - 8, 34, 16), Qt::AlignRight | Qt::AlignVCenter, QString("$%1").arg(int(maxV * g / 4)));
+        p.drawText(QRectF(0, y - 8, 60, 16), Qt::AlignRight | Qt::AlignVCenter, QString("PKR %1").arg(int(maxV * g / 4)));
     }
 
     const qreal slot = area.width() / n;
@@ -368,7 +585,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
             QFont bf = f;
             bf.setBold(true);
             p.setFont(bf);
-            p.drawText(QRectF(x - 16, y - depth - 18, bw + depth + 32, 16), Qt::AlignCenter, QString("$%1").arg(int(m_actual[i])));
+            p.drawText(QRectF(x - 30, y - depth - 18, bw + depth + 60, 16), Qt::AlignCenter, QString("PKR %1").arg(int(m_actual[i])));
             p.setFont(f);
         }
         p.setPen(hot ? Theme::primary : Theme::onSurfaceVariant);
