@@ -1,6 +1,7 @@
 # Follow-up review results - 19 November 2026
 
-Baseline: branch `ali`, commit `1b16a70`. This is a follow-up to the
+Initial baseline: branch `ali`, commit `1b16a70`; final source recheck at
+`883425c`. This is a follow-up to the
 [original verification](../verification.md), with an additional source review
 of backend, GUI, scanner, active targets, and legacy paths.
 
@@ -14,7 +15,8 @@ of backend, GUI, scanner, active targets, and legacy paths.
 | Open pull requests through public GitHub API | Empty list returned; no open PR to inspect or take. |
 | Backend Debug incremental build | Passed; Ninja reported no work required. |
 | Backend CTest | All five suites passed, 0 failures; total 2.20 seconds. |
-| Qt GUI rebuild, camera disabled | Failed again at missing `RecordOrderPage` members. |
+| Initial Qt GUI rebuild, camera disabled, at `1b16a70` | Failed again at missing `RecordOrderPage` members. |
+| Final Qt GUI rebuild, camera disabled, at `883425c` | Passed; `BarcodeHub.exe` linked after the separately committed header repair. |
 
 The backend rerun reused the configured build directory from the earlier fresh
 build. It is not a second clean-build claim. No camera runtime, GUI checkout,
@@ -32,17 +34,21 @@ $env:PATH = 'C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.11.0/mingw_64/bin;' + $env:PAT
 cmake --build build/increment2-audit-gui --parallel 4
 ```
 
-The GUI compiler again reports at
+The initial GUI compiler report at
 [RecordOrderPage.cpp:61](../../../Frontend/src/ui/RecordOrderPage.cpp#L61):
 
 ```text
 error: 'm_feed' was not declared in this scope
 ```
 
-Further diagnostics include `m_customer`, `m_contact`, `m_manual`, `m_sessionId`,
+Further diagnostics included `m_customer`, `m_contact`, `m_manual`, `m_sessionId`,
 `m_checkout`, and total labels. Compare the
 [header](../../../Frontend/include/ui/RecordOrderPage.h) with its implementation.
-The documentation-only scope leaves that existing build failure unresolved.
+During this review another process committed `46f1a4b` (a project text dump),
+then `883425c` (the header repair). Rebuilding after those commits completed
+successfully, including linking `BarcodeHub.exe`. This documentation work did
+not author either commit or change application source. Camera-enabled compilation
+and interactive behavior remain unverified.
 
 ## Additional source findings
 

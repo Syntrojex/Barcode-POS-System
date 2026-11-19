@@ -4,13 +4,15 @@ Reviewed at `2d3c58d` on 19 November 2026. Only the GUI build failure below was
 compiler-reproduced; other findings are from source inspection unless stated.
 The five backend CTest suites passed. No functional fixes are included.
 
-## Presentation blocker
+## Historical presentation blocker - resolved at `883425c`
 
-**The current Qt GUI does not compile.** [RecordOrderPage.cpp](../../Frontend/src/ui/RecordOrderPage.cpp)
-uses `m_feed`, `m_customer`, `m_manual`, `m_checkout` and other members absent
-from [RecordOrderPage.h](../../Frontend/include/ui/RecordOrderPage.h).
-The header and implementation require reconciliation before a current-source
-GUI demonstration. An older binary does not prove this revision builds.
+**At the original baseline the Qt GUI did not compile.**
+[RecordOrderPage.cpp](../../Frontend/src/ui/RecordOrderPage.cpp) used members
+absent from [RecordOrderPage.h](../../Frontend/include/ui/RecordOrderPage.h).
+A separate commit, `883425c`, restored the declarations. A subsequent Qt build
+with `CAMERA=OFF` passed. See [follow-up results](presentation/review-results.md).
+The source fix was not part of the documentation changes. Camera support and
+interactive checkout still require runtime verification.
 
 ## Functional boundaries
 

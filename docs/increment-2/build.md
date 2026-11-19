@@ -26,9 +26,11 @@ cmake -S . -B build/increment2-audit-gui -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCAM
 cmake --build build/increment2-audit-gui --parallel 4
 ```
 
-Configuration succeeded, but compilation failed at `RecordOrderPage.cpp`
-because member declarations differ from its header. This is a reproducible
-diagnostic command, not a successful GUI installation recipe.
+At the original baseline, configuration succeeded but compilation failed at
+`RecordOrderPage.cpp` because member declarations differed from its header.
+After the separate header repair at `883425c`, the same camera-disabled build
+passed and linked `BarcodeHub.exe`. See [follow-up results](presentation/review-results.md).
+Interactive launch and checkout were not tested.
 
 `CAMERA=ON` requires OpenCV 4 components `core`, `imgproc`, `imgcodecs`, `videoio`.
 `CAMERA=AUTO` searches optionally; `OFF` skips OpenCV. Camera-enabled builds also

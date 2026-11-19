@@ -1,5 +1,10 @@
 # Verification record - 19 November 2026
 
+**Follow-up:** the original results below are historical. The separate header
+repair at `883425c` resolves the reported compilation errors; a camera-disabled
+Qt rebuild now passes. The backend rerun also passed 5/5 in 2.20 seconds.
+See [follow-up results](presentation/review-results.md) for the current state.
+
 Baseline: branch `ali`, commit `2d3c58d`. Review changes are Markdown documentation
 only; executable source, tests, build configuration and data remain unchanged.
 

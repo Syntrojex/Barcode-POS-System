@@ -2,16 +2,17 @@
 
 Present product lookup, scanning, order management, and billing as one workflow using four local text files.
 The following GUI steps are a rehearsal plan, not a record of a successful live run.
+The [presentation pack](presentation/README.md) adds viva questions and acceptance cases.
 
 ## Readiness gate
 
-The inspection found a frontend header/source mismatch in `RecordOrderPage`.
-Its implementation references members such as `m_feed` and `m_customer` that
-are absent from the current header. The Qt 6.11.0/GNU 13.1 build with `CAMERA=OFF`
-configured successfully, then failed on these undeclared members. No GUI run followed.
-Do not call the current checkout presentation-ready until a fresh GUI build passes.
-An existing executable may come from older source and does not verify this checkout.
-This documentation work does not change application code or resolve that blocker.
+The original inspection found a frontend header/source mismatch in `RecordOrderPage`.
+The separate header repair at `883425c` resolves that compile failure. A subsequent
+Qt 6.11.0/GNU 13.1 build with `CAMERA=OFF` passed and linked `BarcodeHub.exe`.
+No interactive GUI run followed. Rehearse checkout using copied data before the
+presentation; camera capture requires a separately verified camera-enabled build.
+See [follow-up results](presentation/review-results.md). This documentation work
+did not make the source repair.
 
 The backend audit passed all five CTest tests: product, order, integration, checkout,
 and billing. That result covers those automated checks, not Qt screens or a camera.
