@@ -60,3 +60,17 @@ guarantee finite totals. This is an unexecuted boundary finding, not a test resu
 **Historical reconstruction:** bill rows store aggregate tax but omit each
 line's tax and the original full product name. Reloaded display data can combine
 saved amounts with current catalogue metadata; see [record layouts](../records.md).
+
+## Rollover example and date-validation boundary
+
+If the final saved order on 19 November is 26110819, the next is
+26110919. On 20 November, with no matching IDs for that day, the first is
+26110120; the matching bill prefix changes from 261119 to 261120.
+The order format places its day at the end; the bill format places it before
+the sequence. Neither is a monotonic global transaction counter.
+
+Order::isValid checks date/time separators and digit positions rather than
+real calendar or clock ranges. Correct shape alone does not reject month 99
+or hour 99. Generated timestamps use the local clock; manually supplied records
+need stronger semantic checks than those format checks provide.
+Evidence: [Order validation](../../../Backend/src/order/Order.cpp).
