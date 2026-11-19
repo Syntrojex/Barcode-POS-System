@@ -54,3 +54,21 @@ See [order record validation](../../../Backend/src/order/Order.cpp),
 [bill parsing](../../../Backend/src/billing/BillRecordCodec.cpp) and
 [bill grouping](../../../Backend/src/billing/BillRepository.cpp).
 Do not equate syntactically valid stored text with a valid business transaction.
+
+## Status validation is not a complete workflow state machine
+
+The following are source expectations, not new executed tests. An updated
+record must first pass Order::isValid; updateOrder then adds the restriction
+that an archived order cannot reopen.
+
+| Starting state | Requested operation | Current backend boundary |
+| --- | --- | --- |
+| In-progress | Update to on-hold | Allowed for an otherwise valid record |
+| Paid | Update to in-progress | Not prohibited by updateOrder; no refund is generated |
+| Archived | Update to in-progress | Rejected |
+| Archived | Update while staying archived | Allowed for an otherwise valid record |
+| On-hold | Billing checkout | Eligible; normal payment/persistence rules still apply |
+| Paid | Billing checkout again | Rejected as already paid |
+
+The GUI does not expose all these mutations. An enum listing four states does
+not establish a persisted hold/resume/refund interface.
