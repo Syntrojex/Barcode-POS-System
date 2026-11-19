@@ -54,3 +54,20 @@ Sources: [page wiring](../../../Frontend/src/ui/MainWindow.cpp),
 [dialogs](../../../Frontend/src/ui/Dialogs.cpp),
 [dashboard](../../../Frontend/src/ui/DashboardPage.cpp),
 and [camera widget](../../../Frontend/src/ui/Widgets.cpp).
+
+## Check the copied data after the worked sale
+
+These are pending acceptance checks for the shipped fixture, not observed GUI
+results. Begin with milk stock 42 and bread stock 34 in disposable data, sell
+two milk and one bread, and compare the records before and after:
+
+| Evidence | Expected change for one successful checkout |
+| --- | --- |
+| Product.txt | Milk 42 to 40; bread 34 to 33 |
+| Order.txt | One new paid header with paymentAmount 938 |
+| OrderDetail.txt | Two matching rows: milk quantity 2, bread quantity 1 |
+| Bill.txt | Two new rows sharing one bill ID and order ID; payable 938 |
+| Second checkout attempt on that saved order | Backend rejects already-paid order |
+
+Record the baseline ID set instead of assuming the data files were empty.
+Closing the receipt should clear the draft; it should not remove saved records.
