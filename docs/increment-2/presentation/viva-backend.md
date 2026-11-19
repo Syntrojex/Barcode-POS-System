@@ -59,3 +59,17 @@ them. Describe recovery as best effort, not crash-safe atomic checkout.
 **What do passing tests prove?** The five registered suites exercise backend
 rules and normal file persistence. They do not prove camera operation or GUI
 checkout. See [verification](../verification.md) and [coverage](../../../tests/checkout_test.cpp).
+
+## Trace one catalogue purchase aloud
+
+For milk product ID 1, ProductManager finds the catalogue object using barcode
+40001029. ProductAdapter::toSnapshot copies ID, price, tax, discount, unit,
+and available stock into the order representation. The backend cart validates
+the requested and combined quantity before createOrder saves detail/header
+records. BillingService::preview resolves the saved product ID again and
+calculates a bill; checkout validates payment, marks paid and appends the bill.
+In the GUI, AppState additionally coordinates the inventory save and rollback.
+
+The boundary matters: neither a successful lookup nor a successful order save
+means a finalized sale exists. Point to the paid order and its associated bill
+when explaining completion. Stock persistence is an additional GUI-owned step.
