@@ -53,3 +53,17 @@ Sources: [decoder](../../../Backend/src/scanner/decoder.cpp),
 [EAN-8 helper](../../../Backend/include/product/Ean8.h),
 [catalogue](../../../data/Product.txt), and
 [legacy regression source](../../../tests/regression.cpp).
+
+## Compare the decoder with catalogue validation
+
+Change only the final digit of the example to produce 40001028. Its first
+seven digits still require check digit 9, so the camera decoder rejects that
+candidate. The catalogue's BarcodeRule instead reports a checksum warning and
+can retain a row with an eight-digit numeric code that has the wrong checksum.
+
+Consequently a product reachable through typed catalogue lookup need not be
+readable from a barcode image with that same invalid check digit. This is a
+difference between the implemented validators, not a claim that malformed
+labels were tested on hardware. See
+[BarcodeRule](../../../Backend/src/product/ProductValidation.cpp) and
+[decoder checksum validation](../../../Backend/src/scanner/decoder.cpp).
