@@ -304,6 +304,7 @@ endif()
 
 set(UI_SOURCES
     Frontend/src/ui/AppState.cpp
+    Frontend/src/ui/DarkModeManager.cpp
     Frontend/src/ui/DashboardPage.cpp
     Frontend/src/ui/Dialogs.cpp
     Frontend/src/ui/MainWindow.cpp
