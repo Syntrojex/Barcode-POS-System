@@ -56,3 +56,17 @@ Sources: [AppState](../../../Frontend/src/ui/AppState.cpp),
 [navigation](../../../Frontend/src/ui/MainWindow.cpp),
 [settings controls](../../../Frontend/src/ui/OtherPages.cpp),
 and [theme settings](../../../Frontend/src/ui/Theme.cpp).
+
+## A valid data override can still have broken pictures
+
+BARCODEHUB_DATA selects a directory by the presence of Product.txt. Relative
+barcode image paths are resolved against that directory's parent, not against
+the directory itself. This matches the shipped path data/barcodes/40001029.png
+when the chosen directory is named data inside the copied project/package.
+
+For example, choosing D:/Demo/data resolves that image to
+D:/Demo/data/barcodes/40001029.png. Choosing D:/Demo/catalogue with the same
+unmodified path still resolves under D:/Demo/data/barcodes. Keep the expected
+layout when preparing a demo copy; successful product parsing alone does not
+establish that the image exists. See m_root and ProductInfo::from in
+[AppState](../../../Frontend/src/ui/AppState.cpp).
