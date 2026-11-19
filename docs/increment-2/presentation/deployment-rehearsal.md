@@ -61,3 +61,19 @@ Sources: [Windows helper](../../../scripts/build-windows.ps1),
 [deployment targets](../../../CMakeLists.txt),
 [seed policy](../../../cmake/seed-data.cmake), and
 [data discovery](../../../Frontend/src/ui/AppState.cpp).
+
+## Diagnose a launch failure before changing records
+
+| Launch symptom | First evidence to collect |
+| --- | --- |
+| Missing DLL message | Exact DLL name and copied package contents |
+| Qt platform-plugin error | Platform plugin directory and matching Qt deployment |
+| App starts but products differ | BARCODEHUB_DATA and executable-relative data candidates |
+| Product values load but images fail | Stored image token and parent-relative resolved path |
+| Camera control reports disabled | CAMERA build option used for this executable |
+| Camera control cannot open a device | Device availability and whether another page/process owns it |
+
+A camera-disabled build can be a useful manual-entry rehearsal artifact, but
+copying OpenCV DLLs beside it does not enable camera code that was compiled out.
+Keep the source revision and build options beside the package when presenting
+which capabilities it actually contains.
