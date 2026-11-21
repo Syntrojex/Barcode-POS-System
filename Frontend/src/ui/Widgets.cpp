@@ -221,14 +221,23 @@ void Card::paintEvent(QPaintEvent *)
     p.setRenderHint(QPainter::Antialiasing);
     p.drawPixmap(0, 0, m_shadow);
     const QRectF body = QRectF(rect()).adjusted(8, 4, -8, -10);
+    const bool dark = Theme::isDark(); // card colours follow light / dark mode
     QLinearGradient g(body.topLeft(), body.bottomLeft());
-    g.setColorAt(0, m_alert ? QColor("#ffffff") : QColor("#ffffff"));
-    g.setColorAt(1, m_alert ? QColor("#fff2f0") : QColor("#f4f7ff"));
+    if (dark)
+    {
+        g.setColorAt(0, m_alert ? QColor("#3a2230") : QColor("#1f2a47"));
+        g.setColorAt(1, m_alert ? QColor("#2e1c28") : QColor("#1a233d"));
+    }
+    else
+    {
+        g.setColorAt(0, QColor("#ffffff"));
+        g.setColorAt(1, m_alert ? QColor("#fff2f0") : QColor("#f4f7ff"));
+    }
     p.setBrush(g);
-    p.setPen(QPen(m_alert ? QColor(255, 140, 130, 190) : QColor(40, 70, 150, 34), 1));
+    p.setPen(QPen(m_alert ? QColor(255, 140, 130, 190) : (dark ? QColor(90, 120, 200, 70) : QColor(40, 70, 150, 34)), 1));
     p.drawRoundedRect(body.adjusted(.5, .5, -.5, -.5), 14, 14);
     // lit top edge for the "raised" look
-    p.setPen(QPen(QColor(255, 255, 255, 240), 1.2));
+    p.setPen(QPen(dark ? QColor(140, 170, 255, 60) : QColor(255, 255, 255, 240), 1.2));
     p.drawLine(QPointF(body.left() + 14, body.top() + 1.6), QPointF(body.right() - 14, body.top() + 1.6));
 }
 
@@ -358,6 +367,7 @@ void CameraFeedWidget::setRunning(bool on)
     m_rig->session.setVideoSink(&m_rig->sink);
     m_lastDetected.clear();
     m_lastEmit.invalidate();
+    m_armed = true;
     m_decodeClock.start();
     m_running = true;
     m_rig->camera.start();
@@ -391,6 +401,7 @@ void CameraFeedWidget::setRunning(bool on)
     });
     m_lastDetected.clear();
     m_lastEmit.invalidate();
+    m_armed = true;
     m_decodeClock.start();
     m_running = true;
     m_rig->timer.start(33);
@@ -433,13 +444,17 @@ void CameraFeedWidget::onImage(const QImage &img)
         }
         m_hitText = value;
         m_hitClock.start();
-        if (value != m_lastDetected || !m_lastEmit.isValid() || m_lastEmit.elapsed() > 3000) {
+        // Scan once: report a barcode a single time, then wait until it leaves the picture.
+        m_lastEmit.restart();
+        if (m_armed) {
+            m_armed = false;
             m_lastDetected = value;
-            m_lastEmit.restart();
             showResult(QString(), true); // green flash only, no text on the camera
             scanBeep();
             emit barcodeDetected(value);
         }
+    } else if (!m_armed && m_lastEmit.isValid() && m_lastEmit.elapsed() > 1000) {
+        m_armed = true; // no barcode for 1 second: ready for the next scan
     }
 }
 #endif
@@ -471,8 +486,10 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
         }
         p.setPen(Qt::NoPen);
         p.setPen(Qt::white);
-        p.drawText(r.adjusted(12, 8, -12, 0), Qt::AlignTop | Qt::AlignHCenter,
-                   "Hold the barcode in front of the camera - the red line scans up and down");
+        // short hint on the live picture (elided so it never gets cut off)
+        const QRect hint(origin.x() + 10, origin.y() + 8, scaled.width() - 20, 20);
+        p.drawText(hint, Qt::AlignTop | Qt::AlignHCenter,
+                   p.fontMetrics().elidedText("Hold the barcode on the red line", Qt::ElideRight, hint.width()));
         // "barcode read" confirmation
         if (m_resultClock.isValid() && m_resultClock.elapsed() < 3000) {
             const QColor c = m_resultOk ? QColor(34, 197, 94) : QColor(239, 68, 68);

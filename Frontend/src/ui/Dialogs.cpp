@@ -16,6 +16,14 @@
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QVBoxLayout>
+#include <QDir>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QPageSize>
+#include <QPdfWriter>
+#include <QStandardPaths>
+#include <QTextBrowser>
+#include <QTextDocument>
 
 namespace Dialogs
 {
@@ -28,7 +36,7 @@ namespace Dialogs
         { return l + QString(qMax(1, w - l.size() - r.size()), ' ') + r; };
         const QString rule(w, '-');
         QString t;
-        t += center("BARCODEHUB POS") + "\n" + center("Retail receipt") + "\n" + rule + "\n";
+        t += center("SYNTRO-CHECK") + "\n" + center("Retail receipt") + "\n" + rule + "\n";
         t += two("Order", o.id) + "\n";
         if (!o.billId.isEmpty()) t += two("Bill", o.billId) + "\n";
         t += two("Date", o.time.toString("yyyy-MM-dd HH:mm")) + "\n";
@@ -57,26 +65,125 @@ namespace Dialogs
         return t;
     }
 
+    // Bill as a small HTML page: header, details, item table, totals, payment.
+    // The same HTML is shown on screen and saved as the PDF, so both always match.
+    QString receiptHtml(const OrderRecord &o)
+    {
+        auto esc = [](const QString &x) { return x.toHtmlEscaped(); };
+        auto row = [&](const QString &l, const QString &r, bool strong = false)
+        {
+            const QString w = strong ? "font-weight:700;" : "";
+            return QString("<tr><td style='padding:2px 0;color:#5b6478;%3'>%1</td>"
+                           "<td align='right' style='padding:2px 0;%3'>%2</td></tr>").arg(l, r, w);
+        };
+        QString h;
+        h += "<div style='font-family:Segoe UI,Arial,sans-serif;font-size:10pt;color:#1b2b55;'>";
+        h += "<p align='center' style='margin:0;font-size:18pt;font-weight:800;color:#2554d8;'>Syntro-Check</p>";
+        h += "<p align='center' style='margin:0 0 10px 0;color:#5b6478;'>Sales receipt</p>";
+
+        // order details
+        h += "<table width='100%' cellspacing='0'>";
+        h += row("Bill no.", o.billId.isEmpty() ? QString("-") : esc(o.billId));
+        h += row("Order no.", esc(o.id));
+        h += row("Date", o.time.toString("dd MMM yyyy, hh:mm AP"));
+        h += row("Customer", esc(o.customer.isEmpty() ? QString("Walk-in") : o.customer));
+        if (!o.contact.isEmpty())
+            h += row("Contact", esc(o.contact));
+        h += "</table><hr style='color:#dce4f5;'/>";
+
+        // items
+        h += "<table width='100%' cellspacing='0' cellpadding='3'>"
+             "<tr style='background:#eef3ff;color:#2554d8;font-weight:700;'>"
+             "<td>Item</td><td align='center'>Qty</td><td align='right'>Price</td>"
+             "<td align='right'>Disc.</td><td align='right'>Amount</td></tr>";
+        for (const auto &l : o.lines)
+        {
+            const double amount = (l.price - l.discount) * l.qty;
+            h += QString("<tr><td>%1<br/><span style='color:#8a94ab;font-size:8pt;'>%2</span></td>"
+                         "<td align='center'>%3</td><td align='right'>%4</td><td align='right'>%5</td>"
+                         "<td align='right'>%6</td></tr>")
+                     .arg(esc(l.name), esc(l.acronym)).arg(l.qty)
+                     .arg(QLocale(QLocale::English).toString(l.price, 'f', 2),
+                          l.discount > 0 ? QLocale(QLocale::English).toString(l.discount * l.qty, 'f', 2) : QString("-"),
+                          QLocale(QLocale::English).toString(amount, 'f', 2));
+        }
+        h += "</table><hr style='color:#dce4f5;'/>";
+
+        // totals
+        h += "<table width='100%' cellspacing='0'>";
+        h += row("Subtotal", W::money(o.subtotal));
+        h += row("Discount", o.discount > 0 ? W::money(-o.discount) : W::money(0));
+        h += row("Tax", W::money(o.tax));
+        h += "</table>";
+        h += QString("<table width='100%' cellspacing='0' cellpadding='6' style='margin-top:6px;'>"
+                     "<tr style='background:#2554d8;color:white;font-weight:800;font-size:13pt;'>"
+                     "<td>TOTAL</td><td align='right'>%1</td></tr></table>").arg(W::money(o.total));
+
+        // payment
+        h += "<table width='100%' cellspacing='0' style='margin-top:8px;'>";
+        QString mode = o.payment.isEmpty() ? QString("-") : esc(o.payment);
+        if (!o.merchant.isEmpty() && o.merchant != "-")
+            mode += " (" + esc(o.merchant) + ")";
+        h += row("Payment", mode);
+        if (o.tendered > 0)
+        {
+            h += row("Amount received", W::money(o.tendered));
+            h += row("Balance returned", W::money(o.tendered - o.total));
+        }
+        if (!o.status.isEmpty())
+            h += row("Status", esc(o.status));
+        h += "</table>";
+        h += "<p align='center' style='margin-top:14px;color:#5b6478;'>Thank you for shopping with us!</p></div>";
+        return h;
+    }
+
+    // Saves the bill as a PDF (A5 page) using Qt's built-in PDF writer.
+    bool saveReceiptPdf(const OrderRecord &o, const QString &path)
+    {
+        QPdfWriter pdf(path);
+        pdf.setPageSize(QPageSize(QPageSize::A5));
+        pdf.setPageMargins(QMarginsF(12, 12, 12, 12), QPageLayout::Millimeter);
+        pdf.setTitle("Bill " + (o.billId.isEmpty() ? o.id : o.billId));
+        pdf.setCreator("Syntro-Check");
+        QTextDocument doc;
+        doc.setHtml(receiptHtml(o));
+        doc.print(&pdf);
+        return QFileInfo(path).exists();
+    }
+
     void receipt(QWidget *parent, const OrderRecord &o)
     {
         QDialog d(parent);
-        d.setWindowTitle("Bill - " + o.id);
+        d.setWindowTitle("Bill - " + (o.billId.isEmpty() ? o.id : o.billId));
         auto *v = new QVBoxLayout(&d);
         v->setContentsMargins(18, 18, 18, 14);
-        auto *te = new QPlainTextEdit(receiptText(o));
-        te->setReadOnly(true);
-        QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-        f.setPointSize(10);
-        te->setFont(f);
-        te->setStyleSheet("QPlainTextEdit{background:white;border:1px solid #dce9ff;border-radius:8px;padding:12px;}");
-        te->setMinimumSize(420, 440);
-        v->addWidget(te);
+        v->setSpacing(12);
+        auto *view = new QTextBrowser;
+        view->setHtml(receiptHtml(o));
+        view->setStyleSheet("QTextBrowser{background:white;border:1px solid #dce9ff;border-radius:10px;padding:14px;}");
+        view->setMinimumSize(470, 600);
+        v->addWidget(view);
+
         auto *h = new QHBoxLayout;
-        h->addStretch();
+        auto *pdfBtn = W::button("Save as PDF", "soft", "print");
         auto *close = W::button("Close", "primary");
+        h->addWidget(pdfBtn);
+        h->addStretch();
         h->addWidget(close);
         v->addLayout(h);
         QObject::connect(close, &QPushButton::clicked, &d, &QDialog::accept);
+        QObject::connect(pdfBtn, &QPushButton::clicked, &d, [&d, &o]
+        {
+            const QString name = QString("Bill_%1.pdf").arg(o.billId.isEmpty() ? o.id : o.billId);
+            const QString path = QFileDialog::getSaveFileName(&d, "Save bill as PDF",
+                QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + name, "PDF files (*.pdf)");
+            if (path.isEmpty())
+                return;
+            if (saveReceiptPdf(o, path))
+                QMessageBox::information(&d, "Bill saved", "Saved to:\n" + QDir::toNativeSeparators(path));
+            else
+                QMessageBox::warning(&d, "Bill not saved", "Could not write the PDF file.");
+        });
         d.exec();
     }
 
@@ -88,15 +195,16 @@ namespace Dialogs
         v->setContentsMargins(20, 18, 20, 16);
         v->setSpacing(10);
         auto *top = new QHBoxLayout;
-        top->addWidget(W::label(o.id, "h1"));
+        top->addWidget(W::label("Order " + o.id, "h1"));
         top->addWidget(W::badge(o.status, W::statusBadgeKind(o.status)));
         top->addStretch();
         v->addLayout(top);
-        v->addWidget(W::label(QString("%1  •  %2  •  %3")
-                                  .arg(o.time.toString("yyyy-MM-dd HH:mm"), o.customer, o.shift),
-                              "muted"));
-        auto *t = new QTableWidget(o.lines.size(), 4);
-        t->setHorizontalHeaderLabels({"ITEM", "QTY", "PRICE", "SUBTOTAL"});
+        // date • customer • contact (empty parts are skipped, so no stray dots)
+        QStringList meta{o.time.toString("dd MMM yyyy, hh:mm AP"), o.customer.isEmpty() ? QString("Walk-in") : o.customer};
+        if (!o.contact.isEmpty()) meta << o.contact;
+        v->addWidget(W::label(meta.join("  •  "), "muted"));
+        auto *t = new QTableWidget(o.lines.size(), 5);
+        t->setHorizontalHeaderLabels({"ITEM", "QTY", "PRICE", "DISCOUNT", "AMOUNT"});
         t->verticalHeader()->hide();
         t->setEditTriggers(QAbstractItemView::NoEditTriggers);
         t->setSelectionMode(QAbstractItemView::NoSelection);
@@ -105,15 +213,39 @@ namespace Dialogs
         for (int i = 0; i < o.lines.size(); ++i)
         {
             const auto &l = o.lines[i];
-            t->setItem(i, 0, new QTableWidgetItem(l.name));
-            t->setItem(i, 1, new QTableWidgetItem(QString::number(l.qty)));
-            t->setItem(i, 2, new QTableWidgetItem(W::money(l.price)));
-            t->setItem(i, 3, new QTableWidgetItem(W::money(l.price * l.qty)));
+            auto cell = [&](int col, const QString &text, Qt::Alignment a)
+            {
+                auto *it = new QTableWidgetItem(text);
+                it->setTextAlignment(a | Qt::AlignVCenter);
+                t->setItem(i, col, it);
+            };
+            cell(0, l.name, Qt::AlignLeft);
+            cell(1, QString::number(l.qty), Qt::AlignCenter);
+            cell(2, W::money(l.price), Qt::AlignRight);
+            cell(3, l.discount > 0 ? W::money(-l.discount * l.qty) : QString("-"), Qt::AlignRight);
+            cell(4, W::money((l.price - l.discount) * l.qty), Qt::AlignRight);
         }
-        t->setMinimumSize(480, 200);
+        t->setMinimumSize(660, 200);
         t->setStyleSheet("QTableWidget{border:1px solid #dce9ff;border-radius:8px;}");
         v->addWidget(t);
-        v->addWidget(W::label(QString("Payment: %1      Total: %2").arg(o.payment, W::money(o.total)), "h2"));
+        // totals breakdown
+        auto *sum = new QFormLayout;
+        sum->setLabelAlignment(Qt::AlignLeft);
+        auto right = [](const QString &x, bool big = false)
+        {
+            auto *l = new QLabel(x);
+            l->setAlignment(Qt::AlignRight);
+            if (big) l->setStyleSheet("font-weight:800; font-size:15px;");
+            return l;
+        };
+        sum->addRow("Subtotal", right(W::money(o.subtotal)));
+        sum->addRow("Discount", right(o.discount > 0 ? W::money(-o.discount) : W::money(0)));
+        sum->addRow("Tax", right(W::money(o.tax)));
+        sum->addRow("Payment", right(o.payment.isEmpty() ? QString("-") : o.payment));
+        auto *totalLbl = new QLabel("Total");
+        totalLbl->setStyleSheet("font-weight:800; font-size:15px;");
+        sum->addRow(totalLbl, right(W::money(o.total), true));
+        v->addLayout(sum);
         auto *h = new QHBoxLayout;
         h->addStretch();
         auto *bill = W::button("View Bill", "", "bills");
@@ -282,13 +414,13 @@ namespace Dialogs
     bool login(QWidget *parent, UserRole &role, QString &name)
     {
         QDialog d(parent);
-        d.setWindowTitle("BarcodeHub - Sign in");
+        d.setWindowTitle("Syntro-Check - Sign in");
         d.setMinimumWidth(420);
         auto *v = new QVBoxLayout(&d);
         v->setContentsMargins(28, 24, 28, 22);
         v->setSpacing(12);
 
-        auto *title = new QLabel("Sign in to BarcodeHub");
+        auto *title = new QLabel("Sign in to Syntro-Check");
         title->setStyleSheet("font-size:20px; font-weight:800; color:#1b2b55;");
         auto *sub = new QLabel("Enter your name and choose your role.");
         sub->setStyleSheet("color:#5b6478;");

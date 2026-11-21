@@ -458,6 +458,15 @@ void Theme::setDark(bool on)
     QSettings("BarcodeHub", "SmartPOS").setValue("darkMode", on);
 }
 
+QColor Theme::readable(const QColor &c)
+{
+    // In dark mode a dark colour (e.g. dark blue text) would vanish on the dark cards:
+    // keep its hue but raise its lightness.
+    if (!isDark() || c.lightnessF() >= 0.6)
+        return c;
+    return QColor::fromHslF(c.hslHueF() < 0 ? 0 : c.hslHueF(), c.hslSaturationF(), 0.72);
+}
+
 QString Theme::styleSheet()
 {
     QString s = lightSheet();

@@ -93,17 +93,7 @@ void DashboardPage::build()
     auto *qa = new QHBoxLayout;
     qa->setContentsMargins(8, 8, 8, 4);
     qa->setSpacing(10);
-    auto quick = [&](const QString &text, const QString &icon, int page, bool primary)
-    {
-        auto *b = W::button(text, primary ? "primary" : "soft", icon);
-        b->setMinimumHeight(40);
-        connect(b, &QPushButton::clicked, this, [this, page]
-                { emit navigate(page); });
-        qa->addWidget(b);
-    };
-    quick("New Order", "cart", 1, true);
-    quick("Scan Barcode", "barcode", 4, false);
-    quick("Products", "products", 3, false);
+    // (quick buttons removed: the sidebar already opens these pages)
     qa->addStretch(1);
     m_search = new QLineEdit;
     m_search->setPlaceholderText("Find an order or product…  (Ctrl+K)");
@@ -192,7 +182,7 @@ void DashboardPage::refresh()
         const auto &o = orders[r];
         m_recent->setRowHeight(r, 48);
         auto id = new QTableWidgetItem(o.id);
-        id->setForeground(QColor("#2554d8"));
+        id->setForeground(Theme::readable(QColor("#2554d8")));
         QFont f = id->font();
         f.setBold(true);
         id->setFont(f);

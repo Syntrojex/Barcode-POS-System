@@ -35,7 +35,7 @@ namespace
         auto* i = new QTableWidgetItem(text);
         i->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         if (!color.isEmpty())
-            i->setForeground(QColor(color));
+            i->setForeground(Theme::readable(QColor(color)));
         if (bold)
         {
             QFont f = i->font();
@@ -126,19 +126,16 @@ QWidget* RecordOrderPage::buildLeft()
 
     auto* btns = new QHBoxLayout;
     btns->setSpacing(8);
-    m_camToggle = W::button("Start camera", "soft", "play");
-    auto* scan = W::button("Start scanning  [F9]", "primary", "barcode");
+    m_camToggle = W::button("Start camera  [F9]", "primary", "play");
     btns->addWidget(m_camToggle, 1);
-    btns->addWidget(scan, 1);
     cv->addLayout(btns);
     connect(m_camToggle, &QPushButton::clicked, this, [this]
         {
             const bool on = !m_feed->running();
             m_feed->setRunning(on);
             const bool running = m_feed->running();
-            m_camToggle->setText(running ? "Stop camera" : "Start camera");
-            m_camToggle->setIcon(Theme::icon(running ? "stop" : "play", Theme::primary, 16)); });
-    connect(scan, &QPushButton::clicked, this, &RecordOrderPage::simulateScan);
+            m_camToggle->setText(running ? "Stop camera" : "Start camera  [F9]");
+            m_camToggle->setIcon(Theme::icon(running ? "stop" : "play", QColor("white"), 16)); });
 
     auto* mr = new QHBoxLayout;
     mr->setSpacing(8);
@@ -226,27 +223,10 @@ QWidget* RecordOrderPage::buildRight()
     m_itemsBadge = W::badge("0 items", "grey");
     head->addWidget(m_itemsBadge);
     head->addStretch();
-    auto* custom = W::button("Custom item", "flat", "plus");
     auto* clear = W::button("Clear", "flat", "trash");
-    head->addWidget(custom);
     head->addWidget(clear);
     ov->addLayout(head);
     connect(clear, &QPushButton::clicked, this, &RecordOrderPage::newDraft);
-    connect(custom, &QPushButton::clicked, this, [this]
-        {
-            bool ok = false;
-            const QString name = QInputDialog::getText(this, "Custom item", "Description:", QLineEdit::Normal, "", &ok);
-            if (!ok || name.trimmed().isEmpty()) return;
-            const double price = QInputDialog::getDouble(this, "Custom item", "Unit price (PKR):", 1.0, 0.01, 100000, 2, &ok);
-            if (!ok) return;
-            ProductInfo p;
-            p.sku = QString("CUSTOM-%1").arg(m_nextCustomLine++, 2, 10, QChar('0'));
-            p.name = name.trimmed();
-            p.price = price;
-            p.unit = "count";
-            p.stock = 999999;
-            m_cart.push_back({ p, 1 });
-            rebuildTable(); });
 
     m_table = new QTableWidget(0, 6);
     m_table->setHorizontalHeaderLabels({ "PRODUCT", "PRICE", "QTY", "DISCOUNT", "TOTAL", "" });
@@ -323,7 +303,7 @@ void RecordOrderPage::simulateScan()
     if (!m_feed->running()) emit toast("Unable to start camera scanning");
     else {
         m_camToggle->setText("Stop camera");
-        m_camToggle->setIcon(Theme::icon("stop", Theme::primary, 16));
+        m_camToggle->setIcon(Theme::icon("stop", QColor("white"), 16));
     }
 }
 
