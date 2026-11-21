@@ -1,199 +1,73 @@
-<h1 align="center">🏷️ BarcodeHub</h1>
+# Changelog
 
-<p align="center">
-  <b>A C++17-based Point of Sale system with barcode scanning, product management, order processing, and billing.</b>
-  <br />
-  Developed as an academic project for Introduction to Software Engineering at FAST-NUCES.
-</p>
+All notable changes to **BarcodeHub** are documented in this file.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white" />
-  <img src="https://img.shields.io/badge/Qt-6-41CD52?style=for-the-badge&logo=qt&logoColor=white" />
-  <img src="https://img.shields.io/badge/OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white" />
-  <img src="https://img.shields.io/badge/CMake-Build%20System-064F8C?style=for-the-badge&logo=cmake&logoColor=white" />
-  <img src="https://img.shields.io/badge/Platform-Windows%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white" />
-</p>
+## [3.0.0] — Increment 3: Inventory, Discounts, Reporting & Advanced Billing
 
----
+### Planned
 
-## 📌 Project Overview
+- Add product category management through the GUI, stored in `PCategory.txt`.
+- Use the first two digits of every barcode as the product category.
+- Store the category ID of each product in `Product.txt`.
+- Allow managers to generate barcodes and to add or edit products.
+- Add an inventory view and inventory updates for managers.
+- Update available product quantities with every order.
+- Allow existing orders to be opened and edited; paid orders only within 7 days of payment and after manager approval.
+- Reduce the clicks needed to record an order, put an order on hold, and resume an on-hold order.
+- Extend `Bill.txt` with amount received, balance returned, seasonal discount, special discount, bill date, and bill time.
+- Introduce `BillDetail.txt` to store the product lines of each bill.
+- Introduce `Seasons.txt` for seasonal discounts, and allow managers to add discounts and set them active or inactive.
+- Apply the seasonal discount automatically when the bill date falls within an active season.
+- Support special discounts of up to 8 percent.
+- Print bills as PDF for cashiers and managers.
+- Add management reports: incomplete orders, completed orders, cash sales, all sales, top ten most sold items, and top ten items by remaining stock.
+- Provide separate cashier and manager features in the user interface.
 
-**BarcodeHub** is a C++ desktop application being developed as a barcode-based Point of Sale (POS) system.
+### Development Notes
 
-The project extends its initial barcode generation and reading capabilities into a GUI-based retail workflow, allowing cashiers to scan products, retrieve product information, manage orders, and generate bills. Later increments add category-based barcodes, inventory management, discounts, and management reports.
+- Increment 3 builds on the Point of Sale system from Increment 2.
+- Requirements and open design decisions are documented in `Project-Planning/Increment-3.md`.
+- Increment 3 is currently in the planning stage. None of the items listed above are implemented yet.
 
-Developed incrementally, BarcodeHub emphasizes modularity, code quality, and reusability.
+## [2.0.0] — Increment 2: Point of Sale System
 
----
+### Planned
 
-## ✨ Key Features
+- Introduce a GUI-based Point of Sale (POS) workflow.
+- Implement product management using `Product.txt`.
+- Add product lookup by barcode and product ID.
+- Display product specifications and validate available stock.
+- Integrate camera-based barcode scanning with the POS.
+- Implement cart and order management.
+- Generate unique 8-digit Order IDs.
+- Store order records in `Order.txt`.
+- Store product details and quantities in `OrderDetail.txt`.
+- Implement bill generation and payment calculations.
+- Save generated bills in `Bill.txt`.
+- Support payment modes: cash, card, and wallet.
 
-### v1.0.0
+### Development Notes
 
-- 🏷️ Barcode generation for supported six-digit numeric product codes.
-- 📖 Barcode reading functionality.
-- 🖥️ Qt Widgets-based desktop application foundation.
+- Increment 2 extends the existing barcode generator and reader from Increment 1.
+- The system is being developed using modular components to promote separation of responsibilities, reusability, and maintainability.
+- Increment 2 is currently in development.
 
-### v2.0.0
+## [1.0.0] — Increment 1: Initial Project Setup
 
-- 📷 Camera-based barcode scanning.
-- 📦 Product lookup and description from `Product.txt`.
-- 🛒 Cart and order management.
-- 📊 Product stock validation.
-- 🧾 Automated bill generation.
-- 💳 Cash, card, and wallet payment modes.
-- 📁 File-based product, order, and billing records.
-- 🎨 GUI-based Point of Sale workflow.
+### Added
 
-### v3.0.0
+- Established the initial project structure and directory organization.
+- Configured CMake as the project build system.
+- Implemented the Qt Widgets-based desktop application foundation.
+- Created the initial application window and navigation.
+- Implemented barcode generation for six-digit numeric input.
+- Implemented barcode reading functionality.
+- Added the Decode Barcode interface with camera and image-upload sections.
+- Introduced the initial Scan Logs interface.
+- Organized backend modules for barcode generation, reading, and scanning.
+- Added project documentation and contribution guidelines.
 
-- 🗂️ Product category management, with the first two barcode digits representing the category.
-- ➕ Manager tools to generate barcodes and to add or edit products.
-- 📦 Inventory view and inventory updates, with stock updated on every order.
-- ✏️ Opening and editing existing orders (paid orders only within 7 days of payment and after manager approval).
-- ⚡ Fast order recording, with easy on-hold and resume.
-- 🧾 Extended bills with bill details, amount received, and balance returned.
-- 🌦️ Seasonal discounts from `Seasons.txt`, plus special discounts of up to 8 percent.
-- 🖨️ Bill printing as PDF.
-- 📈 Management reports: incomplete orders, completed orders, cash sales, all sales, top ten most sold items, and top ten items by remaining stock.
-- 👥 Separate cashier and manager features.
+### Notes
 
----
-
-## 🔄 POS Workflow
-
-The POS workflow consists of four main modules:
-
-1. **Product Management** — Retrieve product information and validate stock.
-2. **Camera & Scanner** — Scan product barcodes using a connected camera.
-3. **Order Management** — Record orders and manage product quantities.
-4. **Billing** — Calculate totals, generate bills, and record payment information.
-
----
-
-## 📄 Data Management
-
-BarcodeHub uses text files to store its records:
-
-| File | Purpose | Increment |
-|---|---|---|
-| `Product.txt` | Product specifications and available stock | 2 (category ID added in 3) |
-| `Order.txt` | Customer and order information | 2 |
-| `OrderDetail.txt` | Products and quantities associated with orders | 2 |
-| `Bill.txt` | Generated bill information and payment status | 2 (extended in 3) |
-| `PCategory.txt` | Product categories (ID, name, acronym) | 3 (planned) |
-| `BillDetail.txt` | Product lines belonging to each bill | 3 (planned) |
-| `Seasons.txt` | Seasonal discount periods and their status | 3 (planned) |
-
-Each record follows the specified field order and uses `#` as its end-of-record marker.
-
----
-
-## 🛠️ Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| **C++17** | Core application logic |
-| **Qt 6 Widgets** | Desktop graphical interface |
-| **OpenCV** | Camera capture and image processing |
-| **CMake** | Build configuration |
-| **MinGW-w64** | Windows C++ compilation |
-| **PowerShell** | Build automation |
-| **Git & GitHub** | Version control and collaboration |
-| **GitHub Actions** | Automated branch synchronization |
-
----
-
-## 📂 Project Structure
-
-```text
-Bar-Code-System-CPP/
-│
-├── Backend/
-│   ├── include/
-│   └── src/
-│
-├── Frontend/
-│   ├── assets/
-│   ├── include/
-│   └── src/
-│
-├── data/
-│   ├── Product.txt
-│   ├── Order.txt
-│   ├── OrderDetail.txt
-│   ├── Bill.txt
-│   ├── PCategory.txt
-│   ├── BillDetail.txt
-│   └── Seasons.txt
-│
-├── Project-Planning/
-├── tests/
-├── .github/
-│
-├── main.cpp
-├── CMakeLists.txt
-├── CMakePresets.json
-├── project.json
-├── CHANGELOG.md
-├── CONTRIBUTORS.md
-├── CONTRIBUTING.md
-├── LICENSE
-└── README.md
-```
-
----
-
-## 📚 Project Documentation
-
-| Document | Description |
-|---|---|
-| [Increment 1](Project-Planning/Increment-1.md) | Barcode generator and reader |
-| [Increment 2](Project-Planning/Increment-2.md) | Point of Sale system |
-| [Increment 3](Project-Planning/Increment-3.md) | Inventory, discounts, reporting, and advanced billing |
-| [Changelog](CHANGELOG.md) | History of notable changes |
-
----
-
-## 🎓 Academic Information
-
-| Detail | Information |
-|---|---|
-| Project | BarcodeHub |
-| Repository | Bar-Code-System-CPP |
-| Course | Introduction to Software Engineering (ISE) |
-| Institution | FAST-NUCES |
-| Semester | 3rd Semester |
-| Instructor | Professor Rana Zeeshan |
-| Language | C++ |
-| Methodology | Incremental Development |
-| Submission Platform | GitHub |
-
----
-
-## 👥 Project Team & Credits
-
-| Team Member | Roll Number | GitHub Profile |
-|---|---|---|
-| **Muhammad Mustafa Amir** | 25L-3107 | [@Syntrojex](https://github.com/Syntrojex) |
-| **Ali Abdullah** | 25L-3022 | [@aliabdullah-se](https://github.com/aliabdullah-se) |
-| **Farzam Zeeshan** | 25L-3049 | [@farzamzeeshan1](https://github.com/farzamzeeshan1) |
-| **Shauzab Mukhtar** | 25L-3084 | [@shauzab-72](https://github.com/shauzab-72) |
-
----
-
-## 🤝 Contributing
-
-Contributions, suggestions, and improvements are welcome.
-
-Please read the [Contributing Guidelines](CONTRIBUTING.md) before making changes to the project.
-
----
-
-<p align="center">
-  <b>BarcodeHub</b>
-  <br />
-  Building a practical barcode solution, one increment at a time.
-  <br /><br />
-  <sub>Developed with ❤️ by the BarcodeHub team.</sub>
-</p>
+- Established the foundational barcode generation and reading functionality.
+- Increment 1 serves as the base for the POS capabilities introduced in Increment 2.
