@@ -1,4 +1,5 @@
 #include "Widgets.h"
+#include "AppState.h"
 #include "Theme.h"
 #ifdef WITH_CAMERA
 #include "decoder.h"
@@ -23,6 +24,28 @@
 #include <QTimer>
 #include <cstdlib>
 #include <cmath>
+#include <thread>
+#include <QApplication>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX // keep std::min/std::max usable
+#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+// Short "scanner" beep after a successful scan (if enabled in Settings).
+// Windows Beep() blocks while it plays, so it runs on its own short-lived thread.
+static void scanBeep()
+{
+    if (!AppState::instance().settings().beepOnScan)
+        return;
+#ifdef Q_OS_WIN
+    std::thread([] { Beep(1800, 120); }).detach(); // 1800 Hz for 120 ms
+#else
+    QApplication::beep();
+#endif
+}
 #include <QLinearGradient>
 #include <QLocale>
 #include <QPainter>
@@ -413,7 +436,8 @@ void CameraFeedWidget::onImage(const QImage &img)
         if (value != m_lastDetected || !m_lastEmit.isValid() || m_lastEmit.elapsed() > 3000) {
             m_lastDetected = value;
             m_lastEmit.restart();
-            showResult("Barcode read: " + value, true); // pages replace this with the product name
+            showResult(QString(), true); // green flash only, no text on the camera
+            scanBeep();
             emit barcodeDetected(value);
         }
     }
@@ -455,18 +479,8 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
             p.setBrush(Qt::NoBrush);
             p.setPen(QPen(c, 4));
             p.drawRect(QRect(origin, scaled.size()).adjusted(2, 2, -2, -2));
-            QFont f = font();
-            f.setBold(true);
-            f.setPixelSize(16);
-            p.setFont(f);
-            const QRect banner(origin.x(), origin.y() + scaled.height() - 40, scaled.width(), 40);
-            p.setPen(Qt::NoPen);
-            p.setBrush(QColor(c.red(), c.green(), c.blue(), 225));
-            p.drawRect(banner);
-            p.setPen(Qt::white);
-            p.drawText(banner, Qt::AlignCenter, (m_resultOk ? QString::fromUtf8("\u2714  ") : QString("! ")) + m_result);
         }
-        // the barcode that was just read: green box + code banner for ~2.5 s
+        // the barcode that was just read: green box for ~2.5 s (no text)
         if (m_hitClock.isValid() && m_hitClock.elapsed() < 2500 && !m_hitText.isEmpty()) {
             const double k = static_cast<double>(scaled.width()) / m_frame.width();
             if (m_hitBox.isValid() && !m_hitBox.isEmpty()) {
@@ -476,17 +490,6 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
                 p.setPen(QPen(QColor(40, 220, 100), 3));
                 p.drawRoundedRect(box.adjusted(-6, -6, 6, 6), 6, 6);
             }
-            QFont bf = font();
-            bf.setPixelSize(20);
-            bf.setBold(true);
-            p.setFont(bf);
-            const QString text = QString::fromUtf8("\u2713  Scanned: ") + m_hitText;
-            const QRect banner(r.left() + 20, r.bottom() - 52, r.width() - 40, 40);
-            p.setPen(Qt::NoPen);
-            p.setBrush(QColor(20, 150, 70, 230));
-            p.drawRoundedRect(banner, 10, 10);
-            p.setPen(Qt::white);
-            p.drawText(banner, Qt::AlignCenter, text);
         }
     } else {
         p.setPen(QColor("#c2d0ef"));
@@ -496,10 +499,6 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
         p.drawText(r.adjusted(15, 0, -15, 0), Qt::AlignCenter | Qt::TextWordWrap,
                    "Camera unavailable in this build.\nInstall the Qt Multimedia component, then re-run CMake.\nTyped barcode lookup still works.");
 #endif
-    }
-    if (!m_code.isEmpty()) {
-        p.setPen(Qt::white);
-        p.drawText(r.adjusted(12, 0, -12, -8), Qt::AlignBottom | Qt::AlignRight, m_code);
     }
 }
 
