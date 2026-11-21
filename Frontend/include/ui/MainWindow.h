@@ -1,6 +1,7 @@
 #pragma once
 #include <QMainWindow>
 #include <QVector>
+#include "UserRole.h"
 
 class QLabel;
 class QPushButton;
@@ -20,8 +21,9 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 public:
     enum Page { Dashboard, RecordOrder, Orders, Products, Scanner, Bills, Settings, PageCount };
-    explicit MainWindow(QWidget *parent = nullptr);
-    void goTo(int page);
+    explicit MainWindow(UserRole role = UserRole::Cashier, const QString &userName = QString(), QWidget *parent = nullptr);
+    bool loggedOut() const { return m_loggedOut; } // true if closed with "Log out"
+    bool goTo(int page); // false if the signed-in role may not open this page
     QPixmap grabPage(int page); // used by the screenshot/self-test helper
 
 protected:
@@ -37,6 +39,9 @@ private:
     void handleFKey(int n);
     void positionToast();
 
+    UserRole m_role;
+    QString m_userName;
+    bool m_loggedOut = false;
     QStackedWidget *m_stack;
     QVector<QPushButton *> m_nav;
     QLabel *m_title, *m_subtitle, *m_clockTime, *m_clockDate, *m_toast;

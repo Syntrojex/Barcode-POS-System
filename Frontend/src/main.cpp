@@ -2,6 +2,7 @@
 #include "Theme.h"
 #include <QApplication>
 #include <QFont>
+#include "Dialogs.h"
 #include <QStyleFactory>
 
 int main(int argc, char *argv[])
@@ -14,7 +15,17 @@ int main(int argc, char *argv[])
     app.setFont(f);
     app.setStyleSheet(Theme::styleSheet());
 
-    MainWindow w;
-    w.show();
-    return app.exec();
+    // Sign in, run the POS, and return to sign-in after "Log out".
+    while (true)
+    {
+        UserRole role = UserRole::Cashier;
+        QString name;
+        if (!Dialogs::login(nullptr, role, name))
+            return 0; // sign-in window closed
+        MainWindow w(role, name);
+        w.show();
+        app.exec();
+        if (!w.loggedOut())
+            return 0; // "Exit" closes the app
+    }
 }

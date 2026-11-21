@@ -13,6 +13,7 @@
  */
 
 #include "AppState.h"
+#include "UserRole.h"
 #include <QString>
 
 class QWidget;
@@ -76,4 +77,11 @@ namespace Dialogs
      * @return Formatted multi-line receipt text.
      */
     QString receiptText(const OrderRecord &order);
+    /**
+     * @brief Sign-in screen: the user types a name and presses Cashier or Manager.
+     * @param[out] role Chosen role.
+     * @param[out] name Typed name (the role name if left empty).
+     * @return False if the window was closed without signing in.
+     */
+    bool login(QWidget *parent, UserRole &role, QString &name);
 }

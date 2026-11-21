@@ -278,4 +278,52 @@ namespace Dialogs
         merchant = id == 0 ? QString() : merchantInput->text().trimmed();
         return true;
     }
+
+    bool login(QWidget *parent, UserRole &role, QString &name)
+    {
+        QDialog d(parent);
+        d.setWindowTitle("BarcodeHub - Sign in");
+        d.setMinimumWidth(420);
+        auto *v = new QVBoxLayout(&d);
+        v->setContentsMargins(28, 24, 28, 22);
+        v->setSpacing(12);
+
+        auto *title = new QLabel("Sign in to BarcodeHub");
+        title->setStyleSheet("font-size:20px; font-weight:800; color:#1b2b55;");
+        auto *sub = new QLabel("Enter your name and choose your role.");
+        sub->setStyleSheet("color:#5b6478;");
+        v->addWidget(title);
+        v->addWidget(sub);
+
+        auto *nameEdit = new QLineEdit;
+        nameEdit->setPlaceholderText("Your name");
+        nameEdit->setMinimumHeight(38);
+        v->addWidget(nameEdit);
+
+        // One button per role; the button pressed decides the role.
+        auto *cashier = W::button("Cashier", "primary", "cart");
+        auto *manager = W::button("Manager", "soft", "products");
+        for (auto *b : {cashier, manager})
+            b->setMinimumHeight(46);
+        auto *row = new QHBoxLayout;
+        row->setSpacing(10);
+        row->addWidget(cashier);
+        row->addWidget(manager);
+        v->addLayout(row);
+
+        auto *hint = new QLabel("Cashier: record orders and generate bills.\nManager: view products only.");
+        hint->setStyleSheet("color:#8a94ab; font-size:11px;");
+        v->addWidget(hint);
+
+        QObject::connect(cashier, &QPushButton::clicked, &d, [&] { role = UserRole::Cashier; d.accept(); });
+        QObject::connect(manager, &QPushButton::clicked, &d, [&] { role = UserRole::Manager; d.accept(); });
+        QObject::connect(nameEdit, &QLineEdit::returnPressed, cashier, &QPushButton::click);
+
+        if (d.exec() != QDialog::Accepted)
+            return false;
+        name = nameEdit->text().trimmed();
+        if (name.isEmpty())
+            name = RolePolicy::name(role);
+        return true;
+    }
 }

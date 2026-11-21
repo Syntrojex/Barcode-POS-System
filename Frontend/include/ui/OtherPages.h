@@ -35,12 +35,14 @@ class ProductsPage : public QWidget
 public:
     explicit ProductsPage(QWidget *parent = nullptr);
     void setSearch(const QString &text);
+    void setViewOnly(bool on); // Manager: hide the "Add" (to order) buttons
 signals:
     void toast(const QString &message);
     void addToOrder(const QString &ean);
 
 private:
     void rebuild();
+    bool m_viewOnly = false;
     QLineEdit *m_search;
     QTableWidget *m_table;
     QLabel *m_count;
@@ -66,6 +68,7 @@ class ScannerPage : public QWidget
     Q_OBJECT
 public:
     explicit ScannerPage(QWidget *parent = nullptr);
+    void setViewOnly(bool on); // Manager: hide "Send to order", keep Description
 signals:
     void toast(const QString &message);
     void sendToOrder(const QString &ean);
