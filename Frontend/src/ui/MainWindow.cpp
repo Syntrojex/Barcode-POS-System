@@ -34,7 +34,7 @@ namespace
 MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
     : QMainWindow(parent), m_role(role), m_userName(userName.isEmpty() ? RolePolicy::name(role) : userName)
 {
-    setWindowTitle("BarcodeHub - SmartPOS");
+    setWindowTitle("Syntro-Check");
     setMinimumSize(1100, 700);
     resize(1360, 860);
 
@@ -131,8 +131,7 @@ QWidget *MainWindow::buildSidebar()
     brand->addWidget(logo);
     auto *bt = new QVBoxLayout;
     bt->setSpacing(0);
-    bt->addWidget(W::label("SmartPOS", "brand"));
-    bt->addWidget(W::label("Retail workspace", "brandSub"));
+    bt->addWidget(W::label("Syntro-Check", "brand")); // app name, white, in the sidebar
     brand->addLayout(bt);
     brand->addStretch();
     v->addLayout(brand);
@@ -224,6 +223,7 @@ QWidget *MainWindow::buildTopBar()
     connect(&barcodehub::ui::DarkModeManager::instance(), &barcodehub::ui::DarkModeManager::themeChanged,
             this, [this](bool isDark) {
                 showToast(isDark ? "Switched to Dark Mode" : "Switched to Light Mode");
+                AppState::instance().emitChanged(); // rebuild tables so their text colours match the theme
             });
 
     auto *chip = new QFrame;
@@ -339,7 +339,7 @@ void MainWindow::closeEvent(QCloseEvent *e)
 {
     const auto r = m_loggedOut
         ? QMessageBox::question(this, "Log out", "Log out and return to the sign-in screen? The current draft will be lost.")
-        : QMessageBox::question(this, "Exit Terminal", "Close SmartPOS? The current draft will be lost.");
+        : QMessageBox::question(this, "Exit Terminal", "Close Syntro-Check? The current draft will be lost.");
     if (r == QMessageBox::Yes)
         e->accept();
     else

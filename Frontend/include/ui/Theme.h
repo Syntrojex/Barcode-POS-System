@@ -26,6 +26,7 @@ namespace Theme
 
     bool isDark();
     void setDark(bool on); // persists with QSettings
+    QColor readable(const QColor &c); // dark text colours are lightened in dark mode
     // Application-wide Qt style sheet (light or dark).
     QString styleSheet();
 

@@ -95,7 +95,8 @@ private:
     bool m_running = false;
     QString m_code;
     QString m_lastDetected;
-    QElapsedTimer m_lastEmit;
+    QElapsedTimer m_lastEmit; // last time any barcode was seen in the picture
+    bool m_armed = true;      // false after a read, until the barcode leaves the picture
     QImage m_frame;
     QRectF m_hitBox;       // where the barcode was found, in camera-picture pixels
     QString m_hitText;     // the code that was read

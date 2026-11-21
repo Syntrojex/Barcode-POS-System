@@ -42,7 +42,7 @@ namespace
         auto* i = new QTableWidgetItem(s);
         i->setTextAlignment(a);
         if (!color.isEmpty())
-            i->setForeground(QColor(color));
+            i->setForeground(Theme::readable(QColor(color)));
         if (bold)
         {
             QFont f = i->font();
@@ -412,10 +412,8 @@ ScannerPage::ScannerPage(QWidget* parent) : QWidget(parent)
     m_feed->setMinimumHeight(300);
     cv->addWidget(m_feed, 1);
     auto* btns = new QHBoxLayout;
-    m_toggle = W::button("Start Cam", "soft", "play");
-    auto* scan = W::button("Start Scan [F9]", "primary", "barcode");
+    m_toggle = W::button("Start camera", "primary", "play");
     btns->addWidget(m_toggle);
-    btns->addWidget(scan);
     btns->addStretch();
     cv->addLayout(btns);
     auto* mr = new QHBoxLayout;
@@ -452,9 +450,8 @@ ScannerPage::ScannerPage(QWidget* parent) : QWidget(parent)
             const bool on = !m_feed->running();
             m_feed->setRunning(on);
             const bool running = m_feed->running();
-            m_toggle->setText(running ? "Stop Cam" : "Start Cam");
-            m_toggle->setIcon(Theme::icon(running ? "stop" : "play", Theme::primary, 16)); });
-    connect(scan, &QPushButton::clicked, this, &ScannerPage::scanNext);
+            m_toggle->setText(running ? "Stop camera" : "Start camera");
+            m_toggle->setIcon(Theme::icon(running ? "stop" : "play", QColor("white"), 16)); });
     connect(m_feed, &CameraFeedWidget::scanError, this, &ScannerPage::toast);
     connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString& code) {
         const auto product = AppState::instance().findByCode(code);
@@ -485,8 +482,8 @@ void ScannerPage::scanNext()
     if (!m_feed->running()) m_feed->setRunning(true);
     if (!m_feed->running()) emit toast("Unable to start camera scanning");
     else {
-        m_toggle->setText("Stop Cam");
-        m_toggle->setIcon(Theme::icon("stop", Theme::primary, 16));
+        m_toggle->setText("Stop camera");
+        m_toggle->setIcon(Theme::icon("stop", QColor("white"), 16));
     }
 }
 
@@ -522,18 +519,15 @@ SettingsPage::SettingsPage(QWidget* parent) : QWidget(parent)
     low->setRange(0, 1000);
     low->setSuffix(" units");
     low->setValue(s.lowStockThreshold);
-    auto* dark = new QCheckBox("Dark mode");
-    dark->setChecked(Theme::isDark());
     auto* autoAdd = new QCheckBox("Add scanned items to the order automatically");
     autoAdd->setChecked(s.autoAddScans);
     auto* beep = new QCheckBox("Play a beep on successful scan");
     beep->setChecked(s.beepOnScan);
-    form->addRow("Appearance", dark);
     form->addRow("Low-stock limit", low);
     form->addRow("Scanning", autoAdd);
     form->addRow("", beep);
     v->addLayout(form);
-    v->addWidget(W::label("Tax and discount come per product from Product.txt. Dark mode is remembered between runs.", "muted"));
+    v->addWidget(W::label("Tax and discount come per product from Product.txt. Use the Dark Mode button at the top to switch themes.", "muted"));
     v->addStretch();
     auto* h = new QHBoxLayout;
     h->addStretch();
@@ -545,7 +539,6 @@ SettingsPage::SettingsPage(QWidget* parent) : QWidget(parent)
             auto& st = AppState::instance().settings();
             st.lowStockThreshold = low->value();
             AppState::instance().emitChanged();
-            if (dark->isChecked() != Theme::isDark()) { Theme::setDark(dark->isChecked()); qApp->setStyleSheet(Theme::styleSheet()); }
             st.autoAddScans = autoAdd->isChecked();
             st.beepOnScan = beep->isChecked();
             emit toast("Settings applied"); });

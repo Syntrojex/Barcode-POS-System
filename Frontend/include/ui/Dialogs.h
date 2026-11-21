@@ -77,6 +77,12 @@ namespace Dialogs
      * @return Formatted multi-line receipt text.
      */
     QString receiptText(const OrderRecord &order);
+
+    /** @brief The bill as formatted HTML (used on screen and for the PDF). */
+    QString receiptHtml(const OrderRecord &order);
+
+    /** @brief Saves the bill as a PDF file; returns false if it could not be written. */
+    bool saveReceiptPdf(const OrderRecord &order, const QString &path);
     /**
      * @brief Sign-in screen: the user types a name and presses Cashier or Manager.
      * @param[out] role Chosen role.
