@@ -1,5 +1,6 @@
 #include "Theme.h"
 #include <QPainter>
+#include <cmath>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QPainterPath>
@@ -302,6 +303,175 @@ QPixmap Theme::iconPixmap(const QString &n, const QColor &c, int px)
     {
         p.drawPolyline(QPolygonF({{6, 9}, {12, 15}, {18, 9}}));
     }
+    else if (n == "close")
+    {
+        line(6, 6, 18, 18);
+        line(18, 6, 6, 18);
+    }
+    else if (n == "inventory")
+    {
+        rect(3.5, 4, 17, 5, 1.5);
+        rect(5, 9, 14, 11, 1.5);
+        line(10, 13, 14, 13);
+    }
+    else if (n == "categories")
+    {
+        p.drawPolygon(QPolygonF({{7.5, 3.5}, {11.5, 10}, {3.5, 10}}));
+        rect(13, 13, 7.5, 7.5, 1.5);
+        circle(7.5, 16.8, 3.7);
+    }
+    else if (n == "reports")
+    {
+        line(4, 20, 20, 20);
+        rect(5, 12, 3, 8, 0.8);
+        rect(10.5, 8, 3, 12, 0.8);
+        rect(16, 4, 3, 16, 0.8);
+    }
+    else if (n == "percent")
+    {
+        line(19, 5, 5, 19);
+        circle(7, 7, 2.4);
+        circle(17, 17, 2.4);
+    }
+    else if (n == "moon")
+    {
+        QPainterPath path;
+        path.moveTo(20, 14.5);
+        path.cubicTo(13.5, 17.5, 6.5, 12.5, 8.5, 4);
+        path.cubicTo(4, 5, 2.5, 11, 5.5, 15.5);
+        path.cubicTo(8.5, 20.5, 17, 21, 20, 14.5);
+        p.drawPath(path);
+    }
+    else if (n == "download")
+    {
+        line(12, 4, 12, 15);
+        p.drawPolyline(QPolygonF({{7.5, 10.8}, {12, 15.2}, {16.5, 10.8}}));
+        line(5, 20, 19, 20);
+    }
+    else if (n == "unlock")
+    {
+        rect(5, 11, 14, 10, 2);
+        p.drawArc(QRectF(8, 3, 8, 12), 0, 150 * 16);
+    }
+    else if (n == "history")
+    {
+        p.drawArc(QRectF(4, 4, 16, 16), 20 * 16, 300 * 16);
+        p.drawPolyline(QPolygonF({{3.5, 4.5}, {4.2, 9}, {8.6, 8.2}}));
+        p.drawPolyline(QPolygonF({{12, 8}, {12, 12}, {15, 13.8}}));
+    }
+    else if (n == "mail")
+    {
+        rect(3, 5.5, 18, 13, 2);
+        p.drawPolyline(QPolygonF({{3.5, 7}, {12, 13.5}, {20.5, 7}}));
+    }
+    else if (n == "message")
+    {
+        QPainterPath path;
+        path.moveTo(4, 5);
+        path.lineTo(20, 5);
+        path.lineTo(20, 16);
+        path.lineTo(10, 16);
+        path.lineTo(6, 20);
+        path.lineTo(6, 16);
+        path.lineTo(4, 16);
+        path.closeSubpath();
+        p.drawPath(path);
+        line(8, 9.5, 16, 9.5);
+        line(8, 12.5, 13, 12.5);
+    }
+    else if (n == "bolt")
+    {
+        fillShape([&]
+                  { p.drawPolygon(QPolygonF({{13.5, 2.5}, {5.5, 13.5}, {11, 13.5}, {10, 21.5}, {18.5, 10}, {13, 10}})); });
+    }
+    else if (n == "qr")
+    {
+        rect(3.5, 3.5, 6, 6, 1);
+        rect(14.5, 3.5, 6, 6, 1);
+        rect(3.5, 14.5, 6, 6, 1);
+        line(14.5, 14.5, 14.5, 14.7);
+        line(18, 14.5, 20.5, 14.5);
+        line(14.5, 18, 14.5, 20.5);
+        line(18, 18, 20.5, 20.5);
+    }
+    else if (n == "calendar")
+    {
+        rect(3.5, 5, 17, 15.5, 2.5);
+        line(3.5, 10, 20.5, 10);
+        line(8, 3, 8, 7);
+        line(16, 3, 16, 7);
+    }
+    else if (n == "wallet")
+    {
+        rect(3, 6, 18, 13, 2.5);
+        p.drawPolyline(QPolygonF({{3.5, 9.5}, {17, 9.5}}));
+        circle(16.5, 13.5, 1.2);
+    }
+    else if (n == "idcard")
+    {
+        rect(3, 5.5, 18, 13, 2);
+        circle(8.5, 11.5, 2);
+        line(13, 10.5, 18, 10.5);
+        line(13, 14, 17, 14);
+    }
+    else if (n == "undo")
+    {
+        p.drawPolyline(QPolygonF({{8, 6}, {4, 10}, {8, 14}}));
+        QPainterPath path;
+        path.moveTo(4.5, 10);
+        path.lineTo(14, 10);
+        path.cubicTo(19, 10, 19.5, 18, 14, 18);
+        path.lineTo(9, 18);
+        p.drawPath(path);
+    }
+    else if (n == "star")
+    {
+        QPolygonF st;
+        for (int i = 0; i < 10; ++i)
+        {
+            const qreal r = i % 2 == 0 ? 9 : 4;
+            const qreal a = -M_PI / 2 + i * M_PI / 5;
+            st << QPointF(12 + r * std::cos(a), 12.5 + r * std::sin(a));
+        }
+        p.drawPolygon(st);
+    }
+    else if (n == "drawer")
+    {
+        rect(3, 9, 18, 10, 2);
+        line(3, 13, 21, 13);
+        line(10, 16, 14, 16);
+        p.drawPolyline(QPolygonF({{6, 9}, {8, 4}, {16, 4}, {18, 9}}));
+    }
+    else if (n == "building")
+    {
+        rect(5, 4, 14, 17, 1.5);
+        line(9, 8, 9, 8.2);
+        line(15, 8, 15, 8.2);
+        line(9, 12, 9, 12.2);
+        line(15, 12, 15, 12.2);
+        line(10, 21, 10, 17);
+        line(14, 21, 14, 17);
+    }
+    else if (n == "sun")
+    {
+        circle(12, 12, 4);
+        for (int i = 0; i < 8; ++i)
+        {
+            p.save();
+            p.translate(12, 12);
+            p.rotate(i * 45);
+            line(0, -7, 0, -9.5);
+            p.restore();
+        }
+    }
+    else if (n == "scan")
+    {
+        p.drawPolyline(QPolygonF({{4, 9}, {4, 4}, {9, 4}}));
+        p.drawPolyline(QPolygonF({{15, 4}, {20, 4}, {20, 9}}));
+        p.drawPolyline(QPolygonF({{20, 15}, {20, 20}, {15, 20}}));
+        p.drawPolyline(QPolygonF({{9, 20}, {4, 20}, {4, 15}}));
+        line(7.5, 12, 16.5, 12);
+    }
     return QPixmap(pm);
 }
 
@@ -314,7 +484,7 @@ QMainWindow, #root { background: #eaf0fc; }
 QToolTip { background: #16254a; color: #eaf1ff; border: none; padding: 5px 9px; border-radius: 6px; }
 
 /* ---- sidebar (dark, glossy) ---- */
-#sidebar { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1a2b57, stop:0.55 #111d3d, stop:1 #0a1126); border: none; }
+#sidebar { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #0f1b33, stop:1 #0b1426); border: none; }
 #logoBox { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #7fb0ff, stop:1 #2b5fe8); border-radius: 12px; border-bottom: 3px solid #1a3fae; }
 #logoBox QLabel { color: white; font-weight: 800; font-size: 18px; background: transparent; }
 #brand { color: #ffffff; font-size: 18px; font-weight: 800; }
@@ -325,8 +495,8 @@ QToolTip { background: #16254a; color: #eaf1ff; border: none; padding: 5px 9px; 
 #userRole { color: #8d9abd; font-size: 11.5px; background: transparent; }
 #nav { background: transparent; border: none; border-radius: 12px; text-align: left; }
 #nav:hover { background: rgba(255,255,255,8%); }
-#nav[active="true"] { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #5f97ff, stop:0.5 #3d78f4, stop:1 #2c62e2); border-bottom: 3px solid #1a3fae; }
-#nav QLabel { background: transparent; font-weight: 600; font-size: 14px; color: #b8c3e0; }
+#nav[active="true"] { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #2e62f2, stop:1 #2554d8); border-bottom: 3px solid #1b3e9f; border-radius: 10px; }
+#nav QLabel { background: transparent; font-weight: 600; font-size: 14px; color: #94a3b8; }
 #nav[active="true"] QLabel { color: #ffffff; }
 #nav[locked="true"] QLabel { color: #5d6a8f; }
 #exitBtn { background: rgba(255,255,255,7%); border: 1px solid rgba(255,255,255,10%); border-bottom: 3px solid rgba(0,0,0,25%); border-radius: 11px; color: #c9d3ee; padding: 8px 12px; }
@@ -437,6 +607,22 @@ QCheckBox { spacing: 9px; }
 QCheckBox::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #bcc9e8; background: white; }
 QCheckBox::indicator:checked { background: #3f7bf6; border-color: #2d63e4; }
 QDialog, QMessageBox { background: #f1f5fd; }
+
+/* ---- Increment 3 (Stitch redesign) ---- */
+#eyebrow { color: #2554d8; font-size: 10.5px; font-weight: 800; letter-spacing: 1px; background: transparent; }
+#pageH1 { font-size: 26px; font-weight: 800; color: #0f1b33; background: transparent; }
+#pageDesc { color: #64748b; font-size: 13px; background: transparent; }
+#kbd { background: #e5eeff; color: #1d46b4; border-radius: 5px; padding: 1px 6px; font-size: 10.5px; font-weight: 800; }
+#modalCard { background: transparent; }
+#modalHead { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #eaf1ff, stop:1 #e0eaff); border-top-left-radius: 14px; border-top-right-radius: 14px; }
+#modalHead QLabel { background: transparent; }
+#modalTitle { font-size: 21px; font-weight: 800; background: transparent; }
+#modalFoot { background: #f4f7fe; border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; border-top: 1px solid #dbe4f7; }
+#tagBlue { background: #2554d8; color: #ffffff; border-radius: 4px; padding: 1px 6px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.5px; }
+#tagGrey { background: rgba(255,255,255,18%); color: #cbd5e1; border-radius: 4px; padding: 1px 6px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.5px; }
+#modeChip { background: #047857; color: #d1fae5; border-radius: 6px; padding: 2px 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; }
+#readyPill { background: #d1fae5; border: 1px solid #a7f3d0; border-radius: 14px; }
+#readyText { color: #065f46; font-weight: 700; font-size: 12px; background: transparent; }
 )");
 }
 

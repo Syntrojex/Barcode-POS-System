@@ -15,25 +15,46 @@
 #include "AppState.h"
 #include "UserRole.h"
 #include <QString>
+#include <QVector>
 
 class QWidget;
 
 namespace Dialogs
 {
+    /** What the payment dialog needs to know about the order being settled. */
+    struct PaymentRequest
+    {
+        QString orderId;                // e.g. "26110122"
+        QString customer, contact;
+        QVector<ReceiptLine> lines;     // cart lines; per-unit discount = the product's own discount only (Pricing.h adds the rest)
+    };
+
+    /** What the cashier chose in the payment dialog. */
+    struct PaymentResult
+    {
+        QString mode;              // "Cash" | "Card" | "Wallet"
+        QString merchant;          // gateway / wallet name for Card and Wallet
+        double tendered = 0;       // cash received (Cash only)
+        double specialPercent = 0; // special discount typed in the dialog, 0..8 (Pricing::clampSpecial)
+    };
+
     /**
-     * @brief Launches the payment settlement dialog allowing the cashier to complete an order.
-     *
-     * Provides radio options for Cash, Card, and Wallet. Dynamically adjusts input fields
-     * to accept tendered cash (calculating live change) or bank/merchant provider name.
-     *
-     * @param[in] parent Owning parent widget for modal centering.
-     * @param[in] total Total bill amount payable in PKR.
-     * @param[out] mode Selected payment method string ("Cash", "Card", "Wallet").
-     * @param[out] tendered Physical currency amount entered if Cash mode was selected.
-     * @param[out] merchant Bank or digital wallet identifier if Card/Wallet mode was selected.
-     * @return True if customer confirmed payment; false if checkout was cancelled.
+     * @brief "Complete Order Payment": billing breakdown (item / seasonal / special discount, tax), tender mode,
+     *        cash numpad with quick-tender keys, balance to return. Returns false when cancelled.
      */
-    bool payment(QWidget *parent, double total, QString &mode, double &tendered, QString &merchant);
+    bool payment(QWidget *parent, const PaymentRequest &req, PaymentResult &res);
+
+    /**
+     * @brief "Manager Approval Required": a paid order may only be edited (within 7 days of payment) after a manager
+     *        signs it off. Returns true when approved; fills the manager's name and the audit reason.
+     */
+    bool managerApproval(QWidget *parent, const OrderRecord &order, QString *managerName, QString *reason);
+
+    /**
+     * @brief "Add New Product to Catalog" (existing == nullptr) or edit an existing product: category, specifications,
+     *        EAN-8 barcode generator. Saves through AppState::addProduct / updateProduct. Returns true if saved.
+     */
+    bool editProduct(QWidget *parent, const ProductInfo *existing);
 
     /**
      * @brief Displays a clean printable-style receipt preview dialog for a finalized order.

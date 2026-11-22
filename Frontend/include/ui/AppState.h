@@ -8,6 +8,7 @@
 #include "billing/BillRepository.h"
 #include <memory>
 #include <QDateTime>
+#include <QMap>
 #include <QObject>
 #include <QPair>
 #include <QSet>
@@ -54,8 +55,15 @@ struct OrderRecord
     QDateTime time;
     QString customer, contact, tier, payment, merchant, status, shift;
     QVector<ReceiptLine> lines;
-    double subtotal = 0, discount = 0, tax = 0, total = 0; // total = subtotal - discount + tax
-    double tendered = 0;
+    double subtotal = 0, discount = 0, tax = 0, total = 0; // total = subtotal - discount + tax; discount = ALL discounts
+    double tendered = 0; // amount received (cash); 0 for card / wallet
+    // Breakdown of `discount` (known for orders paid in this session; bills reloaded from disk only keep the total,
+    // because the Increment 2 Bill.txt stores one discount per line - see Pricing.h).
+    double seasonal = 0, special = 0;
+    double seasonalPercent = 0, specialPercent = 0;
+    QString seasonName;
+    double itemDiscount() const { return discount - seasonal - special; }
+    double change() const { return tendered > total ? tendered - total : 0.0; } // balance returned
     int itemCount() const;
     void recompute();
     QString summary() const; // "3 items  Milk, Bread, +1"
@@ -90,6 +98,23 @@ public:
     void reorder(int productId);
     void reorderAllLow();
     static QString locateDataDir();
+    QString dataDir() const; // folder that holds Product.txt, Order.txt, Bill.txt, barcodes/
+    void reloadAll();        // re-read Product.txt, Order.txt, OrderDetail.txt and Bill.txt (after an external change)
+
+    // ---- manager: catalogue and inventory (written to Product.txt with the backend's ProductFileWriter) ----
+    int nextProductId() const;
+    // 8-digit barcode "cc" + 5-digit serial + EAN-8 check digit for category `categoryId`; empty if that category is full.
+    QString nextBarcode(const QString &categoryId) const;
+    int nextSerial(const QString &categoryId) const; // the serial nextBarcode() will use
+    // True when the Increment 2 backend would accept a barcode with this 2-digit prefix (it only allows 01-09 today:
+    // "a product barcode starts with 0 and never with 00"). Used by the Categories page to refuse unusable ids.
+    bool backendAcceptsPrefix(const QString &categoryId) const;
+    // Empty when `p` may be saved; otherwise the first problem (backend ProductValidator + duplicate barcode/acronym).
+    QString validateProduct(const ProductInfo &p, bool isNew) const;
+    bool addProduct(ProductInfo &p, QString *error = nullptr);          // p.id 0 = assign the next id; writes the barcode PNG
+    bool updateProduct(const ProductInfo &p, QString *error = nullptr); // matched by p.id
+    // Inventory commit: productId -> new available quantity. All-or-nothing; saved to Product.txt.
+    bool setStockLevels(const QMap<int, int> &levels, QString *error = nullptr);
 
     // ---- orders ----
     const QVector<OrderRecord> &orders() const { return m_orders; } // newest first

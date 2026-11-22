@@ -13,10 +13,12 @@
  */
 
 #include "AppState.h"
+#include "UserRole.h"
 #include <QVector>
 #include <QWidget>
 #include <optional>
 
+class QHBoxLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -60,9 +62,30 @@ public slots:
     /** @brief Discards the current cart and resets the interface for a new customer transaction. */
     void newDraft();
 
+    /** @brief Opens the Product Description for the product on screen (F4). */
+    void describeCurrent();
+
+    /** @brief Puts the current order on hold (parked in UiStore) and starts a fresh one (F2). One press, no dialog. */
+    void holdOrder();
+
+    /** @brief Resumes a parked (on-hold) order by its code, e.g. "HLD-108" (click on the parked strip). */
+    void resumeParked(const QString& code);
+
+    /**
+     * @brief Opens an existing order in this screen for editing. Called after the manager approved the edit of a paid
+     *        order (Orders page) or when resuming an in-progress order. The screen shows an "Editing order" banner.
+     */
+    void loadOrderForEdit(const QString& orderId);
+
+    /** @brief Role of the signed-in user (Manager may also approve edits on the spot). */
+    void setRole(UserRole role);
+
 signals:
     /** @brief Emits a transient user notification toast message on the main window. */
     void toast(const QString& message);
+
+    /** @brief A bill was just created for this order: the shell opens it on the Bills page ("New Order [Space]" there). */
+    void billReady(const QString& orderId);
 
 private:
     /**
@@ -76,6 +99,7 @@ private:
     };
 
     QWidget* buildCustomerStrip();
+    QWidget* buildParkedStrip(); ///< "Parked (n)" chips of the orders on hold
     QWidget* buildLeft();
     QWidget* buildRight();
     void setPreview(const std::optional<ProductInfo>& p);
@@ -85,7 +109,11 @@ private:
     void rebuildTable();
     void updateTotals();
     void loadDemoDraft();
+    void rebuildParked();        ///< redraws the on-hold chips (also keeps the "4m ago" texts fresh)
+    QVector<ReceiptLine> cartLines() const;
 
+    UserRole m_role = UserRole::Cashier;
+    QString m_editingId; ///< order opened for editing from the Orders page; empty while recording a new order
     QVector<CartLine> m_cart;
     std::optional<ProductInfo> m_preview;
     int m_nextCustomLine = 1;
@@ -113,4 +141,8 @@ private:
     QLabel* m_tax;
     QLabel* m_total;
     QPushButton* m_checkout;
+    QPushButton* m_hold;
+    QLabel* m_parkTitle;
+    QLabel* m_parkEmpty;
+    QHBoxLayout* m_parkChips;
 };
