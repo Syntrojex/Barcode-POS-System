@@ -302,17 +302,14 @@ endif()
 # FRONTEND
 # ============================================================
 
-set(UI_SOURCES
-    Frontend/src/ui/AppState.cpp
-    Frontend/src/ui/DarkModeManager.cpp
-    Frontend/src/ui/DashboardPage.cpp
-    Frontend/src/ui/Dialogs.cpp
-    Frontend/src/ui/MainWindow.cpp
-    Frontend/src/ui/NavigationModel.cpp
-    Frontend/src/ui/OtherPages.cpp
-    Frontend/src/ui/RecordOrderPage.cpp
-    Frontend/src/ui/Theme.cpp
-    Frontend/src/ui/Widgets.cpp
+# Every page / dialog lives in its own file under Frontend/src/ui. New files are picked up automatically
+# (re-run CMake). main.cpp, CameraWidget.cpp and POSWindow.cpp there are legacy stand-alone files.
+file(GLOB UI_SOURCES CONFIGURE_DEPENDS
+    Frontend/src/ui/*.cpp
+)
+
+list(FILTER UI_SOURCES EXCLUDE REGEX
+    "/(main|CameraWidget|POSWindow)\\.cpp$"
 )
 
 file(GLOB UI_HEADERS CONFIGURE_DEPENDS

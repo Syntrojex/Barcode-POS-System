@@ -1,4 +1,5 @@
 #include "AppState.h"
+#include "BarcodeArt.h"
 #include "integration/ProductAdapter.h"
 #include "billing/BillingService.h"
 #include <QCoreApplication>
@@ -232,6 +233,7 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
 
     m_orderManager->clearCart();
     std::map<std::string, bh::order::ProductSnapshot> manualProducts;
+    std::map<std::string, double> lineDiscount; // product id -> per-unit discount incl. seasonal/special (Pricing.h)
     std::map<int, int> stockToDeduct;
     for (const auto& line : o.lines)
     {
@@ -242,6 +244,8 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
             if (!p || QString::fromStdString(p->getAcronym()) != line.acronym)
                 return fail("A product in the order no longer exists. Refresh and retry.");
             snapshot = bh::integration::toSnapshot(*p);
+            snapshot.discountPerUnit = line.discount; // product discount + folded seasonal/special discount
+            lineDiscount[snapshot.productId] = line.discount;
             stockToDeduct[line.productId] += line.qty;
         }
         else
@@ -313,12 +317,17 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
     }
 
     bh::billing::BillingService service(*m_orderManager, *m_billRepository,
-        [this, &manualProducts](const std::string& id, bh::order::ProductSnapshot& snapshot) {
+        [this, &manualProducts, &lineDiscount](const std::string& id, bh::order::ProductSnapshot& snapshot) {
             const auto custom = manualProducts.find(id);
             if (custom != manualProducts.end()) { snapshot = custom->second; return true; }
             try {
                 const Product* p = m_manager.searchByID(std::stoi(id));
-                if (p) { snapshot = bh::integration::toSnapshot(*p); return true; }
+                if (p) {
+                    snapshot = bh::integration::toSnapshot(*p);
+                    const auto d = lineDiscount.find(id);
+                    if (d != lineDiscount.end()) snapshot.discountPerUnit = d->second;
+                    return true;
+                }
             }
             catch (...) {}
             return false;
@@ -343,6 +352,7 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
     o.subtotal = bill.totals.withoutTax;
     o.discount = bill.totals.discount;
     o.tax = bill.totals.tax;
+    o.status = "Paid";
     refreshCache();
     refreshOrders();
     // The current session knows the manual item descriptions even if the catalogue doesn't.
@@ -430,4 +440,213 @@ void AppState::refreshOrders()
         m_orders.push_back(std::move(rec));
     }
     std::sort(m_orders.begin(), m_orders.end(), [](const OrderRecord& a, const OrderRecord& b) { return a.time > b.time; });
+}
+
+// ======================================================================== data directory / reload
+QString AppState::dataDir() const
+{
+    return m_productPath.isEmpty() ? QString() : QFileInfo(m_productPath).absolutePath();
+}
+
+void AppState::reloadAll()
+{
+    if (!m_productPath.isEmpty())
+        m_manager.loadProducts(m_productPath.toStdString());
+    refreshCache();
+    refreshOrders();
+    emit changed();
+}
+
+// ======================================================================== catalogue (manager)
+namespace
+{
+    Product toProduct(const ProductInfo& p, const QString& barcodeFile)
+    {
+        MeasurementUnit unit = MeasurementUnit::Count;
+        parseMeasurementUnit(p.unit.toStdString(), unit);
+        return Product(p.id, p.ean.toStdString(), p.sku.toStdString(), p.name.toStdString(), unit, p.price, p.tax,
+                       p.discount, p.stock, barcodeFile.toStdString());
+    }
+}
+
+int AppState::nextProductId() const
+{
+    int maxId = 0;
+    for (const auto& p : m_products)
+        maxId = qMax(maxId, p.id);
+    return maxId + 1;
+}
+
+int AppState::nextSerial(const QString& categoryId) const
+{
+    int maxSerial = 0;
+    for (const auto& p : m_products)
+        if (p.ean.size() == 8 && p.ean.left(2) == categoryId)
+            maxSerial = qMax(maxSerial, p.ean.mid(2, 5).toInt());
+    return maxSerial + 1;
+}
+
+QString AppState::nextBarcode(const QString& categoryId) const
+{
+    if (categoryId.size() != 2)
+        return QString();
+    int serial = nextSerial(categoryId);
+    while (serial <= 99999)
+    {
+        const QString code = BarcodeArt::makeCode(categoryId, serial);
+        bool taken = false;
+        for (const auto& p : m_products)
+            if (p.ean == code) { taken = true; break; }
+        if (!taken)
+            return code;
+        ++serial;
+    }
+    return QString();
+}
+
+bool AppState::backendAcceptsPrefix(const QString& categoryId) const
+{
+    const QString code = BarcodeArt::makeCode(categoryId, 1);
+    if (code.isEmpty())
+        return false;
+    const Product probe(1, code.toStdString(), "PROBE", "Probe", MeasurementUnit::Count, 1, 0, 0, 0, "data/barcodes/probe.png");
+    return ProductValidator::standard().validate(probe).ok();
+}
+
+QString AppState::validateProduct(const ProductInfo& p, bool isNew) const
+{
+    if (p.name.trimmed().isEmpty())
+        return "Product name is required.";
+    if (p.sku.trimmed().isEmpty())
+        return "Acronym is required.";
+    if (p.ean.isEmpty())
+        return "Generate a barcode first.";
+    const Product candidate = toProduct(p, "data/barcodes/" + p.ean + ".png");
+    const ValidationReport report = ProductValidator::standard().validate(candidate);
+    if (!report.ok())
+        return QString::fromStdString(report.errors.front());
+    for (const auto& o : m_products)
+    {
+        if (!isNew && o.id == p.id)
+            continue;
+        if (o.ean == p.ean)
+            return QString("Barcode %1 already belongs to \"%2\".").arg(p.ean, o.name);
+        if (o.sku.compare(p.sku, Qt::CaseInsensitive) == 0)
+            return QString("Acronym %1 is already used by \"%2\".").arg(p.sku.toUpper(), o.name);
+    }
+    return QString();
+}
+
+namespace
+{
+    // Saves `products` to Product.txt; on failure puts the previous file content back.
+    bool saveCatalogue(const std::string& path, const std::vector<Product>& products, QString* error)
+    {
+        QFile f(QString::fromStdString(path));
+        QByteArray backup;
+        if (f.open(QIODevice::ReadOnly)) { backup = f.readAll(); f.close(); }
+        std::string why;
+        if (ProductFileWriter().save(path, products, &why))
+            return true;
+        if (!backup.isEmpty())
+        {
+            QSaveFile restore(QString::fromStdString(path));
+            if (restore.open(QIODevice::WriteOnly)) { restore.write(backup); restore.commit(); }
+        }
+        if (error) *error = "Could not save Product.txt: " + QString::fromStdString(why);
+        return false;
+    }
+}
+
+bool AppState::addProduct(ProductInfo& p, QString* error)
+{
+    if (m_productPath.isEmpty())
+    {
+        if (error) *error = "Product.txt was not found.";
+        return false;
+    }
+    if (p.id <= 0)
+        p.id = nextProductId();
+    p.sku = p.sku.trimmed().toUpper();
+    p.name = p.name.trimmed();
+    const QString problem = validateProduct(p, true);
+    if (!problem.isEmpty())
+    {
+        if (error) *error = problem;
+        return false;
+    }
+    const QString rel = "data/barcodes/" + p.ean + ".png";
+    QString imgError;
+    if (!BarcodeArt::savePng(p.ean, QDir(m_root).filePath(rel), &imgError))
+    {
+        if (error) *error = imgError;
+        return false;
+    }
+    std::vector<Product> all = m_manager.getProducts();
+    all.push_back(toProduct(p, rel));
+    if (!saveCatalogue(m_productPath.toStdString(), all, error))
+        return false;
+    m_manager.loadProducts(m_productPath.toStdString());
+    refreshCache();
+    refreshOrders();
+    emit changed();
+    return true;
+}
+
+bool AppState::updateProduct(const ProductInfo& p, QString* error)
+{
+    ProductInfo q = p;
+    q.sku = q.sku.trimmed().toUpper();
+    q.name = q.name.trimmed();
+    const QString problem = validateProduct(q, false);
+    if (!problem.isEmpty())
+    {
+        if (error) *error = problem;
+        return false;
+    }
+    std::vector<Product> all = m_manager.getProducts();
+    bool found = false;
+    for (auto& e : all)
+        if (e.getProductID() == q.id)
+        {
+            e = toProduct(q, QString::fromStdString(e.getBarcodeFilePath()));
+            found = true;
+        }
+    if (!found)
+    {
+        if (error) *error = "That product no longer exists.";
+        return false;
+    }
+    if (!saveCatalogue(m_productPath.toStdString(), all, error))
+        return false;
+    m_manager.loadProducts(m_productPath.toStdString());
+    refreshCache();
+    refreshOrders();
+    emit changed();
+    return true;
+}
+
+bool AppState::setStockLevels(const QMap<int, int>& levels, QString* error)
+{
+    std::vector<Product> all = m_manager.getProducts();
+    for (auto& e : all)
+    {
+        const auto it = levels.constFind(e.getProductID());
+        if (it == levels.constEnd())
+            continue;
+        if (it.value() < 0)
+        {
+            if (error) *error = "Quantity cannot be negative.";
+            return false;
+        }
+        ProductInfo info = ProductInfo::from(e, m_root);
+        info.stock = it.value();
+        e = toProduct(info, QString::fromStdString(e.getBarcodeFilePath()));
+    }
+    if (!saveCatalogue(m_productPath.toStdString(), all, error))
+        return false;
+    m_manager.loadProducts(m_productPath.toStdString());
+    refreshCache();
+    emit changed();
+    return true;
 }
