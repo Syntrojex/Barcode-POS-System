@@ -1,3 +1,4 @@
+#include <iterator>
 #include "InventoryPage.h"
 #include "Theme.h"
 #include "UiKit.h"
@@ -148,7 +149,7 @@ void InventoryPage::rebuild()
         bool found = false;
         for (const auto &p : st.products())
             if (p.id == it.key()) { found = true; break; }
-        it = found ? it + 1 : m_edits.erase(it);
+        it = found ? std::next(it) : m_edits.erase(it);
     }
 
     int low = 0, out = 0;
