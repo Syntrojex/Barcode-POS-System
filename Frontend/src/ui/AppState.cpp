@@ -362,6 +362,85 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
     return true;
 }
 
+int AppState::editDaysLeft(const OrderRecord& o) const
+{
+    if (o.status != "Paid")
+        return -1;
+    const qint64 window = qint64(kEditWindowDays) * 86400;
+    const qint64 secs = o.time.secsTo(QDateTime::currentDateTime());
+    if (secs > window)
+        return 0;
+    return qBound(1, int((window - secs + 86399) / 86400), kEditWindowDays);
+}
+
+bool AppState::replaceOrder(const QString& oldId, OrderRecord& neu, QString* error)
+{
+    auto fail = [&](const QString& why) {
+        if (error) *error = why;
+        return false;
+        };
+    if (error) error->clear();
+    if (!m_orderManager)
+        return fail("Data directory is unavailable.");
+    OrderRecord old;
+    bool found = false;
+    for (const auto& o : m_orders)
+        if (o.id == oldId) { old = o; found = true; break; }
+    if (!found)
+        return fail("The order to replace was not found.");
+    if (old.status == "Archived")
+        return fail("That order is already archived.");
+    if (old.status == "Paid" && editDaysLeft(old) == 0)
+        return fail("The 7-day edit window of this order is over.");
+
+    // 1. a paid order has taken its stock: give it back so the edited order can use it again
+    QMap<int, int> before, restored;
+    if (old.status == "Paid")
+    {
+        for (const auto& l : old.lines)
+        {
+            if (l.productId <= 0)
+                continue;
+            const Product* p = m_manager.searchByID(l.productId);
+            if (!p)
+                continue;
+            if (!before.contains(l.productId))
+                before[l.productId] = p->getAvailableQuantity();
+            restored[l.productId] = restored.value(l.productId, before[l.productId]) + l.qty;
+        }
+        QString stockError;
+        if (!restored.isEmpty() && !setStockLevels(restored, &stockError))
+            return fail(stockError);
+    }
+
+    // 2. check out the edited order like any other
+    QString addError;
+    if (!addOrder(neu, &addError))
+    {
+        if (!before.isEmpty())
+            setStockLevels(before, nullptr);
+        return fail(addError);
+    }
+
+    // 3. archive the old order (its bill stays on file)
+    std::string why;
+    barcodehub::order::Order record;
+    if (m_orderManager->findOrder(oldId.toStdString(), record, &why))
+    {
+        record.status = barcodehub::order::OrderStatus::Archived;
+        if (!m_orderManager->updateOrder(record, &why))
+        {
+            refreshOrders();
+            emit changed();
+            if (error) *error = "The new order was saved, but the old order could not be archived: " + QString::fromStdString(why);
+            return true;
+        }
+    }
+    refreshOrders();
+    emit changed();
+    return true;
+}
+
 void AppState::refreshOrders()
 {
     m_orders.clear();

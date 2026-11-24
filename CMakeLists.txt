@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
     # Qt 6 needs a correct __cplusplus value; also read sources as UTF-8.
-    add_compile_options(/Z-c:__cplusplus /utf-8 /permissive-)
+    add_compile_options(/Zc:__cplusplus /utf-8 /permissive-)
 endif()
 
 option(BACKEND_ONLY "Build backend and tests without Qt" OFF)
@@ -318,10 +318,8 @@ file(GLOB UI_SOURCES CONFIGURE_DEPENDS
     Frontend/src/ui/*.cpp
 )
 
-# Legacy stand-alone files are skipped. [Mm]ain also matches the old Main.cpp test window,
-# which includes CameraWidget.h (needs OpenCV) and has its own main().
 list(FILTER UI_SOURCES EXCLUDE REGEX
-    "/([Mm]ain|CameraWidget|POSWindow)\\.cpp$"
+    "/(main|CameraWidget|POSWindow)\\.cpp$"
 )
 
 file(GLOB UI_HEADERS CONFIGURE_DEPENDS

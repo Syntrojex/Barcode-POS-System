@@ -340,3 +340,21 @@ bool UiStore::verifyManager(const QString &staffId, const QString &pin, QString 
         *managerName = demoManagerName();
     return ok;
 }
+
+// ---------------------------------------------------------------- approvals for editing paid orders
+void UiStore::grantApproval(const QString &orderId, const QString &manager, const QString &reason)
+{
+    m_approvals[orderId] = Approval{manager, reason, QDateTime::currentDateTime()};
+}
+
+bool UiStore::approvalFor(const QString &orderId, Approval *out) const
+{
+    const auto it = m_approvals.constFind(orderId);
+    if (it == m_approvals.constEnd())
+        return false;
+    if (out)
+        *out = it.value();
+    return true;
+}
+
+void UiStore::revokeApproval(const QString &orderId) { m_approvals.remove(orderId); }

@@ -6,6 +6,7 @@
 #include "AppState.h"
 #include <QDate>
 #include <QDateTime>
+#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -82,6 +83,11 @@ public:
     static QString demoManagerId() { return QStringLiteral("MGR-004"); }
     static QString demoManagerName() { return QStringLiteral("Salman Tariq"); }
     static QString demoManagerPin() { return QStringLiteral("1234"); }
+    // Approvals given on the Orders page for editing a paid order (kept for this session, consumed on use).
+    struct Approval { QString manager, reason; QDateTime at; };
+    void grantApproval(const QString &orderId, const QString &manager, const QString &reason);
+    bool approvalFor(const QString &orderId, Approval *out = nullptr) const;
+    void revokeApproval(const QString &orderId);
     bool verifyManager(const QString &staffId, const QString &pin, QString *managerName = nullptr) const;
 
 signals:
@@ -98,5 +104,6 @@ private:
     QVector<Category> m_categories;
     QVector<Season> m_seasons;
     QVector<ParkedOrder> m_parked;
+    QMap<QString, Approval> m_approvals;
     int m_nextHold = 109;
 };

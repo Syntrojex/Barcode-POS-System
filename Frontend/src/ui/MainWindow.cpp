@@ -18,10 +18,7 @@
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QHBoxLayout>
-#include <QMenu>
 #include <QMessageBox>
-#include <QToolButton>
-#include <QWidgetAction>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QTimer>
@@ -121,8 +118,6 @@ MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
             { if (goTo(RecordOrder)) m_record->showCode(ean, true); });
 
     connect(m_orders, &OrdersPage::resumeOrder, this, &MainWindow::openOrderForEdit);
-    connect(m_orders, &OrdersPage::resumeParked, this, [this](const QString &code)
-            { if (goTo(RecordOrder)) m_record->resumeParked(code); });
     connect(m_orders, &OrdersPage::editOrder, this, &MainWindow::openOrderForEdit);
     connect(m_orders, &OrdersPage::showBill, this, &MainWindow::showBillFor);
 
@@ -217,7 +212,34 @@ QWidget *MainWindow::buildSidebar()
         connect(b, &QPushButton::clicked, this, [this, i] { goTo(i); });
     }
 
-    v->addStretch(); // user details + log out are in the top-right user menu
+    v->addStretch();
+    auto *user = W::card(sb, "userCard");
+    auto *uv = new QVBoxLayout(user);
+    uv->setContentsMargins(10, 9, 10, 10);
+    uv->setSpacing(8);
+    auto *uh = new QHBoxLayout;
+    uh->setSpacing(10);
+    auto *av = new QLabel(m_userName.left(2).toUpper());
+    av->setObjectName("avatar");
+    av->setFixedSize(34, 34);
+    av->setAlignment(Qt::AlignCenter);
+    uh->addWidget(av);
+    auto *un = new QVBoxLayout;
+    un->setSpacing(0);
+    un->addWidget(W::label(m_userName, "userName"));
+    un->addWidget(W::label(RolePolicy::title(m_role), "userRole"));
+    uh->addLayout(un, 1);
+    uv->addLayout(uh);
+    auto *mode = chipLabel(RolePolicy::name(m_role).toUpper() + " MODE", "modeChip");
+    uv->addWidget(mode, 0, Qt::AlignLeft);
+    auto *logoutB = new QPushButton("  Log out");
+    logoutB->setObjectName("exitBtn");
+    logoutB->setIcon(Theme::icon("logout", QColor("#c9d3ee"), 16));
+    logoutB->setCursor(Qt::PointingHandCursor);
+    uv->addWidget(logoutB);
+    v->addWidget(user);
+    connect(logoutB, &QPushButton::clicked, this, [this]
+            { m_loggedOut = true; if (!close()) m_loggedOut = false; });
     return sb;
 }
 
@@ -239,6 +261,14 @@ QWidget *MainWindow::buildTopBar()
 
     h->addStretch();
 
+    auto *cur = new QFrame;
+    cur->setObjectName("chip");
+    auto *curH = new QHBoxLayout(cur);
+    curH->setContentsMargins(14, 7, 14, 9);
+    curH->setSpacing(6);
+    curH->addWidget(W::label("CURRENCY", "caption"));
+    curH->addWidget(W::label("PKR", "clockTime"));
+    h->addWidget(cur, 0, Qt::AlignVCenter);
 
     auto *chip = new QFrame;
     chip->setObjectName("chip");
@@ -262,10 +292,10 @@ QWidget *MainWindow::buildTopBar()
                 AppState::instance().emitChanged(); // rebuild tables so their text colours match the theme
             });
 
-    // User button (top right): shows the initials; click it for name, role and Log out.
-    auto *avatar = new QToolButton;
+    auto *avatar = new QLabel;
     avatar->setObjectName("topAvatar");
     avatar->setFixedSize(36, 36);
+<<<<<<< HEAD
     avatar->setText(m_userName.left(2).toUpper());
     avatar->setCursor(Qt::PointingHandCursor);
     avatar->setToolTip(m_userName + " (" + RolePolicy::name(m_role) + ")");
@@ -298,6 +328,10 @@ QWidget *MainWindow::buildTopBar()
     connect(logout, &QAction::triggered, this, [this]
             { m_loggedOut = true; if (!close()) m_loggedOut = false; });
     avatar->setMenu(menu);
+=======
+    avatar->setAlignment(Qt::AlignCenter);
+    avatar->setPixmap(Theme::iconPixmap("user", QColor("white"), 18));
+>>>>>>> be434a4b20a77502664cedba4647512c83bc9a5f
     h->addWidget(avatar, 0, Qt::AlignVCenter);
 
     auto *timer = new QTimer(this);

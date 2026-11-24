@@ -23,12 +23,6 @@ All notable changes to **BarcodeHub** are documented in this file.
 - Add management reports: incomplete orders, completed orders, cash sales, all sales, top ten most sold items, and top ten items by remaining stock.
 - Provide separate cashier and manager features in the user interface.
 
-### UI progress (front end only, back end unchanged)
-
-- Orders page: "Editable for N days" badge on paid orders (7-day window, amber for the last 3 days, "Window closed" afterwards), **Open** for paid orders (manager approval for cashiers) and **Resume** for in-progress and on-hold orders, including orders parked with F2.
-- Record Order: opening an existing order loads it into the cart ("editing" mode). Saving edits to an existing order is not wired yet because it needs the Increment 3 back end.
-- Reports page: six tabs (incomplete orders, completed orders, cash sales with daily/weekly/monthly/yearly/custom range, all sales, top 10 sold, top 10 by remaining stock) with summary tiles, totals, CSV export and PDF print.
-
 ### Development Notes
 
 - Increment 3 builds on the Point of Sale system from Increment 2.
