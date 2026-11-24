@@ -1,6 +1,5 @@
 #pragma once
-// Design tokens from the SmartPOS Desktop design system (Stitch DESIGN.md),
-// plus the application style sheet and a small set of painter-drawn icons.
+// Shared Syntro-Check POS colors, application stylesheet, and painter-drawn icons.
 #include <QColor>
 #include <QIcon>
 #include <QPixmap>
@@ -8,16 +7,17 @@
 
 namespace Theme
 {
-    inline const QColor surface("#f4f7fe");
-    inline const QColor surfaceLow("#eff4ff");
-    inline const QColor surfaceContainer("#e5eeff");
-    inline const QColor surfaceHigh("#dce9ff");
-    inline const QColor onSurface("#0f1b33");
-    inline const QColor onSurfaceVariant("#5b6781");
-    inline const QColor outline("#8a94ab");
-    inline const QColor outlineVariant("#c3c6d7");
+    inline const QColor surface("#f5f7fb");
+    inline const QColor surfaceLow("#f8fafc");
+    inline const QColor surfaceContainer("#edf1f7");
+    inline const QColor surfaceHigh("#e3e9f3");
+    inline const QColor onSurface("#18243a");
+    inline const QColor onSurfaceVariant("#526078");
+    inline const QColor outline("#79869b");
+    inline const QColor outlineVariant("#dce2eb");
+    inline const QColor sidebar("#172443");
     inline const QColor primary("#2554d8");
-    inline const QColor primaryContainer("#3f7bf6");
+    inline const QColor primaryContainer("#eaf0ff");
     inline const QColor tertiary("#006329");
     inline const QColor tertiaryFixed("#7ffc97");
     inline const QColor error("#ba1a1a");
