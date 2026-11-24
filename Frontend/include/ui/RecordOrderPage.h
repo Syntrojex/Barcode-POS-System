@@ -18,6 +18,7 @@
 #include <QWidget>
 #include <optional>
 
+class QFrame;
 class QHBoxLayout;
 class QLabel;
 class QLineEdit;
@@ -99,6 +100,8 @@ private:
     };
 
     QWidget* buildCustomerStrip();
+    QWidget* buildEditBanner();  ///< amber "Editing order #..." bar (hidden unless an order is being edited)
+    void setEditMode(const QString& orderId, const QString& text); ///< empty id = leave edit mode
     QWidget* buildParkedStrip(); ///< "Parked (n)" chips of the orders on hold
     QWidget* buildLeft();
     QWidget* buildRight();
@@ -113,7 +116,6 @@ private:
     QVector<ReceiptLine> cartLines() const;
 
     UserRole m_role = UserRole::Cashier;
-    QString m_editingId; ///< order opened for editing from the Orders page; empty while recording a new order
     QVector<CartLine> m_cart;
     std::optional<ProductInfo> m_preview;
     int m_nextCustomLine = 1;
@@ -145,4 +147,7 @@ private:
     QLabel* m_parkTitle;
     QLabel* m_parkEmpty;
     QHBoxLayout* m_parkChips;
+    QFrame* m_editBanner = nullptr;
+    QLabel* m_editText = nullptr;
+    QString m_editingId; ///< order being edited (empty = a normal new order)
 };
