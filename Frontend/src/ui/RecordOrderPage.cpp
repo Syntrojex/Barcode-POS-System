@@ -54,6 +54,7 @@ namespace
 RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
 {
     auto* root = W::pageLayout(this);
+    root->addWidget(buildEditBanner());
     root->addWidget(buildCustomerStrip());
     auto* body = new QHBoxLayout;
     body->setSpacing(0);
@@ -551,7 +552,7 @@ void RecordOrderPage::loadDemoDraft()
 
 void RecordOrderPage::newDraft()
 {
-    m_editingId.clear();
+    setEditMode(QString(), QString());
     m_cart.clear();
     setPreview(std::nullopt);
     rebuildTable();
@@ -564,13 +565,6 @@ void RecordOrderPage::checkout()
     if (m_cart.isEmpty())
     {
         emit toast("The order is empty");
-        return;
-    }
-    if (!m_editingId.isEmpty())
-    {
-        // Front-end only for now: saving edits to an existing order (Order.txt / Bill.txt / stock) arrives with the
-        // Increment 3 back-end. Nothing is written, so no duplicate order is created.
-        emit toast("Saving edits to order #" + m_editingId + " needs the Increment 3 back-end - nothing was changed");
         return;
     }
     OrderRecord o;
@@ -600,18 +594,29 @@ void RecordOrderPage::checkout()
     o.status = "Paid";
     o.shift = "POS #04 • Shift A";
     QString checkoutError;
-    if (!AppState::instance().addOrder(o, &checkoutError))
+    const QString editedId = m_editingId;
+    const bool saved = editedId.isEmpty() ? AppState::instance().addOrder(o, &checkoutError)
+                                          : AppState::instance().replaceOrder(editedId, o, &checkoutError);
+    if (!saved)
     {
         emit toast(checkoutError);
         return;
     }
+    if (!editedId.isEmpty())
+    {
+        UiStore::instance().revokeApproval(editedId);
+        setEditMode(QString(), QString());
+    }
+    if (!checkoutError.isEmpty())
+        emit toast(checkoutError); // saved, with a warning (e.g. the old order could not be archived)
 
     Dialogs::receipt(this, o);
     m_cart.clear();
     setPreview(std::nullopt);
     rebuildTable();
     m_sessionId->setText("#" + AppState::instance().nextOrderId());
-    emit toast("Order " + o.id + " paid - " + W::money(o.total));
+    emit toast(editedId.isEmpty() ? "Order " + o.id + " paid - " + W::money(o.total)
+                                  : "Order " + editedId + " replaced by " + o.id + " (old order archived) - " + W::money(o.total));
 }
 // ---- placeholder bodies for the Increment 3 actions (the redesigned screen replaces them) ----
 void RecordOrderPage::setRole(UserRole role) { m_role = role; }
@@ -704,13 +709,17 @@ void RecordOrderPage::rebuildParked()
 
 void RecordOrderPage::holdOrder()
 {
+    if (!m_editingId.isEmpty())
+    {
+        emit toast("Finish or cancel the edit of order " + m_editingId + " first - it cannot be put on hold");
+        return;
+    }
     if (m_cart.isEmpty())
     {
         emit toast("Nothing to hold - the order is empty");
         return;
     }
     const QString code = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines());
-    m_editingId.clear();
     m_cart.clear();
     m_customer->clear();
     m_contact->clear();
@@ -731,13 +740,8 @@ void RecordOrderPage::resumeParked(const QString& code)
     }
     // A cart that is not empty is parked first (swap), so nothing is lost and no question is asked.
     QString swapped;
-    if (!m_cart.isEmpty() && m_editingId.isEmpty())
+    if (!m_cart.isEmpty())
         swapped = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines());
-    if (!m_editingId.isEmpty()) // leaving an order that was open for editing
-    {
-        m_editingId.clear();
-        m_sessionId->setText("#" + AppState::instance().nextOrderId());
-    }
 
     m_cart.clear();
     int adjusted = 0;
@@ -776,43 +780,112 @@ void RecordOrderPage::resumeParked(const QString& code)
         msg += QString("  -  %1 line%2 changed because of stock").arg(adjusted).arg(adjusted == 1 ? "" : "s");
     emit toast(msg);
 }
-// Opens an existing order (paid + approved from the Orders page, or in progress) in the cart.
+
+// ---------------------------------------------------------------- editing an existing order (requirement 3)
+QWidget* RecordOrderPage::buildEditBanner()
+{
+    m_editBanner = new QFrame;
+    m_editBanner->setStyleSheet("QFrame#editBanner { background:#fff4d6; border:1px solid #ffe08f; border-radius:12px; }"
+                                "QFrame#editBanner QLabel { background:transparent; color:#5a3d00; }");
+    m_editBanner->setObjectName("editBanner");
+    auto* h = new QHBoxLayout(m_editBanner);
+    h->setContentsMargins(14, 8, 10, 8);
+    h->setSpacing(10);
+    h->addWidget(W::iconLabel("edit", QColor("#8a5a00"), 18));
+    m_editText = W::label("");
+    m_editText->setWordWrap(true);
+    m_editText->setStyleSheet("font-weight:700;");
+    h->addWidget(m_editText, 1);
+    auto* cancel = W::button("Cancel edit", "soft", "undo");
+    h->addWidget(cancel);
+    connect(cancel, &QPushButton::clicked, this, [this]
+        {
+            const QString id = m_editingId;
+            if (!id.isEmpty())
+                UiStore::instance().revokeApproval(id);
+            m_cart.clear();
+            newDraft();
+            emit toast("Edit of order " + id + " cancelled - nothing was changed"); });
+    m_editBanner->hide();
+    return m_editBanner;
+}
+
+void RecordOrderPage::setEditMode(const QString& orderId, const QString& text)
+{
+    m_editingId = orderId;
+    m_editText->setText(text);
+    m_editBanner->setVisible(!orderId.isEmpty());
+}
+
 void RecordOrderPage::loadOrderForEdit(const QString& orderId)
 {
-    const OrderRecord* found = nullptr;
-    for (const auto& o : AppState::instance().orders())
-        if (o.id == orderId)
-        {
-            found = &o;
-            break;
-        }
+    auto& app = AppState::instance();
+    OrderRecord order;
+    bool found = false;
+    for (const auto& o : app.orders())
+        if (o.id == orderId) { order = o; found = true; break; }
     if (!found)
     {
-        emit toast("Order #" + orderId + " was not found");
+        emit toast("Order " + orderId + " was not found");
         return;
     }
-    // Nothing is lost: a cart that is not empty is parked first, like when resuming a held order.
+    if (order.status == "Archived")
+    {
+        emit toast("Order " + orderId + " is archived and cannot be edited");
+        return;
+    }
+    UiStore::Approval approval;
+    if (order.status == "Paid")
+    {
+        if (app.editDaysLeft(order) <= 0)
+        {
+            emit toast("Order " + orderId + " can no longer be edited (7 days after payment are over)");
+            return;
+        }
+        if (!UiStore::instance().approvalFor(orderId, &approval))
+        {
+            emit toast("A manager's approval is needed to edit the paid order " + orderId);
+            return;
+        }
+    }
+
+    // a cart that is not empty is put on hold first, so nothing is lost
     QString swapped;
-    if (m_editingId.isEmpty() && !m_cart.isEmpty())
+    if (!m_cart.isEmpty() && m_editingId.isEmpty())
         swapped = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines());
 
     m_cart.clear();
-    for (const auto& line : found->lines)
-        for (const auto& p : AppState::instance().products())
-            if (line.productId > 0 ? p.id == line.productId : p.sku == line.acronym)
-            {
-                m_cart.push_back({ p, line.qty });
-                break;
-            }
-    m_editingId = orderId;
-    m_customer->setText(found->customer == "Walk-in Customer" ? QString() : found->customer);
-    m_contact->setText(found->contact == "-" ? QString() : found->contact);
-    m_sessionId->setText("#" + orderId + "  (editing)");
+    for (const auto& line : order.lines)
+    {
+        ProductInfo p;
+        bool inCatalogue = false;
+        if (line.productId > 0)
+            for (const auto& c : app.products())
+                if (c.id == line.productId) { p = c; inCatalogue = true; break; }
+        if (!inCatalogue) // manual line: keep what the bill says
+        {
+            p.id = 0;
+            p.sku = line.acronym;
+            p.name = line.name;
+            p.unit = "count";
+            p.price = line.price;
+            p.tax = line.tax;
+            p.discount = line.discount;
+            p.stock = 1000000;
+        }
+        m_cart.push_back({ p, line.qty });
+    }
+    m_customer->setText(order.customer == "Walk-in Customer" ? QString() : order.customer);
+    m_contact->setText(order.contact == "-" ? QString() : order.contact);
     setPreview(std::nullopt);
     rebuildTable();
+
+    if (order.status == "Paid")
+        setEditMode(orderId, QString("Editing paid order #%1  •  approved by %2 (%3)  •  saving creates a new order and archives #%1")
+                                 .arg(orderId, approval.manager, approval.reason));
+    else
+        setEditMode(orderId, QString("Resuming order #%1  •  saving creates the paid order and archives this draft").arg(orderId));
     focusInput();
-    QString msg = "Editing order #" + orderId;
-    if (!swapped.isEmpty())
-        msg += "  (previous order held as " + swapped + ")";
-    emit toast(msg);
+    emit toast(swapped.isEmpty() ? "Order " + orderId + " opened for editing"
+                                 : "Order " + orderId + " opened (previous order held as " + swapped + ")");
 }

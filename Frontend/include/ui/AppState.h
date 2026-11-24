@@ -120,6 +120,14 @@ public:
     const QVector<OrderRecord> &orders() const { return m_orders; } // newest first
     QString nextOrderId();
     bool addOrder(OrderRecord &o, QString *error = nullptr); // creates order, bill, updates stock; reports failures
+    // Editing a paid order (requirement 3): allowed for 7 days after payment, only after manager approval.
+    static constexpr int kEditWindowDays = 7;
+    // -1 = not a paid order (no window), 0 = the 7 days are over, 1..7 = days left (rounded up).
+    int editDaysLeft(const OrderRecord &o) const;
+    // Saves `replacement` as a NEW paid order and archives `oldId`. Uses only Increment 2 backend calls:
+    // stock of the old order is given back first (paid orders only), then the new order is checked out as usual;
+    // if that fails the stock is put back as it was and nothing changes.
+    bool replaceOrder(const QString &oldId, OrderRecord &replacement, QString *error = nullptr);
     double salesToday() const { return m_baseSales + m_sessionSales; }
     int ordersToday() const { return m_baseOrders + m_sessionOrders; }
 

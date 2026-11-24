@@ -131,11 +131,13 @@ Bar-Code-System-CPP/
 ├── tests/
 ├── .github/
 │
+├── main.cpp
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── project.json
 ├── CHANGELOG.md
 ├── CONTRIBUTORS.md
+├── CONTRIBUTING.md
 ├── LICENSE
 └── README.md
 ```
