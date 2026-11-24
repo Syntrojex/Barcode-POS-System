@@ -2,7 +2,7 @@
 
 /**
  * @file BillRepository.h
- * @brief Data access object (DAO) managing atomic read and write operations for Bill.txt.
+ * @brief Data access object (DAO) managing atomic read and write operations for Bill.txt and BillDetail.txt.
  * @author Ali Abdullah (25L-3022)
  *
  * Provides safe flat-file persistence for finalized customer bills. Uses an atomic
@@ -34,10 +34,11 @@ namespace barcodehub::billing {
 class BillRepository {
 public:
     /**
-     * @brief Constructs a repository bound to the specified file path.
-     * @param billFile Absolute or relative path to the Bill.txt storage file.
+     * @brief Constructs a repository bound to Bill.txt; BillDetail.txt sits next to it unless given.
+     * @param billFile Path to Bill.txt (one line per bill).
+     * @param detailFile Path to BillDetail.txt (one line per bought product); empty = same folder as Bill.txt.
      */
-    explicit BillRepository(std::filesystem::path billFile);
+    explicit BillRepository(std::filesystem::path billFile, std::filesystem::path detailFile = {});
 
     /**
      * @brief Reads all stored bills from disk, grouping multi-line records by Bill ID.
@@ -78,7 +79,8 @@ public:
                                   std::string* error = nullptr);
 
 private:
-    std::filesystem::path file_; ///< Path to the underlying Bill.txt file.
+    std::filesystem::path file_;       ///< Bill.txt
+    std::filesystem::path detailFile_; ///< BillDetail.txt
 };
 
 } // namespace barcodehub::billing

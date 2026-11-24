@@ -318,8 +318,10 @@ file(GLOB UI_SOURCES CONFIGURE_DEPENDS
     Frontend/src/ui/*.cpp
 )
 
+# Legacy stand-alone files are skipped. [Mm]ain also matches the old Main.cpp test window,
+# which includes CameraWidget.h (needs OpenCV) and has its own main().
 list(FILTER UI_SOURCES EXCLUDE REGEX
-    "/(main|CameraWidget|POSWindow)\\.cpp$"
+    "/([Mm]ain|CameraWidget|POSWindow)\\.cpp$"
 )
 
 file(GLOB UI_HEADERS CONFIGURE_DEPENDS

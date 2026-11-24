@@ -233,7 +233,7 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
 
     m_orderManager->clearCart();
     std::map<std::string, bh::order::ProductSnapshot> manualProducts;
-    std::map<std::string, double> lineDiscount; // product id -> per-unit discount incl. seasonal/special (Pricing.h)
+    std::map<std::string, double> lineDiscount; // product id -> the product's own per-unit discount
     std::map<int, int> stockToDeduct;
     for (const auto& line : o.lines)
     {
@@ -244,7 +244,7 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
             if (!p || QString::fromStdString(p->getAcronym()) != line.acronym)
                 return fail("A product in the order no longer exists. Refresh and retry.");
             snapshot = bh::integration::toSnapshot(*p);
-            snapshot.discountPerUnit = line.discount; // product discount + folded seasonal/special discount
+            snapshot.discountPerUnit = line.discount; // product discount (seasonal/special are bill-level)
             lineDiscount[snapshot.productId] = line.discount;
             stockToDeduct[line.productId] += line.qty;
         }
@@ -271,8 +271,13 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
             return fail("Stock changed while preparing checkout. Refresh and retry.");
 
     // Validate the same arithmetic/payment rules used by Billing before touching disk.
-    o.recompute();
-    const double payable = m_orderManager->totalPayable();
+    // Seasonal and special discounts are bill-level amounts (Bill.txt fields), taken off after the line totals.
+    const double seasonal = std::max(0.0, o.seasonal), special = std::max(0.0, o.special);
+    o.recompute(); // line totals only
+    o.seasonal = seasonal;
+    o.special = special;
+    o.total = std::round((o.total - seasonal - special) * 100.0) / 100.0;
+    const double payable = std::round((m_orderManager->totalPayable() - seasonal - special) * 100.0) / 100.0;
     if (std::fabs(o.total - payable) > 0.011)
         return fail("Cart totals differ from backend totals. Please refresh the order.");
     const auto accepted = method->process(payment, payable);
@@ -334,7 +339,10 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
         });
     bh::billing::Bill bill;
     double change = 0;
-    if (!service.checkout(created.id, payment, bill, &change, &why))
+    bh::billing::BillAdjustments adjustments;
+    adjustments.seasonalDiscount = seasonal;
+    adjustments.specialDiscount = special;
+    if (!service.checkout(created.id, payment, bill, &change, &why, adjustments))
     {
         const bool restored = restoreStock();
         std::string ignored;
@@ -350,8 +358,11 @@ bool AppState::addOrder(OrderRecord& o, QString* error)
     o.status = "Paid";
     o.total = bill.totals.payable;
     o.subtotal = bill.totals.withoutTax;
-    o.discount = bill.totals.discount;
+    o.discount = bill.totals.discount + bill.seasonalDiscount + bill.specialDiscount; // OrderRecord: all discounts
+    o.seasonal = bill.seasonalDiscount;
+    o.special = bill.specialDiscount;
     o.tax = bill.totals.tax;
+    o.tendered = bill.amountReceived;
     o.status = "Paid";
     refreshCache();
     refreshOrders();
@@ -507,9 +518,12 @@ void AppState::refreshOrders()
         if (bill != bills.end())
         {
             rec.subtotal = bill->totals.withoutTax;
-            rec.discount = bill->totals.discount;
+            rec.discount = bill->totals.discount + bill->seasonalDiscount + bill->specialDiscount; // all discounts
+            rec.seasonal = bill->seasonalDiscount;
+            rec.special = bill->specialDiscount;
             rec.tax = bill->totals.tax;
             rec.total = bill->totals.payable;
+            rec.tendered = bill->amountReceived;
         }
         if (rec.time.date() == today)
         {
