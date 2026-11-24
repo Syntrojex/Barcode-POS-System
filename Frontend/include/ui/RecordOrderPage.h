@@ -140,6 +140,8 @@ private:
     QLabel* m_itemsBadge;
     QLabel* m_gross;
     QLabel* m_disc;
+    QLabel* m_seasonal = nullptr;    // seasonal discount (active season), shown before payment
+    QLabel* m_seasonalKey = nullptr; // "Seasonal (10%)"
     QLabel* m_tax;
     QLabel* m_total;
     QPushButton* m_checkout;

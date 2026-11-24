@@ -182,7 +182,7 @@ void DashboardPage::refresh()
         const auto &o = orders[r];
         m_recent->setRowHeight(r, 48);
         auto id = new QTableWidgetItem(o.id);
-        id->setForeground(Theme::readable(QColor("#2554d8")));
+        id->setForeground(Theme::readable(Theme::themed("#2554d8")));
         QFont f = id->font();
         f.setBold(true);
         id->setFont(f);

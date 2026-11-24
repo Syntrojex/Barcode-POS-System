@@ -41,6 +41,102 @@ namespace
             delete it;
         }
     }
+<<<<<<< HEAD
+
+    // One product's sales over all completed orders.
+    struct Sold
+    {
+        QString name, acronym;
+        int productId = 0;
+        int qty = 0;
+        double revenue = 0; // (price - discount) * qty, without tax
+    };
+
+    QVector<Sold> soldTotals()
+    {
+        QMap<QString, Sold> byKey;
+        for (const auto &o : AppState::instance().orders())
+        {
+            if (!isCompleted(o))
+                continue;
+            for (const auto &l : o.lines)
+            {
+                const QString key = l.productId > 0 ? QString("#%1").arg(l.productId) : "n:" + l.name;
+                Sold &s = byKey[key];
+                s.name = l.name;
+                s.acronym = l.acronym;
+                s.productId = l.productId;
+                s.qty += l.qty;
+                s.revenue += (l.price - l.discount) * l.qty;
+            }
+        }
+        QVector<Sold> out;
+        for (auto it = byKey.cbegin(); it != byKey.cend(); ++it)
+            out.push_back(it.value());
+        return out;
+    }
+
+    const ProductInfo *productOf(int productId)
+    {
+        if (productId <= 0)
+            return nullptr;
+        for (const auto &p : AppState::instance().products())
+            if (p.id == productId)
+                return &p;
+        return nullptr;
+    }
+
+    QString stockText(int stock)
+    {
+        const int low = AppState::instance().settings().lowStockThreshold;
+        if (stock <= 0)
+            return "0  (depleted)";
+        if (stock <= low)
+            return QString("%1  (low)").arg(stock);
+        return QString::number(stock);
+    }
+
+    // ---------------------------------------------------------------- widget helpers
+    // Summary tile with a caption that changes per report.
+    QFrame *tile(const QString &icon, const QString &tint, QLabel *&cap, QLabel *&val, QLabel *&sub)
+    {
+        auto *c = W::card(nullptr);
+        auto *h = new QHBoxLayout(c);
+        h->setContentsMargins(16, 12, 16, 12);
+        h->setSpacing(10);
+        auto *v = new QVBoxLayout;
+        v->setSpacing(2);
+        cap = W::label("", "caption");
+        val = W::label("", "bigValue");
+        sub = W::label("", "muted");
+        v->addWidget(cap);
+        v->addWidget(val);
+        v->addWidget(sub);
+        h->addLayout(v, 1);
+        QString top = "#eaf1ff", bottom = "#d9e6ff";
+        QColor fg = Theme::primary;
+        if (tint == "green") { top = "#e2fbec"; bottom = "#c9f3d9"; fg = Theme::tertiary; }
+        else if (tint == "amber") { top = "#fff4d6"; bottom = "#ffe8a8"; fg = Theme::themed("#8a5a00"); }
+        h->addWidget(W::iconTile(icon, fg, top, bottom, 38), 0, Qt::AlignTop);
+        return c;
+    }
+
+    QWidget *barCell(double fraction)
+    {
+        auto *bar = new QProgressBar;
+        bar->setRange(0, 1000);
+        bar->setValue(int(qBound(0.0, fraction, 1.0) * 1000));
+        bar->setTextVisible(false);
+        bar->setFixedHeight(8);
+        bar->setMinimumWidth(130);
+        bar->setStyleSheet("QProgressBar{background:#dfe8fb;border:none;border-radius:4px;}"
+                           "QProgressBar::chunk{background:#2554d8;border-radius:4px;}");
+        return wrapW(bar);
+    }
+
+    QString htmlEscape(const QString &s) { return s.toHtmlEscaped(); }
+=======
+>>>>>>> be434a4b20a77502664cedba4647512c83bc9a5f
 }
 
 // ============================================================================ page

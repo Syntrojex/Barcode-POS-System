@@ -200,7 +200,7 @@ QWidget *MainWindow::buildSidebar()
         auto *ic = new QLabel;
         ic->setObjectName("navIcon");
         ic->setFixedSize(20, 20);
-        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, QColor("#94a3b8"), 20));
+        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, Theme::themed("#94a3b8"), 20));
         auto *tx = new QLabel(QString::fromLatin1(kNav[i].text));
         for (QWidget *l : {static_cast<QWidget *>(ic), static_cast<QWidget *>(tx)})
             l->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -259,15 +259,6 @@ QWidget *MainWindow::buildTopBar()
     t->addStretch();
     h->addLayout(t);
 
-    // "● Scanner Ready"
-    auto *ready = new QFrame;
-    ready->setObjectName("readyPill");
-    auto *rh = new QHBoxLayout(ready);
-    rh->setContentsMargins(11, 4, 12, 4);
-    rh->setSpacing(6);
-    rh->addWidget(W::dot(QColor("#059669")));
-    rh->addWidget(W::label("Scanner Ready", "readyText"));
-    h->addWidget(ready, 0, Qt::AlignVCenter);
     h->addStretch();
 
     auto *cur = new QFrame;
@@ -304,8 +295,43 @@ QWidget *MainWindow::buildTopBar()
     auto *avatar = new QLabel;
     avatar->setObjectName("topAvatar");
     avatar->setFixedSize(36, 36);
+<<<<<<< HEAD
+    avatar->setText(m_userName.left(2).toUpper());
+    avatar->setCursor(Qt::PointingHandCursor);
+    avatar->setToolTip(m_userName + " (" + RolePolicy::name(m_role) + ")");
+    avatar->setPopupMode(QToolButton::InstantPopup);
+    avatar->setStyleSheet("QToolButton{color:white;font-weight:800;border:none;}"
+                          "QToolButton::menu-indicator{image:none;width:0;}");
+    auto *menu = new QMenu(avatar);
+    // dark menu; the highlighted option turns blue with white text
+    menu->setStyleSheet("QMenu{background:#0f1b33;color:#8fb2ff;border:1px solid #26324f;border-radius:8px;padding:4px;}"
+                        "QMenu::item{padding:8px 18px 8px 12px;border-radius:6px;}"
+                        "QMenu::item:selected{background:#2554d8;color:#ffffff;}"
+                        "QMenu::separator{height:1px;background:#26324f;margin:4px 8px;}");
+    auto *who = new QWidget;
+    auto *wv = new QVBoxLayout(who);
+    wv->setContentsMargins(14, 10, 14, 8);
+    wv->setSpacing(2);
+    auto *nm = new QLabel(m_userName);
+    nm->setStyleSheet("font-weight:800; font-size:14px; color:#ffffff;");
+    auto *rl = new QLabel(RolePolicy::title(m_role));
+    rl->setStyleSheet("color:#9aa7c7;");
+    wv->addWidget(nm);
+    wv->addWidget(rl);
+    auto *header = new QWidgetAction(menu);
+    header->setDefaultWidget(who);
+    menu->addAction(header);
+    menu->addSeparator();
+    QIcon logoutIcon(Theme::iconPixmap("logout", Theme::themed("#8fb2ff"), 16));
+    logoutIcon.addPixmap(Theme::iconPixmap("logout", Theme::themed("#ffffff"), 16), QIcon::Active); // white when highlighted
+    QAction *logout = menu->addAction(logoutIcon, "Log out (change role)");
+    connect(logout, &QAction::triggered, this, [this]
+            { m_loggedOut = true; if (!close()) m_loggedOut = false; });
+    avatar->setMenu(menu);
+=======
     avatar->setAlignment(Qt::AlignCenter);
     avatar->setPixmap(Theme::iconPixmap("user", QColor("white"), 18));
+>>>>>>> be434a4b20a77502664cedba4647512c83bc9a5f
     h->addWidget(avatar, 0, Qt::AlignVCenter);
 
     auto *timer = new QTimer(this);
@@ -335,7 +361,7 @@ bool MainWindow::goTo(int page)
     {
         m_nav[i]->setProperty("active", i == page);
         if (auto *ic = m_nav[i]->findChild<QLabel *>("navIcon"))
-            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, i == page ? QColor("white") : QColor("#94a3b8"), 20));
+            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, i == page ? QColor("white") : Theme::themed("#94a3b8"), 20));
         Theme::repolish(m_nav[i]);
         for (auto *c : m_nav[i]->findChildren<QLabel *>())
             Theme::repolish(c);

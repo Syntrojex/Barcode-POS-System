@@ -16,8 +16,8 @@ namespace Theme
     inline const QColor onSurfaceVariant("#5b6781");
     inline const QColor outline("#8a94ab");
     inline const QColor outlineVariant("#c3c6d7");
-    inline const QColor primary("#2554d8");
-    inline const QColor primaryContainer("#3f7bf6");
+    inline const QColor primary("#b52735");          // deep red (themed #2554d8)
+    inline const QColor primaryContainer("#cf3d4b"); // (themed #3f7bf6)
     inline const QColor tertiary("#006329");
     inline const QColor tertiaryFixed("#7ffc97");
     inline const QColor error("#ba1a1a");
@@ -27,6 +27,15 @@ namespace Theme
     bool isDark();
     void setDark(bool on); // persists with QSettings
     QColor readable(const QColor &c); // dark text colours are lightened in dark mode
+
+    // Red + white palette. The app was designed in blue; every blue is converted here:
+    // strong blue -> deep magenta, pale blue background -> warm off-white, pale blue highlight -> soft pink,
+    // navy -> dark plum. Green, red and amber are left unchanged.
+    QColor themed(const QColor &c);
+    inline QColor themed(const char *hex) { return themed(QColor(hex)); }
+    QString themedSheet(const QString &sheet); // same conversion for every #rrggbb in a style sheet
+    // Converts the inline style sheet of every widget (pages, dialogs, popups) as it is shown or restyled.
+    void installThemeFilter();
     // Application-wide Qt style sheet (light or dark).
     QString styleSheet();
 

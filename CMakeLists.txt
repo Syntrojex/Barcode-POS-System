@@ -77,6 +77,7 @@ add_library(billing_core STATIC
     Backend/src/billing/BillRecordCodec.cpp
     Backend/src/billing/BillRepository.cpp
     Backend/src/billing/PaymentMethod.cpp
+    Backend/src/billing/SeasonRepository.cpp
 )
 
 target_include_directories(billing_core PUBLIC
@@ -177,6 +178,15 @@ if(BUILD_TESTING)
     target_link_libraries(checkout_test PRIVATE backend_core)
 
     add_test(NAME checkout COMMAND checkout_test)
+
+    # Seasons.txt reader/writer
+    add_executable(season_test
+        tests/season_test.cpp
+    )
+
+    target_link_libraries(season_test PRIVATE billing_core)
+
+    add_test(NAME season COMMAND season_test)
 
     add_executable(billing_tests
         tests/billing_tests.cpp

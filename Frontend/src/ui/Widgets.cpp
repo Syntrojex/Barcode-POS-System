@@ -225,13 +225,13 @@ void Card::paintEvent(QPaintEvent *)
     QLinearGradient g(body.topLeft(), body.bottomLeft());
     if (dark)
     {
-        g.setColorAt(0, m_alert ? QColor("#3a2230") : QColor("#1f2a47"));
-        g.setColorAt(1, m_alert ? QColor("#2e1c28") : QColor("#1a233d"));
+        g.setColorAt(0, m_alert ? Theme::themed("#3a2230") : Theme::themed("#1f2a47"));
+        g.setColorAt(1, m_alert ? Theme::themed("#2e1c28") : Theme::themed("#1a233d"));
     }
     else
     {
-        g.setColorAt(0, QColor("#ffffff"));
-        g.setColorAt(1, m_alert ? QColor("#fff2f0") : QColor("#f4f7ff"));
+        g.setColorAt(0, Theme::themed("#ffffff"));
+        g.setColorAt(1, m_alert ? Theme::themed("#fff2f0") : Theme::themed("#f4f7ff"));
     }
     p.setBrush(g);
     p.setPen(QPen(m_alert ? QColor(255, 140, 130, 190) : (dark ? QColor(90, 120, 200, 70) : QColor(40, 70, 150, 34)), 1));
@@ -470,7 +470,7 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     const QRect r = rect().adjusted(1, 1, -1, -1);
-    p.fillRect(r, QColor("#162644"));
+    p.fillRect(r, Theme::themed("#162644"));
     if (!m_frame.isNull()) {
         const QImage scaled = m_frame.scaled(r.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         const QPoint origin((width() - scaled.width()) / 2, (height() - scaled.height()) / 2);
@@ -509,7 +509,7 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
             }
         }
     } else {
-        p.setPen(QColor("#c2d0ef"));
+        p.setPen(Theme::themed("#c2d0ef"));
 #ifdef WITH_CAMERA
         p.drawText(r, Qt::AlignCenter, "Camera stopped — press Start camera");
 #else
@@ -554,7 +554,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
     for (int g = 0; g <= 4; ++g)
     {
         const qreal y = area.bottom() - area.height() * g / 4.0;
-        p.setPen(QPen(QColor("#e1e8f8"), 1, g == 0 ? Qt::SolidLine : Qt::DashLine));
+        p.setPen(QPen(Theme::themed("#e1e8f8"), 1, g == 0 ? Qt::SolidLine : Qt::DashLine));
         p.drawLine(QPointF(area.left(), y), QPointF(area.right() + depth, y));
         p.setPen(Theme::outline);
         p.drawText(QRectF(0, y - 8, 60, 16), Qt::AlignRight | Qt::AlignVCenter, QString("PKR %1").arg(int(maxV * g / 4)));
@@ -573,8 +573,8 @@ void RevenueChart::paintEvent(QPaintEvent *)
         const qreal x = area.left() + slot * i + (slot - bw) / 2;
         const qreal h = qMax<qreal>(3, area.height() * m_actual[i] / maxV);
         const qreal y = area.bottom() - h;
-        const QColor c1 = hot ? QColor("#7fb0ff") : QColor("#7aa6f7");
-        const QColor c2 = hot ? QColor("#2457e6") : QColor("#3f6fe0");
+        const QColor c1 = hot ? Theme::themed("#7fb0ff") : Theme::themed("#7aa6f7");
+        const QColor c2 = hot ? Theme::themed("#2457e6") : Theme::themed("#3f6fe0");
         // contact shadow
         p.setPen(Qt::NoPen);
         p.setBrush(QColor(20, 40, 110, 40));
@@ -629,7 +629,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
                 path.lineTo(x, y);
         }
         p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(QColor("#f08a24"), 2, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setPen(QPen(Theme::themed("#f08a24"), 2, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
         p.drawPath(path);
     }
 }

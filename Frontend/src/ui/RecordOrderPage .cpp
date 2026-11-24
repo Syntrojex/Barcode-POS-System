@@ -296,7 +296,11 @@ QWidget* RecordOrderPage::buildRight()
         };
     row("Subtotal", m_gross);
     row("Discount", m_disc);
+    row("Seasonal", m_seasonal);
+    m_seasonalKey = qobject_cast<QLabel*>(grid->itemAt(grid->count() - 1)->layout()->itemAt(0)->widget());
     row("Tax", m_tax);
+    // a season switched on/off or edited on the Discounts page -> refresh the totals
+    connect(&UiStore::instance(), &UiStore::seasonsChanged, this, &RecordOrderPage::updateTotals);
     grid->addStretch();
     th->addLayout(grid, 1);
 
@@ -410,17 +414,17 @@ void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
     pa.setBrush(QColor(20, 40, 110, 40));
     pa.drawEllipse(QRectF(6, 60, 46, 8));
     QLinearGradient fg(10, 8, 10, 62);
-    fg.setColorAt(0, QColor("#7fb0ff"));
-    fg.setColorAt(1, QColor("#2b5fe8"));
+    fg.setColorAt(0, Theme::themed("#7fb0ff"));
+    fg.setColorAt(1, Theme::themed("#2b5fe8"));
     pa.setBrush(fg);
     pa.drawRoundedRect(QRectF(8, 14, 34, 46), 4, 4);
-    pa.setBrush(QColor("#1a3fae"));
+    pa.setBrush(Theme::themed("#1a3fae"));
     pa.drawPolygon(QPolygonF({ {42, 14}, {50, 8}, {50, 54}, {42, 60} }));
-    pa.setBrush(QColor("#a9ccff"));
+    pa.setBrush(Theme::themed("#a9ccff"));
     pa.drawPolygon(QPolygonF({ {8, 14}, {16, 8}, {50, 8}, {42, 14} }));
     pa.setBrush(QColor(255, 255, 255, 230));
     pa.drawRoundedRect(QRectF(13, 26, 24, 22), 3, 3);
-    pa.setPen(QColor("#1a3fae"));
+    pa.setPen(Theme::themed("#1a3fae"));
     QFont f = pa.font();
     f.setPixelSize(8);
     f.setBold(true);
@@ -524,16 +528,14 @@ void RecordOrderPage::rebuildTable()
 
 void RecordOrderPage::updateTotals()
 {
-    double gross = 0, disc = 0, tax = 0;
-    int items = 0;
-    for (const auto& l : m_cart)
-    {
-        gross += l.p.price * l.qty;
-        disc += l.p.discount * l.qty;
-        tax += l.p.tax * l.qty;
-        items += l.qty;
-    }
-    const double total = gross - disc + tax;
+    // Same calculation as the payment screen (Pricing::quote), so the totals always match.
+    // The special discount is chosen at payment, so it is 0 here.
+    const Pricing::Quote q = Pricing::quote(cartLines(), 0);
+    const int items = q.units;
+    const double gross = q.gross, disc = q.itemDiscount, tax = q.tax, total = q.payable;
+    m_seasonalKey->setText(q.seasonName.isEmpty() ? "Seasonal"
+                                                  : QString("Seasonal (%1%)").arg(q.seasonalPercent, 0, 'g', 4));
+    m_seasonal->setText(q.seasonal > 0 ? W::money(-q.seasonal) : "PKR 0.00");
     W::setBadge(m_itemsBadge, QString("%1 item%2").arg(items).arg(items == 1 ? "" : "s"), items ? "blue" : "grey");
     m_gross->setText(W::money(gross));
     m_disc->setText(disc > 0 ? W::money(-disc) : "PKR 0.00");

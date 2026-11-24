@@ -1,4 +1,6 @@
 #include "UiStore.h"
+#include "billing/SeasonRepository.h"
+#include <QDir>
 #include <QRegularExpression>
 #include <algorithm>
 
@@ -47,20 +49,7 @@ UiStore::UiStore()
         {"70", "Household & Cleaning", "HSD", "#b6c4ff"},
     };
 
-    const QDate today = QDate::currentDate();
-    auto mk = [](const QString &id, const QString &name, QDate a, QDate b, double pct, bool on) {
-        Season s;
-        s.id = id; s.name = name; s.start = a; s.end = b; s.percent = pct; s.active = on;
-        return s;
-    };
-    const int y = today.year();
-    m_seasons = {
-        mk(QString("SEA-%1-01").arg(y), "Winter Warmth Sale", today.addDays(-3), today.addDays(4), 10, true),
-        mk(QString("SEA-%1-02").arg(y + 1), "Eid-ul-Fitr Grand Fest", QDate(y + 1, 3, 20), QDate(y + 1, 3, 27), 15, false),
-        mk(QString("SEA-%1-03").arg(y + 1), "Pakistan Day Mega Deal", QDate(y + 1, 3, 23), QDate(y + 1, 3, 24), 8, false),
-        mk(QString("SEA-%1-08").arg(y), "Summer Clearance", QDate(y, 6, 15), QDate(y, 6, 30), 5, false),
-        mk(QString("SEA-%1-12").arg(y - 1), "Winter Promo", QDate(y - 1, 12, 1), QDate(y - 1, 12, 31), 12, false),
-    };
+    loadSeasons(); // real seasons from Seasons.txt (no demo seasons)
 
     // A couple of parked orders so the "Parked" strip is not empty on first launch.
     auto line = [](const char *name, const char *ac, int q, double price, double tax, double disc, int id) {
@@ -194,9 +183,61 @@ bool UiStore::removeCategory(const QString &id, QString *error)
 }
 
 // ---------------------------------------------------------------- seasons
+namespace
+{
+    // Seasons.txt has no name column, so a readable name is made from the dates and percentage.
+    QString autoSeasonName(const Season &s)
+    {
+        return QString("%1% off (%2 - %3)").arg(s.percent, 0, 'g', 4)
+            .arg(s.start.toString("d MMM"), s.end.toString("d MMM yyyy"));
+    }
+}
+
+QString UiStore::seasonsPath() const
+{
+    return QDir(AppState::instance().dataDir()).filePath("Seasons.txt");
+}
+
+void UiStore::loadSeasons()
+{
+    namespace bb = barcodehub::billing;
+    std::vector<std::string> errors;
+    const auto records = bb::SeasonRepository(seasonsPath().toStdString()).load(&errors);
+    m_seasons.clear();
+    int n = 0;
+    for (const auto &r : records)
+    {
+        Season s;
+        s.start = QDate::fromString(QString::fromStdString(r.startDate), Qt::ISODate);
+        s.end = QDate::fromString(QString::fromStdString(r.endDate), Qt::ISODate);
+        s.percent = r.percent;
+        s.active = r.active;
+        s.id = QString("SEA-%1-%2").arg(s.start.year()).arg(++n, 2, 10, QLatin1Char('0'));
+        s.name = autoSeasonName(s);
+        m_seasons.push_back(s);
+    }
+    for (const auto &e : errors)
+        qWarning("%s", e.c_str()); // bad lines are skipped, not fatal
+}
+
+void UiStore::saveSeasons()
+{
+    namespace bb = barcodehub::billing;
+    std::vector<bb::SeasonRecord> records;
+    for (const auto &s : m_seasons)
+        records.push_back({s.start.toString(Qt::ISODate).toStdString(), s.end.toString(Qt::ISODate).toStdString(),
+                           s.percent, s.active});
+    std::string error;
+    if (!bb::SeasonRepository(seasonsPath().toStdString()).save(records, &error))
+        qWarning("Could not save Seasons.txt: %s", error.c_str());
+}
+
 void UiStore::addSeason(const Season &s)
 {
     m_seasons.push_back(s);
+    if (m_seasons.last().name.trimmed().isEmpty())
+        m_seasons.last().name = autoSeasonName(m_seasons.last());
+    saveSeasons();
     emit seasonsChanged();
 }
 
@@ -205,6 +246,7 @@ void UiStore::updateSeason(const QString &id, const Season &s)
     for (auto &x : m_seasons)
         if (x.id == id)
             x = s;
+    saveSeasons();
     emit seasonsChanged();
 }
 
@@ -216,6 +258,7 @@ void UiStore::removeSeason(const QString &id)
             m_seasons.removeAt(i);
             break;
         }
+    saveSeasons();
     emit seasonsChanged();
 }
 
@@ -224,6 +267,7 @@ void UiStore::setSeasonActive(const QString &id, bool on)
     for (auto &x : m_seasons)
         if (x.id == id)
             x.active = on;
+    saveSeasons();
     emit seasonsChanged();
 }
 
@@ -245,8 +289,7 @@ const Season *UiStore::activeSeason(const QDate &d) const
 
 QString UiStore::validateSeason(const QString &name, const QDate &start, const QDate &end, double percent) const
 {
-    if (name.trimmed().isEmpty())
-        return "Give the season a name.";
+    Q_UNUSED(name); // optional: Seasons.txt stores only dates, percentage and isActive
     if (!start.isValid() || !end.isValid())
         return "Enter valid start and end dates.";
     if (end < start)
