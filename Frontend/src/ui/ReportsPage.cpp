@@ -125,7 +125,7 @@ namespace
         QString top = "#eaf1ff", bottom = "#d9e6ff";
         QColor fg = Theme::primary;
         if (tint == "green") { top = "#e2fbec"; bottom = "#c9f3d9"; fg = Theme::tertiary; }
-        else if (tint == "amber") { top = "#fff4d6"; bottom = "#ffe8a8"; fg = QColor("#8a5a00"); }
+        else if (tint == "amber") { top = "#fff4d6"; bottom = "#ffe8a8"; fg = Theme::themed("#8a5a00"); }
         h->addWidget(W::iconTile(icon, fg, top, bottom, 38), 0, Qt::AlignTop);
         return c;
     }

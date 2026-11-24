@@ -89,7 +89,7 @@ InventoryPage::InventoryPage(QWidget *parent) : QWidget(parent)
     auto *bh = new QHBoxLayout(m_bar);
     bh->setContentsMargins(16, 10, 12, 10);
     bh->setSpacing(10);
-    bh->addWidget(W::iconLabel("warn", QColor("#ffc24a"), 20));
+    bh->addWidget(W::iconLabel("warn", Theme::themed("#ffc24a"), 20));
     m_barText = W::label("");
     m_barText->setStyleSheet("color:white; font-weight:700;");
     bh->addWidget(m_barText, 1);
@@ -213,13 +213,13 @@ void InventoryPage::rebuild()
                 {
             if (v == p.stock) m_edits.remove(p.id); else m_edits[p.id] = v;
             W::setBadge(badge, stockText(v, limit), stockKind(v, limit));
-            const QColor bg = v == p.stock ? QColor(Qt::transparent) : QColor("#fff6dd");
+            const QColor bg = v == p.stock ? QColor(Qt::transparent) : Theme::themed("#fff6dd");
             for (int cidx : {0, 1, 2, 5})
                 if (auto *it = m_table->item(r, cidx)) it->setBackground(bg);
             updateBar(); });
         if (m_edits.contains(p.id))
             for (int cidx : {0, 1, 2, 5})
-                m_table->item(r, cidx)->setBackground(QColor("#fff6dd"));
+                m_table->item(r, cidx)->setBackground(Theme::themed("#fff6dd"));
     }
     m_footer->setText(QString("Displaying %1 of %2 registered items").arg(rows.size()).arg(st.products().size()));
     updateBar();

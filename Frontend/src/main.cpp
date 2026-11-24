@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
     QFont f = app.font();
     f.setPointSizeF(9.5);
     app.setFont(f);
+    Theme::installThemeFilter(); // magenta + off-white for inline styles too
     app.setStyleSheet(Theme::styleSheet());
 
     // Sign in, run the POS, and return to sign-in after "Log out".

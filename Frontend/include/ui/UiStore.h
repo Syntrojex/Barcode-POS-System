@@ -91,6 +91,10 @@ signals:
 
 private:
     UiStore();
+    // Seasons.txt (start end percent isActive#) via the backend SeasonRepository.
+    QString seasonsPath() const;
+    void loadSeasons();
+    void saveSeasons();
     QVector<Category> m_categories;
     QVector<Season> m_seasons;
     QVector<ParkedOrder> m_parked;

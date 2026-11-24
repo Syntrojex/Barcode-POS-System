@@ -205,7 +205,7 @@ QWidget *MainWindow::buildSidebar()
         auto *ic = new QLabel;
         ic->setObjectName("navIcon");
         ic->setFixedSize(20, 20);
-        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, QColor("#94a3b8"), 20));
+        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, Theme::themed("#94a3b8"), 20));
         auto *tx = new QLabel(QString::fromLatin1(kNav[i].text));
         for (QWidget *l : {static_cast<QWidget *>(ic), static_cast<QWidget *>(tx)})
             l->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -237,15 +237,6 @@ QWidget *MainWindow::buildTopBar()
     t->addStretch();
     h->addLayout(t);
 
-    // "● Scanner Ready"
-    auto *ready = new QFrame;
-    ready->setObjectName("readyPill");
-    auto *rh = new QHBoxLayout(ready);
-    rh->setContentsMargins(11, 4, 12, 4);
-    rh->setSpacing(6);
-    rh->addWidget(W::dot(QColor("#059669")));
-    rh->addWidget(W::label("Scanner Ready", "readyText"));
-    h->addWidget(ready, 0, Qt::AlignVCenter);
     h->addStretch();
 
 
@@ -301,8 +292,8 @@ QWidget *MainWindow::buildTopBar()
     header->setDefaultWidget(who);
     menu->addAction(header);
     menu->addSeparator();
-    QIcon logoutIcon(Theme::iconPixmap("logout", QColor("#8fb2ff"), 16));
-    logoutIcon.addPixmap(Theme::iconPixmap("logout", QColor("#ffffff"), 16), QIcon::Active); // white when highlighted
+    QIcon logoutIcon(Theme::iconPixmap("logout", Theme::themed("#8fb2ff"), 16));
+    logoutIcon.addPixmap(Theme::iconPixmap("logout", Theme::themed("#ffffff"), 16), QIcon::Active); // white when highlighted
     QAction *logout = menu->addAction(logoutIcon, "Log out (change role)");
     connect(logout, &QAction::triggered, this, [this]
             { m_loggedOut = true; if (!close()) m_loggedOut = false; });
@@ -336,7 +327,7 @@ bool MainWindow::goTo(int page)
     {
         m_nav[i]->setProperty("active", i == page);
         if (auto *ic = m_nav[i]->findChild<QLabel *>("navIcon"))
-            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, i == page ? QColor("white") : QColor("#94a3b8"), 20));
+            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, i == page ? QColor("white") : Theme::themed("#94a3b8"), 20));
         Theme::repolish(m_nav[i]);
         for (auto *c : m_nav[i]->findChildren<QLabel *>())
             Theme::repolish(c);

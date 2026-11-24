@@ -1,4 +1,6 @@
 #include "Theme.h"
+#include <QEvent>
+#include <QApplication>
 #include <QPainter>
 #include <cmath>
 #include <QRegularExpression>
@@ -19,8 +21,9 @@ QIcon Theme::icon(const QString &name, const QColor &color, int px)
     return QIcon(iconPixmap(name, color, px));
 }
 
-QPixmap Theme::iconPixmap(const QString &n, const QColor &c, int px)
+QPixmap Theme::iconPixmap(const QString &n, const QColor &colour, int px)
 {
+    const QColor c = themed(colour); // icons follow the magenta palette
     const qreal dpr = 2.0;
     QPixmap pm(int(px * dpr), int(px * dpr));
     pm.setDevicePixelRatio(dpr);
@@ -484,7 +487,7 @@ QMainWindow, #root { background: #eaf0fc; }
 QToolTip { background: #16254a; color: #eaf1ff; border: none; padding: 5px 9px; border-radius: 6px; }
 
 /* ---- sidebar (dark, glossy) ---- */
-#sidebar { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #0f1b33, stop:1 #0b1426); border: none; }
+#sidebar { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #101c34, stop:1 #0b1426); border: none; } /* #101c34, not #0f1b33: dark mode must not swap it */
 #logoBox { background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #7fb0ff, stop:1 #2b5fe8); border-radius: 12px; border-bottom: 3px solid #1a3fae; }
 #logoBox QLabel { color: white; font-weight: 800; font-size: 18px; background: transparent; }
 #brand { color: #ffffff; font-size: 18px; font-weight: 800; }
@@ -644,8 +647,9 @@ void Theme::setDark(bool on)
     QSettings("BarcodeHub", "SmartPOS").setValue("darkMode", on);
 }
 
-QColor Theme::readable(const QColor &c)
+QColor Theme::readable(const QColor &in)
 {
+    const QColor c = themed(in);
     // In dark mode a dark colour (e.g. dark blue text) would vanish on the dark cards:
     // keep its hue but raise its lightness.
     if (!isDark() || c.lightnessF() >= 0.6)
@@ -653,11 +657,78 @@ QColor Theme::readable(const QColor &c)
     return QColor::fromHslF(c.hslHueF() < 0 ? 0 : c.hslHueF(), c.hslSaturationF(), 0.72);
 }
 
+QColor Theme::themed(const QColor &c)
+{
+    if (!c.isValid())
+        return c;
+    const int h = c.hsvHue();
+    const double s = c.hsvSaturationF(), v = c.valueF();
+    if (h < 195 || h > 250 || s < 0.02)
+        return c; // not blue: keep (white, greys, green, red, amber)
+    double nh, ns, nv;
+    const double red = 354; // accent hue (red); change this one number to re-colour the app
+    if (v > 0.85 && s <= 0.06)       { nh = 20;  ns = s * 0.5;  nv = qMin(1.0, v + 0.01); }  // page background -> white
+    else if (v > 0.85 && s < 0.35)   { nh = red; ns = s * 0.85; nv = v; }                    // pale highlight -> light rose
+    else if (s >= 0.35 && v > 0.35)  { nh = red; ns = qMin(1.0, s * 0.95); nv = v * 0.84; }  // accent -> deep red
+    else if (v <= 0.35)              { nh = 350; ns = s * 0.75; nv = v; }                    // navy -> dark maroon
+    else                             { nh = red; ns = s * 0.45; nv = v; }                    // blue-grey -> warm grey
+    QColor out = QColor::fromHsvF(nh / 360.0, ns, nv);
+    out.setAlpha(c.alpha());
+    return out;
+}
+
+QString Theme::themedSheet(const QString &sheet)
+{
+    static const QRegularExpression hex("#[0-9a-fA-F]{6}\\b");
+    QString out;
+    out.reserve(sheet.size());
+    int last = 0;
+    auto it = hex.globalMatch(sheet);
+    while (it.hasNext())
+    {
+        const auto m = it.next();
+        out += sheet.mid(last, m.capturedStart() - last) + themed(QColor(m.captured())).name();
+        last = m.capturedEnd();
+    }
+    return out + sheet.mid(last);
+}
+
+namespace
+{
+    // Re-colours inline style sheets set with setStyleSheet() anywhere in the app.
+    class ThemeFilter : public QObject
+    {
+    public:
+        using QObject::QObject;
+        bool eventFilter(QObject *obj, QEvent *e) override
+        {
+            if ((e->type() == QEvent::Polish || e->type() == QEvent::StyleChange) && obj->isWidgetType())
+            {
+                auto *w = static_cast<QWidget *>(obj);
+                const QString ss = w->styleSheet();
+                if (!ss.isEmpty() && ss != w->property("themedSheet").toString())
+                {
+                    const QString t = Theme::themedSheet(ss);
+                    w->setProperty("themedSheet", t); // remember, so the next StyleChange is skipped
+                    if (t != ss)
+                        w->setStyleSheet(t);
+                }
+            }
+            return false;
+        }
+    };
+}
+
+void Theme::installThemeFilter()
+{
+    qApp->installEventFilter(new ThemeFilter(qApp));
+}
+
 QString Theme::styleSheet()
 {
     QString s = lightSheet();
     if (!isDark())
-        return s;
+        return themedSheet(s);
     // Dark mode: swap the light palette for dark equivalents (order matters: specific first).
     const char *map[][2] = {
         {"#0f1b33", "#e6ecfb"}, {"#1b2a4d", "#dbe4fa"}, {"#f4f7fe", "#141b2e"}, {"#e8eefb", "#0f1524"},
@@ -675,5 +746,5 @@ QString Theme::styleSheet()
     for (const auto &m : map)
         s.replace(QString::fromLatin1(m[0]), QString::fromLatin1(m[1]));
     s.replace("@KEEPWHITE@", "#ffffff");
-    return s;
+    return themedSheet(s);
 }
