@@ -99,3 +99,9 @@ Baseline `adabeb0` on `ali` built and passed 10/10 CTest checks with the Qt MinG
 - `ScannerPage.h/.cpp` add the two-column camera and scan workspace, real camera state and failure feedback, and selected product details. Preserves the grouped checklist, beep, description, view-only guard, and existing signals. The checkout action transfers checked rows as before.
 - Qt MinGW build and all 10 CTest checks passed. Inspected both themes at 1100×700 and 1440×900. Windows checks verified manual and unknown barcodes, decoded scan routing, Description, view-only controls, batch checkout, and camera controls and error feedback. Physical optical capture remains unverified.
 - Commit subject `feat(ui): modernize barcode scanner workspace`. Next page is Bills & Invoices.
+
+### Bills & Invoices
+
+- `BillsPage.h/.cpp` add the searchable, striped paid-bill ledger with result counts and payment timestamps. Existing order routing and receipt actions remain available.
+- Verified customer, bill and order lookup, no-results behavior, View Bill, and PDF export through the receipt dialog on copied records. Qt MinGW build and CTest 10/10 passed. Inspected both themes at 1100×700 and 1440×900.
+- Commit subject `feat(ui): refine bills and invoice ledger`. Next page is Seasonal Discounts.
