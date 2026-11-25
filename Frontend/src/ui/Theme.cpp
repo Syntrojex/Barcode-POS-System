@@ -584,6 +584,9 @@ QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8
 #dashboardAction:focus { border-color: @focus@; }
 
 #subCard { background: @panel@; border: 1px solid @divider@; border-radius: 12px; }
+#reportMetric { background: @panel@; border: 1px solid @divider@; border-left: 4px solid @brand@; border-radius: 10px; }
+#reportRankingBar { background: @panelLow@; border: none; border-radius: 4px; }
+#reportRankingBar::chunk { background: @brand@; border-radius: 4px; }
 #field { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
 #notice { background: @dangerBg@; border: 1px solid @dangerBorder@; border-radius: 10px; }
 #notice QLabel { color: @dangerText@; background: transparent; }
@@ -641,6 +644,10 @@ QPushButton[kind="flat"]:hover { background: @hover@; }
 QPushButton[kind="flat"]:pressed { background: @pressed@; }
 QPushButton[kind="flat"]:focus { border-color: @focus@; }
 QPushButton[kind="tab"] { padding: 6px 15px; }
+QPushButton[kind="tab"][reportTab="true"] { padding: 7px 10px; }
+QPushButton[reportTab="true"]:!checked { background: @panelLow@; border-color: @divider@; }
+QPushButton[reportTab="true"]:!checked:hover { background: @hover@; }
+QPushButton[reportTab="true"]:!checked:focus { border-color: @focus@; }
 QPushButton[kind="tab"][compactSeasonTab="true"] { padding: 5px 9px; }
 QPushButton[kind="mini"] { padding: 4px 11px; font-size: 12px; border-radius: 8px; color: @accent@; }
 QPushButton[kind="step"] { padding: 0; border-radius: 8px; min-width: 26px; max-width: 26px; min-height: 24px; max-height: 24px; font-size: 15px; font-weight: 700; color: @accent@; }

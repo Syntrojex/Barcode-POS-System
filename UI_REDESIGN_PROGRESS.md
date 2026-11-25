@@ -117,3 +117,16 @@ Baseline `adabeb0` on `ali` built and passed 10/10 CTest checks with the Qt MinG
 - `SettingsPage.cpp` adds a sectioned preferences panel and a separate theme help card. The 0–1000 stock threshold, auto-add and beep options, and Apply notifications retain their existing session semantics.
 - Verified the preference controls stay staged until Apply and then update all three settings and emit the existing notification. Inspected both themes at 1100×700 and 1440×900. Qt MinGW build and CTest passed 10/10.
 - Updated `DEVELOPMENT_HANDOFF.md`. The four local checkpoints are listed by `git log --oneline adabeb0..HEAD`. The next increment is Manager Reports.
+
+## Task 07 · Manager Reports
+
+Finalized Incomplete Orders, Completed Orders, Cash Sales, All Sales, Top 10 Sold, and Top 10 Remaining Stock. `ReportsPage.h/.cpp` and scoped selectors in `Theme.cpp` provide consistent tabs, three KPI cards per report, compact tables, totals, empty states, and sales rankings in both themes.
+
+- Incomplete covers all open and held orders. Completed displays the same date it filters on, with payment time preferred and archived rows excluded from paid totals. Reversed custom dates are reordered in both inputs and applied inclusively.
+- Sales use saved settlement totals and show discounts separately. Cash Sales limits both the ledger and product rankings to cash. Saved bill lines keep fractional quantities. Top Sold labels pre-tax line value after item discounts. Top Remaining ranks current stock, with sold quantities scoped to the selected dates and advice based on the stock threshold.
+- Baseline `0c00ddf` and final Qt MinGW Debug builds passed, with 10/10 CTest checks each. The running Windows application held the default executable open, so the preset used the existing `build/qt-mingw-task05` directory. The updated executable is `build/qt-mingw-task05/BarcodeHub.exe`.
+- On isolated fixtures, all six tabs and role access passed. Cash reconciled to PKR 1,000.00 and All Sales to PKR 1,880.00. The run also covered archived exclusions, inclusive dates, empty states, fractional rankings, and unchanged source records. CSV and landscape A4 PDF passed for all six reports and an empty report. Ctrl+P opened PDF export.
+- Compared running Windows screens to all twelve references in light and dark at 1100×700 and 1440×900. At minimum width, the date controls use two rows and wide sales ledgers scroll horizontally. The 24 captures and verified exports are under `C:/Users/iAT/AppData/Local/Temp/syntro-inc7-1795642747357/2cd94bff-d9be-4c7e-a2b9-66e13b52dbf3`.
+- Resolve the local checkpoint with `git log -1 --format=%H --grep='^feat(ui): finalize six manager reports and analytics$'`.
+
+**Next increment** · Project-wide QA, integration, visual consistency, and submission readiness.

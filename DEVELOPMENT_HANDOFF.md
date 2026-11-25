@@ -85,3 +85,14 @@ Qt MinGW Debug built successfully. CTest passed 10/10. Both Qt suites also passe
 All four pages were built and run on Windows in light and dark modes at 1100×700 and 1440×900. The default executable was open, so builds used the existing `build/qt-mingw-task05` directory with the Qt MinGW preset. The baseline and all four checkpoints passed CTest 10/10. The four sets of captures are in `C:/Users/iAT/AppData/Local/Temp/syntro-inc6-1795641158885`. Wide tables can scroll at 1100px. Physical optical capture and speaker audibility remain unverified.
 
 Next increment is Manager Reports.
+
+## Manager Reports · Task 07
+
+`ali` started at `0c00ddf`. The report checkpoint is `feat(ui): finalize six manager reports and analytics`. Resolve its hash with `git log -1 --format=%H --grep='^feat(ui): finalize six manager reports and analytics$'`. Scope is `ReportsPage.h/.cpp`, report-specific selectors in `Theme.cpp`, and the two handoff logs.
+
+- All six reports use the existing manager-only route and shared theme. Incomplete spans all dates. Completed and Sales use payment dates with the existing creation-date fallback. Archived rows are excluded from paid totals. The report reads saved bill quantities for decimal precision and ranks available stock from the current catalogue.
+- Both baseline and final Qt MinGW Debug passed, with 10/10 CTest checks each. The default executable was open. Use `cmake --preset qt-mingw -B build/qt-mingw-task05` and `cmake --build build/qt-mingw-task05 --config Debug` to rebuild the updated executable in the existing alternate directory.
+- The native Windows fixture run covered Manager and Cashier permissions, all six reports, date presets and inclusive ranges, outstanding and archived orders, payment mix, sales reconciliation, fractional quantities, stock rankings, and unchanged source data. CSV and landscape PDF exports passed for all reports and an empty report. Ctrl+P was exercised.
+- Running-window captures and exports are under `C:/Users/iAT/AppData/Local/Temp/syntro-inc7-1795642747357/2cd94bff-d9be-4c7e-a2b9-66e13b52dbf3`. Both themes were checked at 1100×700 and 1440×900 against the references. Wide sales tables use horizontal scrolling at minimum width.
+
+Next is Increment 08 project-wide QA and submission readiness. Retain the earlier optical scanner and physical audio checks in that QA plan.
