@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "Dialogs.h"
 #include "Pricing.h"
+#include "ScanAudio.h"
 #include "Theme.h"
 #include "UiKit.h"
 #include "UiStore.h"
@@ -107,8 +108,10 @@ RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
     setTabOrder(m_manual, m_addBtn);
     setTabOrder(m_addBtn, m_descBtn);
 
+    ScanAudio::instance().warmUp();
+
     connect(&AppState::instance(), &AppState::scanned, this, [this](const QString& ean)
-        { showCode(ean, true); });
+        { processBarcode(ean, true, true); });
     connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString& ean) {
         const auto product = AppState::instance().findByCode(ean);
         if (product) m_feed->showResult(ean + "  -  " + product->name, true);
@@ -164,7 +167,7 @@ QWidget* RecordOrderPage::buildBarcodeStrip()
     label->setBuddy(m_manual);
     h->addWidget(m_manual, 1);
     connect(m_manual, &QLineEdit::returnPressed, this, [this]
-        { showCode(m_manual->text(), false); });
+        { processBarcode(m_manual->text(), false, true); });
 
     auto* browse = W::button("Browse products", "soft", "products");
     m_camToggle = W::button("Camera  [F9]", "soft", "camera");
@@ -392,6 +395,11 @@ void RecordOrderPage::quickLookup()
 
 void RecordOrderPage::showCode(const QString& codeIn, bool fromScanner)
 {
+    processBarcode(codeIn, fromScanner, false);
+}
+
+void RecordOrderPage::processBarcode(const QString& codeIn, bool fromScanner, bool playAudio)
+{
     const QString code = codeIn.trimmed();
     if (code.isEmpty())
     {
@@ -409,7 +417,12 @@ void RecordOrderPage::showCode(const QString& codeIn, bool fromScanner)
     setPreview(p);
     m_manual->clear();
     if (fromScanner && AppState::instance().settings().autoAddScans)
-        addToCart(*p);
+    {
+        if (!addToCart(*p))
+            return;
+    }
+    if (playAudio)
+        ScanAudio::instance().playSuccess();
 }
 
 void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
@@ -442,7 +455,7 @@ void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
 
 }
 
-void RecordOrderPage::addToCart(const ProductInfo& p, int qty)
+bool RecordOrderPage::addToCart(const ProductInfo& p, int qty)
 {
     int have = 0;
     for (const auto& l : m_cart)
@@ -452,7 +465,7 @@ void RecordOrderPage::addToCart(const ProductInfo& p, int qty)
     if (!problem.isEmpty())
     {
         emit toast(problem);
-        return;
+        return false;
     }
     bool found = false;
     for (auto& l : m_cart)
@@ -465,6 +478,7 @@ void RecordOrderPage::addToCart(const ProductInfo& p, int qty)
         m_cart.push_back({ p, qty });
     rebuildTable();
     emit toast(QString("Added %1 × %2").arg(qty).arg(p.name));
+    return true;
 }
 
 void RecordOrderPage::changeQty(int row, int delta)

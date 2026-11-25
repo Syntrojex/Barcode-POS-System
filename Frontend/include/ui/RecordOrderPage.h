@@ -111,7 +111,8 @@ private:
     QWidget* buildSummary();
     void setCameraActive(bool active);
     void setPreview(const std::optional<ProductInfo>& p);
-    void addToCart(const ProductInfo& p, int qty = 1);
+    void processBarcode(const QString& codeIn, bool fromScanner, bool playAudio);
+    bool addToCart(const ProductInfo& p, int qty = 1);
     void changeQty(int row, int delta);
     void removeRow(int row);
     void rebuildTable();

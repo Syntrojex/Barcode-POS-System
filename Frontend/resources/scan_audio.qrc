@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/audio">
+        <file alias="scan_beep.wav">../../assets/scan_beep.wav</file>
+    </qresource>
+</RCC>

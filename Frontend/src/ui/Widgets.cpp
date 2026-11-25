@@ -24,29 +24,8 @@
 #include <QTimer>
 #include <cstdlib>
 #include <cmath>
-#include <thread>
 #include <QApplication>
 #include <QIconEngine>
-#ifdef Q_OS_WIN
-#ifndef NOMINMAX
-#define NOMINMAX // keep std::min/std::max usable
-#endif
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
-// Short "scanner" beep after a successful scan (if enabled in Settings).
-// Windows Beep() blocks while it plays, so it runs on its own short-lived thread.
-static void scanBeep()
-{
-    if (!AppState::instance().settings().beepOnScan)
-        return;
-#ifdef Q_OS_WIN
-    std::thread([] { Beep(1800, 120); }).detach(); // 1800 Hz for 120 ms
-#else
-    QApplication::beep();
-#endif
-}
 #include <QLinearGradient>
 #include <QLocale>
 #include <QPainter>
@@ -459,7 +438,6 @@ void CameraFeedWidget::onImage(const QImage &img)
             m_armed = false;
             m_lastDetected = value;
             showResult(QString(), true); // green flash only, no text on the camera
-            scanBeep();
             emit barcodeDetected(value);
         }
     } else if (!m_armed && m_lastEmit.isValid() && m_lastEmit.elapsed() > 1000) {
