@@ -64,3 +64,11 @@ Local `ali` includes `origin/main` at `09d24ce`. The initial sync `56eef61` kept
 - Product Categories kept the department index, two-digit prefix validation, linked-product protection and the existing session-scoped CRUD. Fixed the displayed range endpoints. Use `git log -1 --format=%H --grep='^feat(ui): redesign product categories screen$'` to resolve this checkpoint.
 
 Build and CTest passed at each screen checkpoint. Windows screenshots are under `C:/Users/iAT/AppData/Local/Temp/syntro-task05-1795632134317` in both themes at 1100×700 and 1440×900. Wide tables use horizontal scrolling at the minimum width. Testing used copied records. See `UI_REDESIGN_PROGRESS.md` for each verified workflow. Next increment is Barcode Scanner, Bills, Discounts, and Settings.
+
+## Scanner checklist and audio integration
+
+The active checkout is `Barcode-POS-System` on `ali`. Integrated the scanner audio and grouped checklist changes from `6ebdb23` and `bb9002d` together with the unfinished Windows playback fix. Windows plays the embedded WAV asynchronously through WinMM. Barcode Scanner and Record Order use the same beep setting. Unknown barcodes, unavailable stock, and checkout transfers produce no additional beep.
+
+The checklist keeps unchecked rows and any quantities the cart could not accept. It uses the existing pricing quote for the selected total. Verified grouping, quantity controls, stock limits, partial and rejected transfers, hold/resume, and two separate paid orders from the same checklist, with distinct order and bill IDs and correct stock after reload.
+
+Qt MinGW Debug built successfully. CTest passed 10/10. Both Qt suites also passed with the native Windows platform plugin. Windows accepted the audio playback request. Speaker audibility and optical barcode scanning still need an in-person check. Tests used temporary data files.

@@ -421,16 +421,13 @@ void RecordOrderPage::processBarcode(const QString& codeIn, bool fromScanner, bo
         if (!addToCart(*p))
             return;
     }
-    if (playAudio)
+    if (playAudio && p->stock + m_stockCredit.value(p->id) > 0)
         ScanAudio::instance().playSuccess();
 }
 
-void RecordOrderPage::addScannedBatch(const QVector<QPair<QString, int>>& items)
+QVector<QPair<QString, int>> RecordOrderPage::addScannedBatch(const QVector<QPair<QString, int>>& items)
 {
-    if (items.isEmpty())
-        return;
-
-    int addedLines = 0;
+    QVector<QPair<QString, int>> accepted;
     int addedUnits = 0;
     int adjustedCount = 0;
     QString lastError;
@@ -456,15 +453,14 @@ void RecordOrderPage::addScannedBatch(const QVector<QPair<QString, int>>& items)
             if (l.p.sku == p->sku)
                 have = l.qty;
 
-        int addQty = requested;
-        const QString problem = stockIssue(p->id, have, addQty);
-        if (!problem.isEmpty())
+        const int available = qMax(0, p->stock + m_stockCredit.value(p->id) - have);
+        const int addQty = qMin(requested, available);
+        const QString problem = stockIssue(p->id, have, requested);
+        if (addQty != requested || !problem.isEmpty())
         {
-            while (addQty > 0 && !stockIssue(p->id, have, addQty).isEmpty())
-                --addQty;
             ++adjustedCount;
             lastError = problem;
-            if (addQty <= 0)
+            if (addQty <= 0 || !stockIssue(p->id, have, addQty).isEmpty())
                 continue;
         }
 
@@ -481,7 +477,7 @@ void RecordOrderPage::addScannedBatch(const QVector<QPair<QString, int>>& items)
         if (!found)
             m_cart.push_back({ *p, addQty });
 
-        ++addedLines;
+        accepted.push_back({code, addQty});
         addedUnits += addQty;
         lastAdded = *p;
     }
@@ -498,14 +494,14 @@ void RecordOrderPage::addScannedBatch(const QVector<QPair<QString, int>>& items)
     if (addedUnits > 0 && adjustedCount == 0)
     {
         emit toast(QString("Added %1 product%2 (%3 unit%4) to checkout")
-                       .arg(addedLines)
-                       .arg(addedLines == 1 ? "" : "s")
+                       .arg(accepted.size())
+                       .arg(accepted.size() == 1 ? "" : "s")
                        .arg(addedUnits)
                        .arg(addedUnits == 1 ? "" : "s"));
     }
     else if (addedUnits > 0)
     {
-        emit toast(QString("Added %1 unit%2 to checkout (%3 item%4 adjusted for stock)")
+        emit toast(QString("Added %1 unit%2 · %3 item%4 need review in the scanner")
                        .arg(addedUnits)
                        .arg(addedUnits == 1 ? "" : "s")
                        .arg(adjustedCount)
@@ -515,6 +511,7 @@ void RecordOrderPage::addScannedBatch(const QVector<QPair<QString, int>>& items)
     {
         emit toast(lastError);
     }
+    return accepted;
 }
 
 void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)

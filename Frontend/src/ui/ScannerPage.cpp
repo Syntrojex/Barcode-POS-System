@@ -1,7 +1,10 @@
 #include "ScannerPage.h"
 #include "Dialogs.h"
+#include "Pricing.h"
+#include "ScanAudio.h"
 #include "Theme.h"
 #include "UiKit.h"
+#include "UiStore.h"
 #include "Widgets.h"
 #include <QAbstractItemView>
 #include <QCheckBox>
@@ -191,8 +194,10 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
             const auto product = AppState::instance().findByCode(code);
             if (product)
             {
-                m_feed->showResult(code + "  -  " + product->name, true);
-                show(*product);
+                const bool added = show(*product);
+                m_feed->showResult(code + "  -  " + product->name, added);
+                if (added)
+                    ScanAudio::instance().playSuccess();
             }
             else
             {
@@ -215,7 +220,8 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
                 emit toast("No product found for \"" + query + "\"");
                 return;
             }
-            show(*p);
+            if (show(*p))
+                ScanAudio::instance().playSuccess();
             m_manual->clear();
         };
     connect(go, &QPushButton::clicked, this, lookup);
@@ -244,12 +250,16 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
                     e.product = *latest;
                     if (e.product.stock <= 0)
                         e.checked = false;
-                    else if (e.qty > e.product.stock)
-                        e.qty = e.product.stock;
+                }
+                else
+                {
+                    e.product.stock = 0;
+                    e.checked = false;
                 }
             }
             rebuildChecklist();
         });
+    connect(&UiStore::instance(), &UiStore::seasonsChanged, this, &ScannerPage::updateSelectionSummary);
 
     rebuildChecklist();
 }
@@ -272,7 +282,7 @@ void ScannerPage::recordScan(const ProductInfo &p)
     show(p);
 }
 
-void ScannerPage::show(const ProductInfo &p)
+bool ScannerPage::show(const ProductInfo &p)
 {
     m_feed->setCode(p.ean);
     m_lastEan = p.ean;
@@ -289,6 +299,7 @@ void ScannerPage::show(const ProductInfo &p)
         }
     }
 
+    bool added = p.stock > 0;
     if (existingIndex >= 0)
     {
         ScanEntry updated = m_entries.takeAt(existingIndex);
@@ -299,7 +310,10 @@ void ScannerPage::show(const ProductInfo &p)
             if (updated.qty < p.stock)
                 ++updated.qty;
             else
+            {
+                added = false;
                 emit toast(QString("Maximum stock (%1) reached for %2").arg(p.stock).arg(p.name));
+            }
             updated.checked = true;
         }
         else
@@ -322,6 +336,7 @@ void ScannerPage::show(const ProductInfo &p)
     if (!m_entries.isEmpty())
         m_checklist->selectRow(0);
     // Show description only on request; opening a modal on every camera frame is disruptive.
+    return added;
 }
 
 void ScannerPage::rebuildChecklist()
@@ -399,7 +414,7 @@ void ScannerPage::updateSelectionSummary()
     int checkableItems = 0;
     int checkedItems = 0;
     int checkedUnits = 0;
-    double checkedTotal = 0.0;
+    QVector<ReceiptLine> checkedLines;
 
     for (const auto &e : m_entries)
     {
@@ -410,7 +425,8 @@ void ScannerPage::updateSelectionSummary()
         {
             ++checkedItems;
             checkedUnits += e.qty;
-            checkedTotal += unitGrossWithTax(e.product) * e.qty;
+            const auto &p = e.product;
+            checkedLines.push_back({p.name, p.sku, e.qty, p.price, p.tax, p.discount, p.id});
         }
     }
 
@@ -436,7 +452,7 @@ void ScannerPage::updateSelectionSummary()
               .arg(checkedItems == 1 ? "" : "s")
               .arg(checkedUnits)
               .arg(checkedUnits == 1 ? "" : "s"));
-    m_selectedTotal->setText(W::money(checkedTotal));
+    m_selectedTotal->setText(W::money(Pricing::quote(checkedLines).payable));
 
     m_send->setEnabled(!m_viewOnly && checkedUnits > 0);
     m_send->setText(checkedUnits > 0
@@ -513,15 +529,14 @@ void ScannerPage::clearHistory()
 
 void ScannerPage::sendCheckedToOrder()
 {
+    if (m_viewOnly)
+        return;
     QVector<QPair<QString, int>> batch;
-    QVector<ScanEntry> remaining;
 
     for (const auto &e : m_entries)
     {
         if (e.checked && e.qty > 0 && e.product.stock > 0)
             batch.push_back({e.product.ean, e.qty});
-        else
-            remaining.push_back(e);
     }
 
     if (batch.isEmpty())
@@ -530,12 +545,24 @@ void ScannerPage::sendCheckedToOrder()
         return;
     }
 
-    m_entries = remaining;
+    emit sendBatchToOrder(batch);
+}
+
+void ScannerPage::removeTransferredItems(const QVector<QPair<QString, int>> &items)
+{
+    for (const auto &item : items)
+    {
+        const auto entry = std::find_if(m_entries.begin(), m_entries.end(), [&item](const ScanEntry &candidate)
+            { return candidate.product.ean == item.first; });
+        if (entry == m_entries.end())
+            continue;
+        entry->qty -= item.second;
+        if (entry->qty <= 0)
+            m_entries.erase(entry);
+    }
     rebuildChecklist();
     if (!m_entries.isEmpty())
         setRowSelected(0);
-
-    emit sendBatchToOrder(batch);
 }
 
 void ScannerPage::setViewOnly(bool on)

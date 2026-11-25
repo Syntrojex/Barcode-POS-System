@@ -15,6 +15,8 @@
 #include <QMediaDevices>
 #include <QSoundEffect>
 #elif defined(WITH_SCAN_AUDIO_WINMM)
+#include <QDir>
+#include <QTemporaryFile>
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -192,7 +194,8 @@ void ScanAudio::ensureInitialized()
     m_initialized = true;
     initScanAudioResources();
 
-    connect(app, &QCoreApplication::aboutToQuit, this, &ScanAudio::shutdown, Qt::DirectConnection);
+    // The POS leaves and re-enters the event loop on logout. Keep audio reusable for the next sign-in.
+    connect(app, &QObject::destroyed, this, &ScanAudio::shutdown, Qt::DirectConnection);
 
     QFile wavFile(QStringLiteral(":/audio/scan_beep.wav"));
     if (wavFile.open(QIODevice::ReadOnly))
@@ -224,6 +227,23 @@ void ScanAudio::ensureInitialized()
         }
     });
     m_effect->setSource(QUrl(QStringLiteral("qrc:/audio/scan_beep.wav")));
+#elif defined(WITH_SCAN_AUDIO_WINMM)
+    // WinMM does not support SND_MEMORY | SND_ASYNC. Persist the embedded WAV
+    // to a temporary file and play by filename, asynchronously.
+    m_temporaryWav = std::make_unique<QTemporaryFile>(
+        QDir::tempPath() + QStringLiteral("/syntro_scan_XXXXXX.wav"));
+    if (m_temporaryWav->open() &&
+        m_temporaryWav->write(m_wavBuffer) == m_wavBuffer.size() &&
+        m_temporaryWav->flush())
+    {
+        m_temporaryWavPath = m_temporaryWav->fileName();
+        m_temporaryWav->close(); // Let the Windows sound API open it by filename.
+    }
+    else
+    {
+        qWarning("ScanAudio: could not prepare the embedded WAV for Windows playback.");
+        m_temporaryWav.reset();
+    }
 #endif
 
     refreshDeviceAvailability();
@@ -239,6 +259,8 @@ void ScanAudio::shutdown()
     m_mediaDevices.reset();
 #elif defined(WITH_SCAN_AUDIO_WINMM)
     PlaySoundW(nullptr, nullptr, 0);
+    m_temporaryWav.reset(); // Deletes the temporary WAV on shutdown.
+    m_temporaryWavPath.clear();
 #endif
     m_wavBuffer.clear();
 }
@@ -268,7 +290,7 @@ void ScanAudio::refreshDeviceAvailability()
         m_effect->setAudioDevice(defaultOut);
     m_available = (m_effect->status() != QSoundEffect::Error);
 #elif defined(WITH_SCAN_AUDIO_WINMM)
-    m_available = (waveOutGetNumDevs() > 0) && !m_wavBuffer.isEmpty();
+    m_available = (waveOutGetNumDevs() > 0) && !m_temporaryWavPath.isEmpty();
 #else
     m_available = false;
 #endif
@@ -296,11 +318,13 @@ bool ScanAudio::triggerBackendPlayback()
     m_effect->play();
     return true;
 #elif defined(WITH_SCAN_AUDIO_WINMM)
-    if (m_wavBuffer.isEmpty())
+    if (m_temporaryWavPath.isEmpty())
         return false;
-    return PlaySoundW(reinterpret_cast<LPCWSTR>(m_wavBuffer.constData()),
-                      nullptr,
-                      SND_MEMORY | SND_ASYNC | SND_NODEFAULT) != FALSE;
+    const BOOL played = PlaySoundW(reinterpret_cast<LPCWSTR>(m_temporaryWavPath.utf16()),
+                                   nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+    if (!played)
+        qWarning("ScanAudio: Windows rejected the scan tone playback request.");
+    return played != FALSE;
 #else
     return false;
 #endif

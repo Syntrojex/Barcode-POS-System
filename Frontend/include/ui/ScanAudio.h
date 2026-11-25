@@ -9,6 +9,8 @@
 #ifdef WITH_SCAN_AUDIO_QT
 class QMediaDevices;
 class QSoundEffect;
+#elif defined(WITH_SCAN_AUDIO_WINMM)
+class QTemporaryFile;
 #endif
 
 /**
@@ -74,5 +76,8 @@ private:
 #ifdef WITH_SCAN_AUDIO_QT
     std::unique_ptr<QMediaDevices> m_mediaDevices;
     std::unique_ptr<QSoundEffect> m_effect;
+#elif defined(WITH_SCAN_AUDIO_WINMM)
+    std::unique_ptr<QTemporaryFile> m_temporaryWav;
+    QString m_temporaryWavPath;
 #endif
 };

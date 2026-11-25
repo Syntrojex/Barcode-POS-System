@@ -33,6 +33,7 @@ public:
     void deselectAll();
     void clearHistory();
     void sendCheckedToOrder();
+    void removeTransferredItems(const QVector<QPair<QString, int>> &items);
 
 signals:
     void toast(const QString &message);
@@ -42,7 +43,7 @@ signals:
 
 private:
     void scanNext();
-    void show(const ProductInfo &p);
+    bool show(const ProductInfo &p);
     void rebuildChecklist();
     void updateSelectionSummary();
     void changeEntryQty(int row, int delta);

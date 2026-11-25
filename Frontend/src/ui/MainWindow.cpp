@@ -124,7 +124,7 @@ MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
     connect(m_scanner, &ScannerPage::sendToOrder, this, [this](const QString &ean)
             { if (goTo(RecordOrder)) m_record->showCode(ean, true); });
     connect(m_scanner, &ScannerPage::sendBatchToOrder, this, [this](const QVector<QPair<QString, int>> &items)
-            { if (goTo(RecordOrder)) m_record->addScannedBatch(items); });
+            { if (goTo(RecordOrder)) m_scanner->removeTransferredItems(m_record->addScannedBatch(items)); });
 
     connect(m_orders, &OrdersPage::resumeOrder, this, &MainWindow::openOrderForEdit);
     connect(m_orders, &OrdersPage::editOrder, this, &MainWindow::openOrderForEdit);

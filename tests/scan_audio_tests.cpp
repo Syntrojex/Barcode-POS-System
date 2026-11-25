@@ -277,8 +277,14 @@ void ScanAudioTests::gracefulUnavailableHardwareHandling()
     const QString backend = audio.backendName();
     QVERIFY(!backend.isEmpty());
     audio.resetDebounce();
-    (void)audio.playIfEnabled(true);
-    (void)audio.playIfEnabled(false);
+    const bool available = audio.isAvailable();
+    const bool played = audio.playIfEnabled(true);
+    QVERIFY(!audio.playIfEnabled(false));
+#ifdef WITH_SCAN_AUDIO_WINMM
+    if (available)
+        QVERIFY2(played, "Windows rejected playback of the embedded scan tone");
+    qInfo() << "Windows audio output available:" << available << "Playback accepted:" << played;
+#endif
 }
 
 int main(int argc, char *argv[])

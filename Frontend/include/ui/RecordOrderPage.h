@@ -67,7 +67,7 @@ public slots:
      * @brief Adds a batch of checked barcode-scanned items (EAN, quantity) directly to the cart
      *        so the cashier can generate a collective bill.
      */
-    void addScannedBatch(const QVector<QPair<QString, int>>& items);
+    QVector<QPair<QString, int>> addScannedBatch(const QVector<QPair<QString, int>>& items);
 
     /** @brief Discards the current cart and resets the interface for a new customer transaction. */
     void newDraft();

@@ -1,6 +1,7 @@
 #include "AppState.h"
 #include "MainWindow.h"
 #include "RecordOrderPage.h"
+#include "ScanAudio.h"
 #include "ScannerPage.h"
 #include "Theme.h"
 #include "Widgets.h"
@@ -8,6 +9,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QDir>
+#include <QDialog>
 #include <QFile>
 #include <QLabel>
 #include <QLineEdit>
@@ -15,6 +17,7 @@
 #include <QSignalSpy>
 #include <QTableWidget>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtTest/QtTest>
 
 namespace
@@ -56,6 +59,9 @@ private slots:
     void sendCheckedBatchToCollectiveCheckout();
     void stockClampingAndOutOfStockHandling();
     void mainWindowRoutesBatchToRecordOrder();
+    void partialTransfersRemainAvailableForNextOrder();
+    void scannerAudioForAcceptedScansOnly();
+    void twoOrdersFromOneChecklist();
 
 private:
     QTemporaryDir m_tempDataDir;
@@ -135,8 +141,9 @@ void ScannerChecklistTests::sendCheckedBatchToCollectiveCheckout()
     RecordOrderPage recordOrder;
     AppState::instance().settings().autoAddScans = false; // collective batch must add regardless!
 
-    connect(&scanner, &ScannerPage::sendBatchToOrder,
-            &recordOrder, &RecordOrderPage::addScannedBatch);
+    connect(&scanner, &ScannerPage::sendBatchToOrder, &recordOrder,
+            [&](const QVector<QPair<QString, int>> &items)
+            { scanner.removeTransferredItems(recordOrder.addScannedBatch(items)); });
 
     const auto water = AppState::instance().findByCode("01008418");
     const auto eggs = AppState::instance().findByCode("01007350");
@@ -224,6 +231,139 @@ void ScannerChecklistTests::mainWindowRoutesBatchToRecordOrder()
 
     QCOMPARE(win.recordPage()->findChild<QLabel *>("checkoutPayable")->text(), QString("PKR 448.00"));
     Theme::setDark(originalDark);
+}
+
+void ScannerChecklistTests::partialTransfersRemainAvailableForNextOrder()
+{
+    MainWindow window(UserRole::Cashier, "Cashier Test");
+    auto *scanner = window.findChild<ScannerPage *>();
+    auto *order = window.recordPage();
+    const auto eggs = AppState::instance().findByCode("01007350");
+    QVERIFY(scanner && order && eggs);
+
+    order->addScannedBatch({{eggs->ean, 3}});
+    for (int i = 0; i < 4; ++i)
+        scanner->recordScan(*eggs);
+    scanner->sendCheckedToOrder();
+    QCOMPARE(scanner->entries().size(), 1);
+    QCOMPARE(scanner->entries().first().qty, 3);
+    QCOMPARE(order->findChild<QLabel *>("checkoutPayable")->text(), QString("PKR 1,560.00"));
+
+    scanner->sendCheckedToOrder();
+    QCOMPARE(scanner->entries().first().qty, 3);
+    order->holdOrder();
+    scanner->sendCheckedToOrder();
+    QVERIFY(scanner->entries().isEmpty());
+    QCOMPARE(order->findChild<QLabel *>("checkoutPayable")->text(), QString("PKR 1,170.00"));
+    QVERIFY(!AppState::instance().heldOrders().isEmpty());
+}
+
+void ScannerChecklistTests::scannerAudioForAcceptedScansOnly()
+{
+    ScannerPage scanner;
+    auto *feed = scanner.findChild<CameraFeedWidget *>();
+    auto *manual = scanner.findChild<QLineEdit *>("scannerManualInput");
+    auto &audio = ScanAudio::instance();
+    auto &settings = AppState::instance().settings();
+    const bool beep = settings.beepOnScan;
+    QSignalSpy feedback(&audio, &ScanAudio::feedbackTriggered);
+    settings.beepOnScan = true;
+    audio.resetDebounce();
+    emit feed->barcodeDetected("99999999");
+    emit feed->barcodeDetected("01011722");
+    QCOMPARE(feedback.count(), 0);
+
+    emit feed->barcodeDetected("01001020");
+    QCOMPARE(feedback.count(), 1);
+    audio.resetDebounce();
+    manual->setText("01008418");
+    QTest::keyClick(manual, Qt::Key_Return);
+    QCOMPARE(feedback.count(), 2);
+
+    settings.beepOnScan = false;
+    audio.resetDebounce();
+    emit feed->barcodeDetected("01008418");
+    QCOMPARE(feedback.count(), 2);
+    settings.beepOnScan = beep;
+}
+
+void ScannerChecklistTests::twoOrdersFromOneChecklist()
+{
+    auto &state = AppState::instance();
+    const auto milk = state.findByCode("01001020");
+    const auto water = state.findByCode("01008418");
+    QVERIFY(milk && water);
+    MainWindow window(UserRole::Cashier, "Cashier Test");
+    auto *scanner = window.findChild<ScannerPage *>();
+    auto *order = window.recordPage();
+    auto *table = scanner->findChild<QTableWidget *>("scannerChecklist");
+    scanner->recordScan(*milk);
+    scanner->recordScan(*water);
+    scanner->recordScan(*water);
+    table->cellWidget(1, 0)->findChild<QCheckBox *>()->setChecked(false);
+    scanner->sendCheckedToOrder();
+    QCOMPARE(scanner->entries().size(), 1);
+    QCOMPARE(scanner->entries().first().product.ean, milk->ean);
+
+    auto settleCash = [order] {
+        int ticks = 0;
+        bool receipt = false;
+        QTimer timer;
+        QObject::connect(&timer, &QTimer::timeout, order, [&] {
+            auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!dialog)
+                return;
+            if (dialog->windowTitle().startsWith("Bill - "))
+            {
+                receipt = true;
+                dialog->accept();
+                return;
+            }
+            for (auto *button : dialog->findChildren<QPushButton *>())
+                if (button->isEnabled() && button->text().startsWith("Confirm Payment"))
+                {
+                    button->click();
+                    return;
+                }
+            if (++ticks > 20)
+                dialog->reject();
+        });
+        timer.start(50);
+        order->checkout();
+        return receipt;
+    };
+
+    const auto before = state.orders().size();
+    QVERIFY(settleCash());
+    QCOMPARE(state.orders().size(), before + 1);
+    QString firstId, firstBill;
+    for (const auto &saved : state.orders())
+        if (saved.status == "Paid")
+        {
+            firstId = saved.id;
+            firstBill = saved.billId;
+            QCOMPARE(saved.itemCount(), 2);
+        }
+    QVERIFY(!firstId.isEmpty() && !firstBill.isEmpty());
+    QCOMPARE(scanner->entries().size(), 1);
+    scanner->selectAll();
+    scanner->sendCheckedToOrder();
+    QVERIFY(scanner->entries().isEmpty());
+    QVERIFY(settleCash());
+    state.reloadAll();
+    QCOMPARE(state.orders().size(), before + 2);
+    QVERIFY(!firstBill.isEmpty());
+    bool secondOrderFound = false;
+    for (const auto &saved : state.orders())
+        if (saved.status == "Paid" && saved.id != firstId)
+        {
+            QVERIFY(!saved.billId.isEmpty() && saved.billId != firstBill);
+            QCOMPARE(saved.itemCount(), 1);
+            secondOrderFound = true;
+        }
+    QVERIFY(secondOrderFound);
+    QCOMPARE(state.findByCode(milk->ean)->stock, milk->stock - 1);
+    QCOMPARE(state.findByCode(water->ean)->stock, water->stock - 2);
 }
 
 int main(int argc, char *argv[])
