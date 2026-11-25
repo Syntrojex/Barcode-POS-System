@@ -78,10 +78,21 @@ public:
      * @param[out] bill Finalized Bill object populated with generated Bill ID and saved data.
      * @param[out] change Optional pointer to receive change amount in PKR for cash transactions.
      * @param[out] error Optional pointer to receive failure details.
+     * @param[in] adjustments Seasonal and special discount amounts (PKR) taken off the whole bill (Increment 3).
      * @return True if checkout and persistence succeeded; false otherwise.
      */
     bool checkout(const std::string& orderId, const PaymentRequest& payment, Bill& bill,
-                  double* change = nullptr, std::string* error = nullptr);
+                  double* change = nullptr, std::string* error = nullptr,
+                  const BillAdjustments& adjustments = {});
+
+    /**
+     * @brief Re-bills an order that is already paid, after its lines were edited (requirement 3).
+     *        The order stays paid and keeps its Bill ID and the original bill date/time (the payment
+     *        moment that the 7-day edit window counts from); amounts, payment and lines are replaced.
+     */
+    bool rebill(const std::string& orderId, const PaymentRequest& payment, Bill& bill,
+                double* change = nullptr, std::string* error = nullptr,
+                const BillAdjustments& adjustments = {});
 
 private:
     order::OrderManager& orders_;           ///< Managed order subsystem.

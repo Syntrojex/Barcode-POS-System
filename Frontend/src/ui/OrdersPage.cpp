@@ -1,9 +1,8 @@
 #include "OrdersPage.h"
 #include "Dialogs.h"
-#include "OrderRules.h"
-#include "UiStore.h"
 #include "Theme.h"
 #include "UiKit.h"
+#include "UiStore.h"
 #include "Widgets.h"
 #include <QApplication>
 #include <QCheckBox>
@@ -13,10 +12,8 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QSet>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTextStream>
@@ -76,9 +73,9 @@ OrdersPage::OrdersPage(QWidget* parent) : QWidget(parent)
     for (int c : {2, 6, 7, 8})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
     m_table->setColumnWidth(2, 175);
-    m_table->setColumnWidth(6, 110);
-    m_table->setColumnWidth(7, 150);
-    m_table->setColumnWidth(8, 215);
+    m_table->setColumnWidth(6, 120);
+    m_table->setColumnWidth(7, 170);
+    m_table->setColumnWidth(8, 190);
     v->addWidget(m_table, 1);
     m_showing = W::label("", "muted");
     v->addWidget(m_showing);
@@ -89,7 +86,6 @@ OrdersPage::OrdersPage(QWidget* parent) : QWidget(parent)
     connect(m_custSearch, &QLineEdit::textChanged, this, [this]
         { rebuild(); });
     connect(&AppState::instance(), &AppState::changed, this, &OrdersPage::rebuild);
-    connect(&UiStore::instance(), &UiStore::parkedChanged, this, &OrdersPage::rebuild);
     connect(exp, &QPushButton::clicked, this, [this]
         {
             QStringList rows{ "Order ID,Time,Customer,Contact,Items,Payment,Amount,Status" };
@@ -109,34 +105,14 @@ void OrdersPage::setSearch(const QString& text)
 void OrdersPage::rebuild()
 {
     const auto& all = AppState::instance().orders();
-    const auto& parked = UiStore::instance().parked();
     QString q = m_orderSearch->text().trimmed();
     q.remove('#');
-
-    // Orders parked with F2 live in UiStore; show them as "On Hold" rows next to the orders from Order.txt.
-    QVector<OrderRecord> candidates;
-    QSet<QString> holdCodes;
-    for (const auto& p : parked)
-    {
-        OrderRecord h;
-        h.id = p.code;
-        h.time = p.parkedAt;
-        h.customer = p.customer.isEmpty() ? QString("Walk-in Customer") : p.customer;
-        h.contact = p.contact.isEmpty() ? QString("-") : p.contact;
-        h.tier = "Guest";
-        h.shift = "Parked";
-        h.payment = "-";
-        h.status = "On Hold";
-        h.lines = p.lines;
-        h.recompute();
-        candidates << h;
-        holdCodes.insert(p.code);
-    }
-    candidates += all;
-
     QVector<OrderRecord> rows;
-    for (const auto& o : candidates)
+    int hold = 0;
+    for (const auto& o : all)
     {
+        if (o.status == "On Hold" || o.status == "In Progress")
+            ++hold;
         if (m_filter != "All" && o.status != m_filter)
             continue;
         if (!q.isEmpty() && !o.id.contains(q, Qt::CaseInsensitive) && !o.customer.contains(q, Qt::CaseInsensitive) &&
@@ -144,13 +120,13 @@ void OrdersPage::rebuild()
             continue;
         rows << o;
     }
-
+    auto& st = AppState::instance();
+    (void)hold;
     m_table->setRowCount(rows.size());
     for (int r = 0; r < rows.size(); ++r)
     {
         const auto& o = rows[r];
-        const bool isHold = holdCodes.contains(o.id);
-        m_table->setRowHeight(r, 56);
+        m_table->setRowHeight(r, 60);
         m_table->setItem(r, 0, item("#" + o.id, Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
         m_table->setItem(r, 1, item(o.time.toString("yyyy-MM-dd HH:mm") + "\n" + o.shift));
         {
@@ -169,111 +145,77 @@ void OrdersPage::rebuild()
         m_table->setItem(r, 4, item(o.payment));
         m_table->setItem(r, 5, item(W::money(o.total), Qt::AlignRight | Qt::AlignVCenter, "", true));
         m_table->setCellWidget(r, 6, wrapW(W::badge(o.status, W::statusBadgeKind(o.status))));
+        // ---- edit window (requirement 3): paid orders can be edited for 7 days after payment, with manager approval
+        const int daysLeft = st.editDaysLeft(o);
+        QLabel* windowBadge = nullptr;
+        if (o.status == "Paid")
+            windowBadge = daysLeft > 0
+                ? W::badge(QString("Editable for %1 day%2").arg(daysLeft).arg(daysLeft == 1 ? "" : "s"), daysLeft <= 2 ? "amber" : "green")
+                : W::badge("Locked (7 days over)", "grey");
+        else if (o.status == "In Progress" || o.status == "On Hold")
+            windowBadge = W::badge("Not paid yet", "blue");
+        else
+            windowBadge = W::badge("Archived", "grey");
+        m_table->setCellWidget(r, 7, wrapW(windowBadge));
 
-        // ---- EDIT WINDOW column: "Editable for N days" (paid, inside 7 days), "Window closed", "Locked", "Resume anytime"
-        {
-            QLabel* b = nullptr;
-            if (OrderRules::isPaid(o))
-            {
-                const int left = OrderRules::editDaysLeft(o);
-                if (left > 0)
-                {
-                    b = W::badge(OrderRules::editBadgeText(left), OrderRules::editBadgeKind(left));
-                    b->setToolTip(QString("Paid %1 - editable until %2, with manager approval")
-                        .arg(o.time.toString("d MMM HH:mm"), OrderRules::editDeadline(o).toString("d MMM yyyy HH:mm")));
-                }
-                else
-                {
-                    b = W::badge("Window closed", "grey");
-                    b->setToolTip(QString("Paid %1 days ago - orders can only be edited within %2 days of payment")
-                        .arg(OrderRules::daysSincePaid(o)).arg(OrderRules::kEditWindowDays));
-                }
-            }
-            else if (o.status == "Archived")
-            {
-                b = W::badge("Locked", "grey");
-                b->setToolTip("Archived orders cannot be edited");
-            }
-            else if (OrderRules::isResumable(o))
-            {
-                b = W::badge("Resume anytime", "blue");
-                b->setToolTip("On-hold orders need no approval");
-            }
-            if (b)
-                m_table->setCellWidget(r, 7, wrapW(b));
-        }
-
-        // ---- ACTIONS column: Open (paid) / Resume (on hold, in progress), details, receipt
         auto* w = new QWidget;
         auto* h = new QHBoxLayout(w);
         h->setContentsMargins(4, 0, 4, 0);
         h->setSpacing(4);
         const OrderRecord copy = o;
-        const QString id = o.id;
-        if (OrderRules::isResumable(o))
-        {
-            auto* resume = W::button("Resume", "mini", "play");
-            resume->setToolTip("Continue this order in Record Order");
-            h->addWidget(resume);
-            if (isHold)
-                connect(resume, &QPushButton::clicked, this, [this, id] { emit resumeParked(id); });
-            else
-                connect(resume, &QPushButton::clicked, this, [this, id] { emit resumeOrder(id); });
-        }
-        else if (OrderRules::isPaid(o) || o.status == "Archived")
-        {
-            auto* open = W::button("Open", "mini", OrderRules::isPaid(o) && OrderRules::paidEditable(o) ? "unlock" : "lock");
-            open->setEnabled(OrderRules::isPaid(o) && OrderRules::paidEditable(o));
-            open->setToolTip(open->isEnabled()
-                ? (m_role == UserRole::Manager ? "Open this paid order for editing"
-                                               : "Open this paid order for editing (needs manager approval)")
-                : "This order can no longer be edited");
-            h->addWidget(open);
-            connect(open, &QPushButton::clicked, this, [this, copy] { openPaid(copy); });
-        }
         auto* view = W::button("", "flat", "eye");
         view->setToolTip("View details");
         h->addWidget(view);
         connect(view, &QPushButton::clicked, this, [this, copy]
             { Dialogs::orderDetails(this, copy); });
-        if (!isHold)
+        auto* rc = W::button("", "flat", "bills");
+        rc->setToolTip("Receipt");
+        h->addWidget(rc);
+        connect(rc, &QPushButton::clicked, this, [this, copy]
+            { Dialogs::receipt(this, copy); });
+        if (o.status == "In Progress" || o.status == "On Hold")
         {
-            auto* rc = W::button("", "flat", "bills");
-            rc->setToolTip("Receipt");
-            h->addWidget(rc);
-            connect(rc, &QPushButton::clicked, this, [this, copy]
-                { Dialogs::receipt(this, copy); });
+            auto* resume = W::button("Resume", "mini", "play");
+            resume->setToolTip("Open this order in Record Order");
+            h->addWidget(resume);
+            connect(resume, &QPushButton::clicked, this, [this, copy]
+                { emit resumeOrder(copy.id); });
+        }
+        else if (o.status == "Paid")
+        {
+            auto* open = W::button(daysLeft > 0 ? "Open" : "Locked", "mini", daysLeft > 0 ? "unlock" : "lock");
+            open->setEnabled(daysLeft > 0);
+            open->setToolTip(daysLeft > 0 ? "Edit this order (needs a manager's approval)"
+                                          : "The 7-day edit window is over");
+            h->addWidget(open);
+            connect(open, &QPushButton::clicked, this, [this, copy]
+                { openPaid(copy); });
         }
         h->addStretch();
         m_table->setCellWidget(r, 8, w);
     }
-    m_showing->setText(QString("%1 of %2 orders").arg(rows.size()).arg(candidates.size()));
+    m_showing->setText(QString("%1 of %2 orders").arg(rows.size()).arg(all.size()));
 }
 
-// Paid order: inside the 7-day window and approved by a manager -> open it for editing.
+void OrdersPage::setRole(UserRole role) { m_role = role; }
+
+// A paid order is opened for editing only after a manager approved it (a signed-in manager approves it himself).
 void OrdersPage::openPaid(const OrderRecord& order)
 {
-    if (!OrderRules::paidEditable(order))
+    if (AppState::instance().editDaysLeft(order) <= 0)
     {
-        emit toast(QString("Order #%1 was paid %2 days ago - the %3-day edit window has closed")
-            .arg(order.id).arg(OrderRules::daysSincePaid(order)).arg(OrderRules::kEditWindowDays));
-        return;
-    }
-    if (m_role == UserRole::Manager)
-    {
-        emit toast("Edit of order #" + order.id + " approved by manager");
-        emit editOrder(order.id);
+        emit toast("Order " + order.id + " can no longer be edited (7 days after payment are over)");
         return;
     }
     QString manager, reason;
-    if (!Dialogs::managerApproval(this, order, &manager, &reason))
+    if (m_role == UserRole::Manager)
+    {
+        manager = "Manager (signed in)";
+        reason = "Edited by manager";
+    }
+    else if (!Dialogs::managerApproval(this, order, &manager, &reason))
         return;
-    emit toast(QString("Order #%1 unlocked by %2").arg(order.id, manager));
+    UiStore::instance().grantApproval(order.id, manager, reason);
+    emit toast("Approved by " + manager + " - opening order " + order.id);
     emit editOrder(order.id);
-}
-
-void OrdersPage::setRole(UserRole role)
-{
-    m_role = role;
-    rebuild();
 }

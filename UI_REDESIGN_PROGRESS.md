@@ -38,3 +38,14 @@ Completed on `ali`. The navy sidebar groups the existing pages into Sales, Catal
 - [x] The local commit `fix(ui): meet increment 2 acceptance checklist` records the acceptance fixes, the preceding dashboard and theme upgrade, and this progress log.
 
 All six CTest checks passed. Cash checkout in both themes used a temporary copy of the catalog. Typed barcode lookup found the product, cash payment created the paid order, order detail, and bill records, and stock decreased by one. Scanner decoding was covered by CTest.
+
+## Team integration checkpoint
+
+The local candidate on `integration/ali-team-sync-20261125-2122` integrates the approved `origin/main` work for persisted holds, paid-order editing, split bill records, seasonal discounts, and sales reports. Ali's blue/navy shell, dashboard, light/dark styling, and committed checkout layout remain the visual baseline.
+
+- Original `ali` commit was `9cb1661640af80bc7725ee6ce43360cf046c93d4`. The exact commit is protected by `backup/ali-before-team-integration-20261125-2122`.
+- Task 03 remained in progress in the original worktree. Its tracked changes were independently captured in `backup/ali-checkout-wip-20261125-2122`. The dashboard refresh was committed with Increment 2 acceptance. No separate Task 04 completion record was found.
+- The baseline build passed 6/6 CTest checks. The merge candidate built and passed 8/8. Windows checks covered both roles and themes at 1100×700 and 1440×900, cash/card/wallet checkout, persisted hold/resume, an approved paid edit, legacy-bill reload, and receipt PDF generation on copied records.
+- Optical barcode capture and external payment terminals were outside the verified workflows. The merge is ready for review on the integration branch. The checkout work in the original `ali` worktree overlaps the merge and needs reconciliation before promotion.
+
+See [DEVELOPMENT_HANDOFF.md](DEVELOPMENT_HANDOFF.md) for the full integration audit and remaining checks.

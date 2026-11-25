@@ -125,8 +125,6 @@ MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
             { if (goTo(RecordOrder)) m_record->showCode(ean, true); });
 
     connect(m_orders, &OrdersPage::resumeOrder, this, &MainWindow::openOrderForEdit);
-    connect(m_orders, &OrdersPage::resumeParked, this, [this](const QString &code)
-            { if (goTo(RecordOrder)) m_record->resumeParked(code); });
     connect(m_orders, &OrdersPage::editOrder, this, &MainWindow::openOrderForEdit);
     connect(m_orders, &OrdersPage::showBill, this, &MainWindow::showBillFor);
 

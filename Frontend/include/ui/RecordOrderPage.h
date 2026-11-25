@@ -14,10 +14,12 @@
 
 #include "AppState.h"
 #include "UserRole.h"
+#include <QMap>
 #include <QVector>
 #include <QWidget>
 #include <optional>
 
+class QFrame;
 class QHBoxLayout;
 class QLabel;
 class ElidedLabel;
@@ -100,6 +102,8 @@ private:
     };
 
     QWidget* buildCustomerStrip();
+    QWidget* buildEditBanner();  ///< amber "Editing order #..." bar (hidden unless an order is being edited)
+    void setEditMode(const QString& orderId, const QString& text); ///< empty id = leave edit mode
     QWidget* buildParkedStrip(); ///< "Parked (n)" chips of the orders on hold
     QWidget* buildLeft();
     QWidget* buildRight();
@@ -112,9 +116,12 @@ private:
     void loadDemoDraft();
     void rebuildParked();        ///< redraws the on-hold chips (also keeps the "4m ago" texts fresh)
     QVector<ReceiptLine> cartLines() const;
+    // Empty when `add` more units of product `id` fit (the cart already has `have`); otherwise the reason.
+    // While a paid order is edited, the units that order already took from stock count as available.
+    QString stockIssue(int id, int have, int add) const;
+    void startFresh(const QString& message = QString()); ///< empty cart, new order number, ready to scan
 
     UserRole m_role = UserRole::Cashier;
-    QString m_editingId; ///< order opened for editing from the Orders page; empty while recording a new order
     QVector<CartLine> m_cart;
     std::optional<ProductInfo> m_preview;
     int m_nextCustomLine = 1;
@@ -139,6 +146,8 @@ private:
     QLabel* m_itemsBadge;
     QLabel* m_gross;
     QLabel* m_disc;
+    QLabel* m_seasonal = nullptr;    // seasonal discount (active season), shown before payment
+    QLabel* m_seasonalKey = nullptr; // "Seasonal (10%)"
     QLabel* m_tax;
     QLabel* m_total;
     QPushButton* m_checkout;
@@ -146,4 +155,9 @@ private:
     QLabel* m_parkTitle;
     QLabel* m_parkEmpty;
     QHBoxLayout* m_parkChips;
+    QFrame* m_editBanner = nullptr;
+    QLabel* m_editText = nullptr;
+    QString m_editingId; ///< paid order being edited (empty = a normal new order)
+    QString m_heldId;    ///< on-hold order resumed into the cart (paid / held again under the same Order ID)
+    QMap<int, int> m_stockCredit; ///< productId -> units the edited paid order already took from stock
 };

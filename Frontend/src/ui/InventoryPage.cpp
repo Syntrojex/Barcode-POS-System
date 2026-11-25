@@ -1,7 +1,7 @@
+#include <iterator>
 #include "InventoryPage.h"
 #include "Theme.h"
 #include "UiKit.h"
-#include <iterator>
 #include "UiStore.h"
 #include "Widgets.h"
 #include <QCheckBox>

@@ -587,6 +587,8 @@ QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8
 #field { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
 #notice { background: @dangerBg@; border: 1px solid @dangerBorder@; border-radius: 10px; }
 #notice QLabel { color: @dangerText@; background: transparent; }
+#editBanner { background: @warningBg@; border: 1px solid @warningBorder@; border-radius: 12px; }
+#editBanner QLabel { color: @warningText@; background: transparent; }
 #totalBox { background: @navy@; border-radius: 12px; }
 #totalBox QLabel { color: @white@; background: transparent; }
 #totalBox #caption { color: #bdcbee; }

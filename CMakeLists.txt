@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
     # Qt 6 needs a correct __cplusplus value; also read sources as UTF-8.
-    add_compile_options(/Z-c:__cplusplus /utf-8 /permissive-)
+    add_compile_options(/Zc:__cplusplus /utf-8 /permissive-)
 endif()
 
 option(BACKEND_ONLY "Build backend and tests without Qt" OFF)
@@ -77,6 +77,7 @@ add_library(billing_core STATIC
     Backend/src/billing/BillRecordCodec.cpp
     Backend/src/billing/BillRepository.cpp
     Backend/src/billing/PaymentMethod.cpp
+    Backend/src/billing/SeasonRepository.cpp
 )
 
 target_include_directories(billing_core PUBLIC
@@ -177,6 +178,24 @@ if(BUILD_TESTING)
     target_link_libraries(checkout_test PRIVATE backend_core)
 
     add_test(NAME checkout COMMAND checkout_test)
+
+    # Editing a paid order in place / on-hold orders kept in Order.txt (Increment 3, requirements 3 and 10)
+    add_executable(order_edit_test
+        tests/order_edit_test.cpp
+    )
+
+    target_link_libraries(order_edit_test PRIVATE backend_core)
+
+    add_test(NAME order_edit COMMAND order_edit_test)
+
+    # Seasons.txt reader/writer
+    add_executable(season_test
+        tests/season_test.cpp
+    )
+
+    target_link_libraries(season_test PRIVATE billing_core)
+
+    add_test(NAME season COMMAND season_test)
 
     add_executable(billing_tests
         tests/billing_tests.cpp

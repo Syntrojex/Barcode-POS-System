@@ -6,6 +6,7 @@
 #include "AppState.h"
 #include <QDate>
 #include <QDateTime>
+#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -21,19 +22,20 @@ struct Category
 
 struct Season
 {
-    QString id;   // "SEA-2026-01"
-    QString name;
+    // Seasons.txt (requirement 13) stores exactly: start date, end date, discount percentage, isActive.
     QDate start, end;
     double percent = 0;
     bool active = false;       // isActive in Seasons.txt
-    QStringList categories;    // empty = all categories
-    // "active" | "scheduled" | "expired" for a given day (an inactive season is never "active")
+    // Not stored - derived for the screen only:
+    QString id;   // row handle "SEA-2026-01" (position in Seasons.txt)
+    QString name; // label made from the dates, e.g. "23 Nov - 30 Nov 2026"
+    // "active" | "scheduled" | "inactive" | "expired" for a given day
     QString statusOn(const QDate &d) const;
 };
 
 struct ParkedOrder
 {
-    QString code; // "HLD-108"
+    QString code; // the Order ID of the on-hold order (Order.txt)
     QString customer, contact;
     QDateTime parkedAt;
     QVector<ReceiptLine> lines;
@@ -66,22 +68,34 @@ public:
     void addSeason(const Season &s);
     void updateSeason(const QString &id, const Season &s);
     void removeSeason(const QString &id);
-    void setSeasonActive(const QString &id, bool on);
+    // Empty on success; otherwise why it was refused (an active season may not overlap another active one).
+    QString setSeasonActive(const QString &id, bool on);
     QString nextSeasonId() const;
     const Season *activeSeason(const QDate &d = QDate::currentDate()) const; // first active season covering d
-    QString validateSeason(const QString &name, const QDate &start, const QDate &end, double percent) const;
+    // Requirement 13: a season is only start date, end date, discount percentage and isActive (Seasons.txt).
+    // Two ACTIVE seasons may not share a day, so a bill date always matches at most one discount (requirement 15).
+    QString validateSeason(const QDate &start, const QDate &end, double percent, bool active,
+                           const QString &ignoreId = QString()) const;
+    static QString seasonLabel(const QDate &start, const QDate &end); // "23 Nov - 30 Nov 2026"
 
-    // ---- on-hold orders ----
-    const QVector<ParkedOrder> &parked() const { return m_parked; }
-    QString park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines);
-    bool takeParked(const QString &code, ParkedOrder &out); // removes it from the list
-    void discardParked(const QString &code);
+    // ---- on-hold orders: saved in Order.txt / OrderDetail.txt with status on-hold (see AppState::holdOrder) ----
+    QVector<ParkedOrder> parked() const; // newest first
+    // Saves the cart as an on-hold order (`existingId` = update that held order). Returns the Order ID, empty on failure.
+    QString park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines,
+                 const QString &existingId = QString(), QString *error = nullptr);
+    bool takeParked(const QString &code, ParkedOrder &out); // reads it (it stays on hold until it is paid)
+    bool discardParked(const QString &code, QString *error = nullptr);
 
     // ---- manager sign-off (needed to edit a paid order) ----
     // Demo check only: replace with real staff accounts when the back-end has them.
     static QString demoManagerId() { return QStringLiteral("MGR-004"); }
     static QString demoManagerName() { return QStringLiteral("Salman Tariq"); }
     static QString demoManagerPin() { return QStringLiteral("1234"); }
+    // Approvals given on the Orders page for editing a paid order (kept for this session, consumed on use).
+    struct Approval { QString manager, reason; QDateTime at; };
+    void grantApproval(const QString &orderId, const QString &manager, const QString &reason);
+    bool approvalFor(const QString &orderId, Approval *out = nullptr) const;
+    void revokeApproval(const QString &orderId);
     bool verifyManager(const QString &staffId, const QString &pin, QString *managerName = nullptr) const;
 
 signals:
@@ -91,8 +105,11 @@ signals:
 
 private:
     UiStore();
+    // Seasons.txt (start end percent isActive#) via the backend SeasonRepository.
+    QString seasonsPath() const;
+    void loadSeasons();
+    void saveSeasons();
     QVector<Category> m_categories;
     QVector<Season> m_seasons;
-    QVector<ParkedOrder> m_parked;
-    int m_nextHold = 109;
+    QMap<QString, Approval> m_approvals;
 };

@@ -94,4 +94,3 @@ jobs:
           fi
 
           echo "All branches successfully synchronized."
- 

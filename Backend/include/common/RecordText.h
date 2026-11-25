@@ -22,5 +22,6 @@ std::string formatQuantity(double value);                     // 3 decimals, tra
 double roundMoney(double value);                              // to 2 decimals
 
 std::string currentDate();                                    // YYYY-MM-DD, local time
+std::string currentTime();                                    // HH:MM:SS, local time
 
 } // namespace barcodehub::common

@@ -8,6 +8,7 @@
 #include "Widgets.h"
 #include <QDateTime>
 #include <QFontMetrics>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -62,9 +63,9 @@ namespace
         auto* v = new QVBoxLayout(w);
         v->setContentsMargins(4, 4, 4, 4);
         v->setSpacing(1);
-        auto* t = W::label(top);
+        auto* t = new ElidedLabel;
         t->setStyleSheet("font-weight:700; font-size:13.5px;");
-        t->setWordWrap(true);
+        t->setFullText(top);
         auto* b = W::label(bottom, "muted");
         v->addWidget(t);
         v->addWidget(b);
@@ -90,6 +91,7 @@ RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
 {
     QVBoxLayout* root;
     Ui::pageShell(this, root, true);
+    root->addWidget(buildEditBanner());
     root->addWidget(buildCustomerStrip());
     auto* body = new QHBoxLayout;
     body->setSpacing(0);
@@ -122,6 +124,7 @@ RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
 
     // on-hold chips: redraw when the list changes and every 30 s (the "4m ago" text)
     connect(&UiStore::instance(), &UiStore::parkedChanged, this, &RecordOrderPage::rebuildParked);
+    connect(&AppState::instance(), &AppState::changed, this, &RecordOrderPage::rebuildParked);
     auto* ageTimer = new QTimer(this);
     ageTimer->setInterval(30000);
     connect(ageTimer, &QTimer::timeout, this, &RecordOrderPage::rebuildParked);
@@ -148,11 +151,11 @@ QWidget* RecordOrderPage::buildCustomerStrip()
             v->addWidget(content);
             h->addWidget(f, stretch);
         };
-    m_customer = new QLineEdit("Marcus Vance");
+    m_customer = new QLineEdit;
     m_customer->setProperty("flat", true);
     m_customer->setPlaceholderText("Walk-in customer");
     field("CUSTOMER", m_customer, 3);
-    m_contact = new QLineEdit("+1 (555) 019-2834");
+    m_contact = new QLineEdit;
     m_contact->setProperty("flat", true);
     m_contact->setPlaceholderText("Phone (optional)");
     field("PHONE", m_contact, 3);
@@ -307,10 +310,10 @@ QWidget* RecordOrderPage::buildRight()
     hh->setSectionResizeMode(0, QHeaderView::Stretch);
     hh->setHighlightSections(false);
     hh->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_table->setColumnWidth(1, 78);
-    m_table->setColumnWidth(2, 112);
-    m_table->setColumnWidth(3, 92);
-    m_table->setColumnWidth(4, 96);
+    m_table->setColumnWidth(1, 90);
+    m_table->setColumnWidth(2, 120);
+    m_table->setColumnWidth(3, 84);
+    m_table->setColumnWidth(4, 95);
     m_table->setColumnWidth(5, 52);
     m_table->setWordWrap(false);
     ov->addWidget(m_table, 1);
@@ -318,29 +321,33 @@ QWidget* RecordOrderPage::buildRight()
 
     auto* tc = W::card(col, "totals");
     auto* th = new QHBoxLayout(tc);
-    th->setContentsMargins(18, 14, 18, 14);
-    th->setSpacing(18);
-    auto* grid = new QVBoxLayout;
-    grid->setSpacing(8);
-    auto row = [&](const QString& k, QLabel*& val)
+    th->setContentsMargins(12, 10, 12, 10);
+    th->setSpacing(12);
+    auto* grid = new QGridLayout;
+    grid->setHorizontalSpacing(8);
+    grid->setVerticalSpacing(5);
+    auto row = [&](int index, const QString& k, QLabel*& val)
         {
-            auto* r = new QHBoxLayout;
-            r->addWidget(W::label(k, "muted"));
-            r->addStretch();
+            auto* label = W::label(k, "muted");
+            grid->addWidget(label, index, 0);
             val = W::label("PKR 0.00");
             val->setStyleSheet("font-weight:800; font-size:14px;");
-            r->addWidget(val);
-            grid->addLayout(r);
+            val->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            val->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+            grid->addWidget(val, index, 1);
+            return label;
         };
-    row("Subtotal", m_gross);
-    row("Discount", m_disc);
-    row("Tax", m_tax);
-    grid->addStretch();
+    row(0, "Subtotal", m_gross);
+    row(1, "Discount", m_disc);
+    m_seasonalKey = row(2, "Seasonal", m_seasonal);
+    row(3, "Tax", m_tax);
+    // a season switched on/off or edited on the Discounts page -> refresh the totals
+    connect(&UiStore::instance(), &UiStore::seasonsChanged, this, &RecordOrderPage::updateTotals);
     th->addLayout(grid, 1);
 
     auto* tb = W::card(tc, "totalBox");
     auto* tv = new QVBoxLayout(tb);
-    tv->setContentsMargins(18, 12, 18, 14);
+    tv->setContentsMargins(12, 8, 12, 10);
     tv->setSpacing(2);
     auto* cap = W::label("TOTAL", "caption");
     tv->addWidget(cap);
@@ -358,7 +365,7 @@ QWidget* RecordOrderPage::buildRight()
     actions->addWidget(m_checkout, 3);
     tv->addLayout(actions);
     connect(m_hold, &QPushButton::clicked, this, &RecordOrderPage::holdOrder);
-    th->addWidget(tb, 1);
+    th->addWidget(tb);
     connect(m_checkout, &QPushButton::clicked, this, &RecordOrderPage::checkout);
     v->addWidget(tc);
     return col;
@@ -417,7 +424,7 @@ void RecordOrderPage::showCode(const QString& codeIn, bool fromScanner)
 void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
 {
     m_preview = p;
-    m_addBtn->setEnabled(p.has_value() && p->stock > 0);
+    m_addBtn->setEnabled(p.has_value() && p->stock + m_stockCredit.value(p->id) > 0);
     m_descBtn->setEnabled(p.has_value() && p->id > 0);
     m_pThumb->setVisible(p.has_value());
     m_pPrice->setVisible(p.has_value());
@@ -480,7 +487,7 @@ void RecordOrderPage::addToCart(const ProductInfo& p, int qty)
     for (const auto& l : m_cart)
         if (l.p.sku == p.sku)
             have = l.qty;
-    const QString problem = AppState::instance().stockProblem(p.id, have, qty);
+    const QString problem = stockIssue(p.id, have, qty);
     if (!problem.isEmpty())
     {
         emit toast(problem);
@@ -510,7 +517,7 @@ void RecordOrderPage::changeQty(int row, int delta)
         removeRow(row);
         return;
     }
-    const QString problem = AppState::instance().stockProblem(l.p.id, l.qty, delta);
+    const QString problem = stockIssue(l.p.id, l.qty, delta);
     if (delta > 0 && !problem.isEmpty())
     {
         emit toast(problem);
@@ -568,23 +575,21 @@ void RecordOrderPage::rebuildTable()
 
 void RecordOrderPage::updateTotals()
 {
-    double gross = 0, disc = 0, tax = 0;
-    int items = 0;
-    for (const auto& l : m_cart)
-    {
-        gross += l.p.price * l.qty;
-        disc += l.p.discount * l.qty;
-        tax += l.p.tax * l.qty;
-        items += l.qty;
-    }
-    const double total = gross - disc + tax;
+    // Same calculation as the payment screen (Pricing::quote), so the totals always match.
+    // The special discount is chosen at payment, so it is 0 here.
+    const Pricing::Quote q = Pricing::quote(cartLines(), 0);
+    const int items = q.units;
+    const double gross = q.gross, disc = q.itemDiscount, tax = q.tax, total = q.payable;
+    m_seasonalKey->setToolTip(q.seasonName.isEmpty() ? QString()
+                                  : QString("%1% for %2").arg(q.seasonalPercent, 0, 'g', 4).arg(q.seasonName));
+    m_seasonal->setText(q.seasonal > 0 ? W::money(-q.seasonal) : "PKR 0.00");
     W::setBadge(m_itemsBadge, QString("%1 item%2").arg(items).arg(items == 1 ? "" : "s"), items ? "blue" : "grey");
     m_gross->setText(W::money(gross));
     m_disc->setText(disc > 0 ? W::money(-disc) : "PKR 0.00");
     m_tax->setText(W::money(tax));
     m_total->setText(W::money(total));
     m_checkout->setEnabled(items > 0);
-    m_hold->setEnabled(items > 0);
+    m_hold->setEnabled(items > 0 && m_editingId.isEmpty()); // a paid order being edited cannot go on hold
 }
 
 void RecordOrderPage::loadDemoDraft()
@@ -596,12 +601,37 @@ void RecordOrderPage::loadDemoDraft()
 
 void RecordOrderPage::newDraft()
 {
-    m_editingId.clear();
+    if (!m_editingId.isEmpty())
+        UiStore::instance().revokeApproval(m_editingId);
+    const QString held = m_heldId;
+    startFresh(held.isEmpty() ? "New order started" : "New order started (order " + held + " stays on hold)");
+}
+
+void RecordOrderPage::startFresh(const QString& message)
+{
+    setEditMode(QString(), QString());
+    m_heldId.clear();
     m_cart.clear();
+    m_customer->clear();
+    m_contact->clear();
     setPreview(std::nullopt);
     rebuildTable();
+    rebuildParked();
     m_sessionId->setText("#" + AppState::instance().nextOrderId());
-    emit toast("New order started");
+    focusInput();
+    if (!message.isEmpty())
+        emit toast(message);
+}
+
+QString RecordOrderPage::stockIssue(int id, int have, int add) const
+{
+    if (add <= 0)
+        return QString();
+    const int credit = m_stockCredit.value(id);
+    const int need = have + add - credit; // units that must still come out of the current stock
+    if (need <= 0)
+        return QString();
+    return AppState::instance().stockProblem(id, 0, need);
 }
 
 void RecordOrderPage::checkout()
@@ -609,13 +639,6 @@ void RecordOrderPage::checkout()
     if (m_cart.isEmpty())
     {
         emit toast("The order is empty");
-        return;
-    }
-    if (!m_editingId.isEmpty())
-    {
-        // Front-end only for now: saving edits to an existing order (Order.txt / Bill.txt / stock) arrives with the
-        // Increment 3 back-end. Nothing is written, so no duplicate order is created.
-        emit toast("Saving edits to order #" + m_editingId + " needs the Increment 3 back-end - nothing was changed");
         return;
     }
     OrderRecord o;
@@ -634,7 +657,8 @@ void RecordOrderPage::checkout()
     const QString mode = res.mode, merchant = res.merchant;
     const double tendered = res.tendered;
     const auto quote = Pricing::quote(o.lines, res.specialPercent);
-    o.lines = Pricing::fold(o.lines, res.specialPercent);
+    // Lines keep only the product's own discount (BillDetail.txt); the seasonal and special amounts go to
+    // Bill.txt as their own fields (set on `o` by Pricing::apply and passed to Billing by AppState::addOrder).
     Pricing::apply(o, quote);
 
     o.customer = m_customer->text().trimmed().isEmpty() ? "Walk-in Customer" : m_customer->text().trimmed();
@@ -645,18 +669,22 @@ void RecordOrderPage::checkout()
     o.status = "Paid";
     o.shift = "POS #04 • Shift A";
     QString checkoutError;
-    if (!AppState::instance().addOrder(o, &checkoutError))
+    const QString editedId = m_editingId;
+    const QString heldId = m_heldId;
+    // new order, a resumed on-hold order (same Order ID), or an edited paid order (same Order ID and Bill ID)
+    const bool saved = editedId.isEmpty() ? AppState::instance().addOrder(o, &checkoutError, heldId)
+                                          : AppState::instance().replaceOrder(editedId, o, &checkoutError);
+    if (!saved)
     {
         emit toast(checkoutError);
         return;
     }
+    if (!editedId.isEmpty())
+        UiStore::instance().revokeApproval(editedId);
 
     Dialogs::receipt(this, o);
-    m_cart.clear();
-    setPreview(std::nullopt);
-    rebuildTable();
-    m_sessionId->setText("#" + AppState::instance().nextOrderId());
-    emit toast("Order " + o.id + " paid - " + W::money(o.total));
+    startFresh(!editedId.isEmpty() ? "Order " + editedId + " updated (bill " + o.billId + ") - " + W::money(o.total)
+                                   : "Order " + o.id + " paid - " + W::money(o.total));
 }
 // ---- placeholder bodies for the Increment 3 actions (the redesigned screen replaces them) ----
 void RecordOrderPage::setRole(UserRole role) { m_role = role; }
@@ -709,20 +737,28 @@ void RecordOrderPage::rebuildParked()
     while (QLayoutItem* it = m_parkChips->takeAt(0))
     {
         if (QWidget* w = it->widget())
+        {
+            w->hide();
             w->deleteLater();
+        }
         delete it;
     }
-    const auto& parked = UiStore::instance().parked();
-    m_parkTitle->setText(QString("ON HOLD (%1)").arg(parked.size()));
-    m_parkEmpty->setVisible(parked.isEmpty());
+    const auto parked = UiStore::instance().parked();
+    int shown = 0;
+    for (const auto& p : parked)
+        shown += p.code != m_heldId;
+    m_parkTitle->setText(QString("ON HOLD (%1)").arg(shown));
+    m_parkEmpty->setVisible(shown == 0);
     const QDateTime now = QDateTime::currentDateTime();
     for (const auto& p : parked)
     {
+        if (p.code == m_heldId)
+            continue; // it is in the cart right now
         const qint64 secs = p.parkedAt.secsTo(now);
         const QString ago = secs < 60 ? QString("just now")
             : secs < 3600 ? QString("%1m ago").arg(secs / 60)
             : QString("%1h ago").arg(secs / 3600);
-        const QString text = QString("#%1   %2  •  %3  •  %4   %5")
+        const QString text = QString("#%1   %2  •  %3 items  •  %4   %5")
             .arg(p.code, p.customer.left(18), QString::number(p.itemCount()), W::money(p.total()), ago);
         auto* chip = W::button(text, "soft", "arrow-right");
         chip->setMinimumHeight(36);
@@ -733,8 +769,11 @@ void RecordOrderPage::rebuildParked()
         del->setToolTip("Discard this held order");
         connect(del, &QPushButton::clicked, this, [this, code]
             {
-                UiStore::instance().discardParked(code);
-                emit toast("Held order " + code + " discarded");
+                QString err;
+                if (UiStore::instance().discardParked(code, &err))
+                    emit toast("Held order " + code + " discarded");
+                else
+                    emit toast(err);
             });
         auto* cell = new QWidget;
         auto* cl = new QHBoxLayout(cell);
@@ -749,40 +788,55 @@ void RecordOrderPage::rebuildParked()
 
 void RecordOrderPage::holdOrder()
 {
+    if (!m_editingId.isEmpty())
+    {
+        emit toast("Finish or cancel the edit of order " + m_editingId + " first - it cannot be put on hold");
+        return;
+    }
     if (m_cart.isEmpty())
     {
         emit toast("Nothing to hold - the order is empty");
         return;
     }
-    const QString code = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines());
-    m_editingId.clear();
-    m_cart.clear();
-    m_customer->clear();
-    m_contact->clear();
-    setPreview(std::nullopt);
-    rebuildTable();
-    m_sessionId->setText("#" + AppState::instance().nextOrderId());
-    focusInput(); // ready for the next customer's first scan
-    emit toast("Order put on hold as " + code);
+    QString err;
+    const QString code = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines(), m_heldId, &err);
+    if (code.isEmpty())
+    {
+        emit toast(err);
+        return;
+    }
+    startFresh("Order " + code + " put on hold"); // ready for the next customer's first scan
 }
 
 void RecordOrderPage::resumeParked(const QString& code)
 {
+    if (code == m_heldId)
+        return; // already in the cart
     ParkedOrder po;
     if (!UiStore::instance().takeParked(code, po))
     {
         emit toast("That held order is no longer available");
         return;
     }
-    // A cart that is not empty is parked first (swap), so nothing is lost and no question is asked.
-    QString swapped;
-    if (!m_cart.isEmpty() && m_editingId.isEmpty())
-        swapped = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines());
-    if (!m_editingId.isEmpty()) // leaving an order that was open for editing
+    if (!m_editingId.isEmpty())
     {
-        m_editingId.clear();
-        m_sessionId->setText("#" + AppState::instance().nextOrderId());
+        emit toast("Finish or cancel the edit of order " + m_editingId + " first");
+        return;
     }
+    // A cart that is not empty is put on hold first (swap), so nothing is lost and no question is asked.
+    QString swapped;
+    if (!m_cart.isEmpty())
+    {
+        QString err;
+        swapped = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines(), m_heldId, &err);
+        if (swapped.isEmpty())
+        {
+            emit toast(err);
+            return;
+        }
+    }
+    m_heldId = code;
+    m_sessionId->setText("#" + code);
 
     m_cart.clear();
     int adjusted = 0;
@@ -812,52 +866,133 @@ void RecordOrderPage::resumeParked(const QString& code)
     m_contact->setText(po.contact == "-" ? QString() : po.contact);
     setPreview(std::nullopt);
     rebuildTable();
+    rebuildParked();
     focusInput();
 
-    QString msg = "Resumed " + code;
+    QString msg = "Resumed order " + code;
     if (!swapped.isEmpty())
         msg += "  (previous order held as " + swapped + ")";
     if (adjusted > 0)
         msg += QString("  -  %1 line%2 changed because of stock").arg(adjusted).arg(adjusted == 1 ? "" : "s");
     emit toast(msg);
 }
-// Opens an existing order (paid + approved from the Orders page, or in progress) in the cart.
+
+// ---------------------------------------------------------------- editing an existing order (requirement 3)
+QWidget* RecordOrderPage::buildEditBanner()
+{
+    m_editBanner = new QFrame;
+    m_editBanner->setObjectName("editBanner");
+    auto* h = new QHBoxLayout(m_editBanner);
+    h->setContentsMargins(14, 8, 10, 8);
+    h->setSpacing(10);
+    h->addWidget(W::iconLabel("edit", QColor("#8a5a00"), 18));
+    m_editText = W::label("");
+    m_editText->setWordWrap(true);
+    m_editText->setStyleSheet("font-weight:700;");
+    h->addWidget(m_editText, 1);
+    auto* cancel = W::button("Cancel edit", "soft", "undo");
+    h->addWidget(cancel);
+    connect(cancel, &QPushButton::clicked, this, [this]
+        {
+            const QString id = m_editingId;
+            if (!id.isEmpty())
+                UiStore::instance().revokeApproval(id);
+            startFresh("Edit of order " + id + " cancelled - nothing was changed"); });
+    m_editBanner->hide();
+    return m_editBanner;
+}
+
+void RecordOrderPage::setEditMode(const QString& orderId, const QString& text)
+{
+    m_editingId = orderId;
+    m_stockCredit = orderId.isEmpty() ? QMap<int, int>() : AppState::instance().stockHeldBy(orderId);
+    m_editText->setText(text);
+    m_editBanner->setVisible(!orderId.isEmpty());
+    if (!orderId.isEmpty())
+        m_sessionId->setText("#" + orderId);
+}
+
 void RecordOrderPage::loadOrderForEdit(const QString& orderId)
 {
-    const OrderRecord* found = nullptr;
-    for (const auto& o : AppState::instance().orders())
-        if (o.id == orderId)
-        {
-            found = &o;
-            break;
-        }
+    auto& app = AppState::instance();
+    OrderRecord order;
+    bool found = false;
+    for (const auto& o : app.orders())
+        if (o.id == orderId) { order = o; found = true; break; }
     if (!found)
     {
-        emit toast("Order #" + orderId + " was not found");
+        emit toast("Order " + orderId + " was not found");
         return;
     }
-    // Nothing is lost: a cart that is not empty is parked first, like when resuming a held order.
+    if (order.status == "Archived")
+    {
+        emit toast("Order " + orderId + " is archived and cannot be edited");
+        return;
+    }
+    if (order.status != "Paid")
+    {
+        resumeParked(orderId); // on-hold / in-progress: straight back into the cart, one click
+        return;
+    }
+    if (app.editDaysLeft(order) <= 0)
+    {
+        emit toast("Order " + orderId + " can no longer be edited (7 days after payment are over)");
+        return;
+    }
+    UiStore::Approval approval;
+    if (!UiStore::instance().approvalFor(orderId, &approval))
+    {
+        emit toast("A manager's approval is needed to edit the paid order " + orderId);
+        return;
+    }
+    if (m_editingId == orderId)
+        return; // already open
+
+    // a cart that is not empty is put on hold first, so nothing is lost
     QString swapped;
-    if (m_editingId.isEmpty() && !m_cart.isEmpty())
-        swapped = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines());
+    if (!m_cart.isEmpty() && m_editingId.isEmpty())
+    {
+        QString err;
+        swapped = UiStore::instance().park(m_customer->text(), m_contact->text(), cartLines(), m_heldId, &err);
+        if (swapped.isEmpty())
+        {
+            emit toast(err);
+            return;
+        }
+    }
+    m_heldId.clear();
 
     m_cart.clear();
-    for (const auto& line : found->lines)
-        for (const auto& p : AppState::instance().products())
-            if (line.productId > 0 ? p.id == line.productId : p.sku == line.acronym)
-            {
-                m_cart.push_back({ p, line.qty });
-                break;
-            }
-    m_editingId = orderId;
-    m_customer->setText(found->customer == "Walk-in Customer" ? QString() : found->customer);
-    m_contact->setText(found->contact == "-" ? QString() : found->contact);
-    m_sessionId->setText("#" + orderId + "  (editing)");
+    for (const auto& line : order.lines)
+    {
+        ProductInfo p;
+        bool inCatalogue = false;
+        if (line.productId > 0)
+            for (const auto& c : app.products())
+                if (c.id == line.productId) { p = c; inCatalogue = true; break; }
+        if (inCatalogue)
+            p.discount = line.discount; // keep the discount the order was sold with
+        else // manual line: keep what the bill says
+        {
+            p.id = 0;
+            p.sku = line.acronym;
+            p.name = line.name;
+            p.unit = "count";
+            p.price = line.price;
+            p.tax = line.tax;
+            p.discount = line.discount;
+            p.stock = 1000000;
+        }
+        m_cart.push_back({ p, line.qty });
+    }
+    m_customer->setText(order.customer == "Walk-in Customer" ? QString() : order.customer);
+    m_contact->setText(order.contact == "-" ? QString() : order.contact);
+    setEditMode(orderId, QString("Editing paid order #%1 (bill %2)  •  approved by %3 (%4)  •  change items, then Checkout [F10] to save")
+                             .arg(orderId, order.billId.isEmpty() ? QString("-") : order.billId, approval.manager, approval.reason));
     setPreview(std::nullopt);
     rebuildTable();
+    rebuildParked();
     focusInput();
-    QString msg = "Editing order #" + orderId;
-    if (!swapped.isEmpty())
-        msg += "  (previous order held as " + swapped + ")";
-    emit toast(msg);
+    emit toast(swapped.isEmpty() ? "Order " + orderId + " opened for editing"
+                                 : "Order " + orderId + " opened (previous order held as " + swapped + ")");
 }

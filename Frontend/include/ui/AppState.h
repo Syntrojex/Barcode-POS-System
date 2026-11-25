@@ -52,18 +52,19 @@ struct OrderRecord
 {
     QString id;
     QString billId; // only nonempty when an actual Bill.txt record exists
-    QDateTime time;
+    QDateTime time;   // order created (Order.txt)
+    QDateTime paidAt; // payment moment (Bill.txt date/time); the 7-day edit window counts from here
     QString customer, contact, tier, payment, merchant, status, shift;
     QVector<ReceiptLine> lines;
     double subtotal = 0, discount = 0, tax = 0, total = 0; // total = subtotal - discount + tax; discount = ALL discounts
     double tendered = 0; // amount received (cash); 0 for card / wallet
-    // Breakdown of `discount` (known for orders paid in this session; bills reloaded from disk only keep the total,
-    // because the Increment 2 Bill.txt stores one discount per line - see Pricing.h).
+    // Breakdown of discount stored on the bill. Legacy bills only store the combined discount.
     double seasonal = 0, special = 0;
     double seasonalPercent = 0, specialPercent = 0;
     QString seasonName;
     double itemDiscount() const { return discount - seasonal - special; }
     double change() const { return tendered > total ? tendered - total : 0.0; } // balance returned
+    QDateTime paymentTime() const { return paidAt.isValid() ? paidAt : time; }
     int itemCount() const;
     void recompute();
     QString summary() const; // "3 items  Milk, Bread, +1"
@@ -119,7 +120,24 @@ public:
     // ---- orders ----
     const QVector<OrderRecord> &orders() const { return m_orders; } // newest first
     QString nextOrderId();
-    bool addOrder(OrderRecord &o, QString *error = nullptr); // creates order, bill, updates stock; reports failures
+    // Pays an order: creates the order (or, with `existingId`, pays that held / in-progress order under the SAME
+    // Order ID), writes the bill and takes the stock. All-or-nothing: on failure every file is put back.
+    bool addOrder(OrderRecord &o, QString *error = nullptr, const QString &existingId = QString());
+    // Editing a paid order (requirement 3): allowed for 7 days after payment, only after manager approval.
+    static constexpr int kEditWindowDays = 7;
+    // -1 = not a paid order (no window), 0 = the 7 days are over, 1..7 = days left (rounded up).
+    int editDaysLeft(const OrderRecord &o) const;
+    // Edits a paid order IN PLACE: same Order ID and Bill ID, new lines/amounts, stock adjusted by the difference.
+    bool replaceOrder(const QString &orderId, OrderRecord &edited, QString *error = nullptr);
+    // Quantity of each product a paid order already took from stock (credited back while that order is edited).
+    QMap<int, int> stockHeldBy(const QString &orderId) const;
+
+    // ---- on-hold orders (requirement 10): real orders in Order.txt with status on-hold ----
+    // Saves the cart as an on-hold order (a new one, or `existingId` updated). Returns the Order ID, empty on failure.
+    QString holdOrder(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines,
+                      const QString &existingId = QString(), QString *error = nullptr);
+    bool discardHeldOrder(const QString &orderId, QString *error = nullptr);
+    QVector<OrderRecord> heldOrders() const; // newest first
     double salesToday() const { return m_baseSales + m_sessionSales; }
     int ordersToday() const { return m_baseOrders + m_sessionOrders; }
 
@@ -135,6 +153,9 @@ private:
     AppState();
     void refreshCache();
     void refreshOrders();
+    bool settle(OrderRecord &o, const QString &existingId, bool editPaid, QString *error);
+    bool cartFromLines(const QVector<ReceiptLine> &lines, QString *error); // fills the backend cart
+    QStringList recordFiles() const; // Product/Order/OrderDetail/Bill/BillDetail.txt (for all-or-nothing saves)
     ProductManager m_manager;
     StockValidator m_stock;
     QVector<ProductInfo> m_products;

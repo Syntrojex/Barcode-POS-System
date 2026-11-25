@@ -5,24 +5,6 @@
 namespace
 {
     double round2(double v) { return qRound64(v * 100.0) / 100.0; }
-
-    // Category id of the product behind a bill line (first two digits of its barcode); empty for manual lines.
-    QString categoryOfLine(const ReceiptLine &l)
-    {
-        if (l.productId <= 0)
-            return QString();
-        for (const auto &p : AppState::instance().products())
-            if (p.id == l.productId)
-                return p.ean.left(2);
-        return QString();
-    }
-
-    bool seasonCovers(const Season &s, const ReceiptLine &l)
-    {
-        if (s.categories.isEmpty())
-            return true;
-        return s.categories.contains(categoryOfLine(l));
-    }
 }
 
 namespace Pricing
@@ -48,7 +30,7 @@ namespace Pricing
         {
             const double base = l.price - l.discount; // per unit, after the product's own discount
             double sUnit = 0;
-            if (season && seasonCovers(*season, l))
+            if (season) // requirement 15: the active season applies to the whole bill
                 sUnit = round2(base * season->percent / 100.0);
             const double xUnit = round2((base - sUnit) * q.specialPercent / 100.0);
             q.gross += l.price * l.qty;
@@ -72,7 +54,7 @@ namespace Pricing
         {
             const double base = l.price - l.discount;
             double sUnit = 0;
-            if (season && seasonCovers(*season, l))
+            if (season) // requirement 15: the active season applies to the whole bill
                 sUnit = round2(base * season->percent / 100.0);
             const double xUnit = round2((base - sUnit) * sp / 100.0);
             l.discount = round2(l.discount + sUnit + xUnit);

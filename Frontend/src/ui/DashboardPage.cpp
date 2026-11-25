@@ -202,16 +202,19 @@ void DashboardPage::refresh()
     m_orders->setText(QString::number(st.ordersToday()));
     int paidToday = 0;
     for (const auto &o : orders)
-        if (o.status == "Paid" && o.time.date() == QDate::currentDate()) ++paidToday;
+        if (o.status == "Paid" && o.paymentTime().date() == QDate::currentDate()) ++paidToday;
     m_ordersSub->setText("Average " + W::money(st.salesToday() / qMax(1, paidToday)) + " per paid order");
 
     QStringList hours;
     QVector<double> earned(13, 0.0), target(13, 0.0);
     for (int hour = 8; hour <= 20; ++hour) hours << QString("%1").arg(hour, 2, 10, QChar('0'));
     for (const auto &o : orders)
-        if (o.status == "Paid" && o.time.date() == QDate::currentDate() &&
-            o.time.time().hour() >= 8 && o.time.time().hour() <= 20)
-            earned[o.time.time().hour() - 8] += o.total;
+    {
+        const auto paid = o.paymentTime();
+        const int hour = paid.time().hour();
+        if (o.status == "Paid" && paid.date() == QDate::currentDate() && hour >= 8 && hour <= 20)
+            earned[hour - 8] += o.total;
+    }
     m_chart->setData(hours, earned, target);
     m_pending->setText(QString::number(pending));
     m_pendingSub->setText("On hold or in progress");

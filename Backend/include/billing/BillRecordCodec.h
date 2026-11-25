@@ -2,26 +2,31 @@
 
 /**
  * @file BillRecordCodec.h
- * @brief Serialization and deserialization engine for Bill.txt flat-file records.
- * @author Ali Abdullah (25L-3022)
+ * @brief Converts bills to and from the text lines of Bill.txt and BillDetail.txt.
+ * @author Ali Abdullah (25L-3022); Increment 3 format by Shauzab Mukhtar
  *
- * Implements bidirectional translation between structured Bill / BillLine objects
- * and raw delimited text lines stored in data/Bill.txt.
+ * Bill.txt - one bill per line, 14 space separated fields, ending with '#' (requirement 8):
+ *   [0]  billId            9 digits YYMMDD### (unique in the file)
+ *   [1]  customerName      text (spaces written as '_')
+ *   [2]  orderId           from Order.txt
+ *   [3]  totalWithoutTax   PKR
+ *   [4]  totalTax          PKR
+ *   [5]  totalDiscount     PKR, sum of the discounts on all bought products
+ *   [6]  totalPayable      PKR
+ *   [7]  amountReceived    PKR
+ *   [8]  balanceReturned   PKR
+ *   [9]  paymentStatus     order status from Order.txt (e.g. paid)
+ *   [10] seasonalDiscount  PKR
+ *   [11] specialDiscount   PKR (special discount is at most 8 percent)
+ *   [12] billDate          YYYY-MM-DD
+ *   [13] billTime          HH:MM:SS
  *
- * Line layout specification (12 whitespace-delimited fields ending with '#'):
- *   [0]  billId           (9 digits: YYMMDD###)
- *   [1]  customerName     (encoded string via RecordText)
- *   [2]  orderId          (8-digit order identifier)
- *   [3]  productAcronym   (encoded string, max 8 chars)
- *   [4]  unitPrice        (formatted floating point, PKR)
- *   [5]  discountPerUnit  (formatted floating point, PKR)
- *   [6]  quantity         (formatted floating point)
- *   [7]  totalWithoutTax  (bill subtotal before tax, PKR)
- *   [8]  totalTax         (cumulative bill tax, PKR)
- *   [9]  totalDiscount    (cumulative bill discount, PKR)
- *   [10] totalPayable     (net bill payable, PKR)
- *   [11] paymentStatus    (encoded order status string, e.g. "paid")
- *   [12] "#"              (record terminator delimiter)
+ * BillDetail.txt - one bought product per line, 5 fields, ending with '#' (requirement 9):
+ *   billId productAcronym unitPriceWithoutTax quantity lineDiscount
+ *   (lineDiscount = discount per unit x quantity: 10 products with 5 off each -> 50)
+ *
+ * Old Increment 2 Bill.txt lines (12 fields, one line per product) can still be read with parseLegacy(),
+ * so bills saved before the new format do not break the app.
  */
 
 #include "billing/Bill.h"
@@ -32,39 +37,29 @@ namespace barcodehub::billing {
 
 /**
  * @class BillRecordCodec
- * @brief Stateless encoder and decoder for flat-file bill records.
- *
- * Operates purely on strings and data models without performing disk I/O,
- * facilitating isolated unit testing of file formatting and parsing logic.
+ * @brief Stateless encoder / decoder for bill records (no file I/O, so it is easy to test).
  */
 class BillRecordCodec {
 public:
-    /**
-     * @brief Serializes a Bill header and a specific BillLine into a compliant Bill.txt line.
-     *
-     * Encodes text fields safely using common::encodeField, formats currency figures,
-     * and appends the mandatory '#' terminal symbol.
-     *
-     * @param bill The overarching bill containing ID, customer name, totals, and payment status.
-     * @param line The specific product line item to serialize.
-     * @return Formatted record string ready for writing to disk.
-     */
-    static std::string format(const Bill& bill, const BillLine& line);
+    /** @brief One Bill.txt line (14 fields + '#') for the bill header and totals. */
+    static std::string format(const Bill& bill);
 
-    /**
-     * @brief Deserializes a raw record line into a Bill header and BillLine instance.
-     *
-     * Validates that the line ends with '#', splits tokens, checks for the 12-field contract,
-     * verifies that the Bill ID comprises exactly 9 numeric digits, and decodes numeric and text fields.
-     *
-     * @param[in] record Raw line read from Bill.txt.
-     * @param[out] header Output Bill instance populated with global bill metadata and totals.
-     * @param[out] line Output BillLine instance populated with the item-specific values.
-     * @param[out] error Optional pointer to store error message upon parse failure.
-     * @return True if parsing succeeded and fields conform to specifications; false otherwise.
-     */
-    static bool parse(const std::string& record, Bill& header, BillLine& line,
-                      std::string* error = nullptr);
+    /** @brief Parses one 14-field Bill.txt line into @p bill (its lines are left empty). */
+    static bool parse(const std::string& record, Bill& bill, std::string* error = nullptr);
+
+    /** @brief One BillDetail.txt line for one product of the bill. */
+    static std::string formatDetail(const std::string& billId, const BillLine& line);
+
+    /** @brief Parses one BillDetail.txt line; discountPerUnit is lineDiscount / quantity. */
+    static bool parseDetail(const std::string& record, std::string& billId, BillLine& line,
+                            std::string* error = nullptr);
+
+    /** @brief Reads an old Increment 2 Bill.txt line (12 fields: bill header + one product). */
+    static bool parseLegacy(const std::string& record, Bill& header, BillLine& line,
+                            std::string* error = nullptr);
+
+    /** @brief Number of fields in the line (ignoring the '#'); -1 if it does not end with '#'. */
+    static int fieldCount(const std::string& record);
 };
 
 } // namespace barcodehub::billing

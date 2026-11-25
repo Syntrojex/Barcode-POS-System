@@ -7,6 +7,7 @@
  * payment strategy processing, record codec serialization, and repository persistence.
  */
 
+#include <fstream>
 #include "billing/Bill.h"
 #include "billing/BillCalculator.h"
 #include "billing/BillRecordCodec.h"
@@ -273,62 +274,84 @@ bool testPaymentRegistryDefaults() {
 // ============================================================
 
 bool testCodecFormatAndParse() {
+    // Bill.txt: one line per bill, 14 fields (requirement 8)
     Bill bill;
     bill.id = "261118001";
     bill.customerName = "Ali Abdullah";
     bill.orderId = "26111818";
     bill.paymentStatus = "paid";
-    bill.totals = {500.0, 50.0, 25.0, 525.0};
+    bill.totals = {500.0, 50.0, 25.0, 475.0};
+    bill.amountReceived = 500.0;
+    bill.balanceReturned = 25.0;
+    bill.seasonalDiscount = 40.0;
+    bill.specialDiscount = 10.0;
+    bill.date = "2026-11-18";
+    bill.time = "14:05:09";
 
+    const std::string formatted = BillRecordCodec::format(bill);
+    TEST_ASSERT(formatted == "261118001 Ali_Abdullah 26111818 500.00 50.00 25.00 475.00 500.00 25.00 paid 40.00 10.00 2026-11-18 14:05:09 #",
+                "Unexpected Bill.txt line: " + formatted);
+
+    Bill parsed;
+    std::string error;
+    TEST_ASSERT(BillRecordCodec::parse(formatted, parsed, &error), "Parse failed: " + error);
+    TEST_ASSERT(parsed.id == "261118001" && parsed.customerName == "Ali Abdullah", "Parsed id/customer mismatch");
+    TEST_ASSERT(parsed.orderId == "26111818" && parsed.paymentStatus == "paid", "Parsed order/status mismatch");
+    TEST_ASSERT(doubleNear(parsed.totals.payable, 475.0) && doubleNear(parsed.totals.discount, 25.0), "Parsed totals mismatch");
+    TEST_ASSERT(doubleNear(parsed.amountReceived, 500.0) && doubleNear(parsed.balanceReturned, 25.0), "Parsed received/balance mismatch");
+    TEST_ASSERT(doubleNear(parsed.seasonalDiscount, 40.0) && doubleNear(parsed.specialDiscount, 10.0), "Parsed seasonal/special mismatch");
+    TEST_ASSERT(parsed.date == "2026-11-18" && parsed.time == "14:05:09", "Parsed date/time mismatch");
+
+    // BillDetail.txt: line discount = per-unit discount x quantity (requirement 9: 10 x 5 = 50)
     BillLine line;
     line.productAcronym = "MILK";
     line.unitPrice = 250.0;
-    line.discountPerUnit = 12.5;
-    line.quantity = 2.0;
+    line.discountPerUnit = 5.0;
+    line.quantity = 10.0;
+    const std::string detail = BillRecordCodec::formatDetail("261118001", line);
+    TEST_ASSERT(detail == "261118001 MILK 250.00 10 50.00 #", "Unexpected BillDetail.txt line: " + detail);
+    std::string billId;
+    BillLine back;
+    TEST_ASSERT(BillRecordCodec::parseDetail(detail, billId, back, &error), "Detail parse failed: " + error);
+    TEST_ASSERT(billId == "261118001" && back.productAcronym == "MILK", "Detail id/acronym mismatch");
+    TEST_ASSERT(doubleNear(back.quantity, 10.0) && doubleNear(back.discountPerUnit, 5.0), "Detail qty/discount mismatch");
 
-    std::string formatted = BillRecordCodec::format(bill, line);
-    TEST_ASSERT(formatted.back() == '#', "Formatted record must end with '#'");
-
-    Bill parsedHeader;
-    BillLine parsedLine;
-    std::string error;
-    TEST_ASSERT(BillRecordCodec::parse(formatted, parsedHeader, parsedLine, &error),
-                "Parse failed: " + error);
-
-    TEST_ASSERT(parsedHeader.id == "261118001", "Parsed bill ID mismatch");
-    TEST_ASSERT(parsedHeader.customerName == "Ali Abdullah", "Parsed customer mismatch");
-    TEST_ASSERT(parsedHeader.orderId == "26111818", "Parsed order ID mismatch");
-    TEST_ASSERT(parsedHeader.paymentStatus == "paid", "Parsed status mismatch");
-    TEST_ASSERT(doubleNear(parsedHeader.totals.payable, 525.0), "Parsed payable mismatch");
-
-    TEST_ASSERT(parsedLine.productAcronym == "MILK", "Parsed acronym mismatch");
-    TEST_ASSERT(doubleNear(parsedLine.unitPrice, 250.0), "Parsed unit price mismatch");
-    TEST_ASSERT(doubleNear(parsedLine.discountPerUnit, 12.5), "Parsed discount mismatch");
-    TEST_ASSERT(doubleNear(parsedLine.quantity, 2.0), "Parsed quantity mismatch");
+    // old Increment 2 line (12 fields) can still be read
+    Bill oldHeader;
+    BillLine oldLine;
+    TEST_ASSERT(BillRecordCodec::parseLegacy("261118001 Ali 26111818 MILK 250 12.5 2 500 50 25 525 paid #",
+                                             oldHeader, oldLine, &error), "Legacy parse failed: " + error);
+    TEST_ASSERT(doubleNear(oldHeader.totals.payable, 525.0) && doubleNear(oldLine.quantity, 2.0), "Legacy values mismatch");
     return true;
 }
 
 bool testCodecParseErrors() {
     Bill header;
-    BillLine line;
     std::string error;
+    const std::string good = "261118001 Ali 26111818 500 50 25 475 500 25 paid 40 10 2026-11-18 14:05:09";
 
-    std::string noTerminator = "261118001 Ali 26111818 MILK 250 12.5 2 500 50 25 525 paid";
-    TEST_ASSERT(!BillRecordCodec::parse(noTerminator, header, line, &error), "Missing '#' must fail");
+    TEST_ASSERT(!BillRecordCodec::parse(good, header, &error), "Missing '#' must fail");
     TEST_ASSERT(error.find("end with '#'") != std::string::npos, "Unexpected error: " + error);
 
-    std::string shortRecord = "261118001 Ali 26111818 MILK #";
-    TEST_ASSERT(!BillRecordCodec::parse(shortRecord, header, line, &error), "Short record must fail");
-    TEST_ASSERT(error.find("expected 12 fields") != std::string::npos, "Unexpected error: " + error);
+    TEST_ASSERT(!BillRecordCodec::parse("261118001 Ali 26111818 500 #", header, &error), "Short record must fail");
+    TEST_ASSERT(error.find("expected 14 fields") != std::string::npos, "Unexpected error: " + error);
 
-    std::string badId = "26111801 Ali 26111818 MILK 250 12.5 2 500 50 25 525 paid #";
-    TEST_ASSERT(!BillRecordCodec::parse(badId, header, line, &error), "8-digit bill ID must fail");
+    TEST_ASSERT(!BillRecordCodec::parse("26111801" + good.substr(9) + " #", header, &error), "8-digit bill ID must fail");
     TEST_ASSERT(error.find("exactly 9 digits") != std::string::npos, "Unexpected error: " + error);
 
-    std::string badNumber = "261118001 Ali 26111818 MILK NOT_A_NUM 12.5 2 500 50 25 525 paid #";
-    TEST_ASSERT(!BillRecordCodec::parse(badNumber, header, line, &error), "Non-numeric price must fail");
+    TEST_ASSERT(!BillRecordCodec::parse("261118001 Ali 26111818 X 50 25 475 500 25 paid 40 10 2026-11-18 14:05:09 #", header, &error),
+                "Non-numeric total must fail");
     TEST_ASSERT(error.find("not a number") != std::string::npos, "Unexpected error: " + error);
 
+    TEST_ASSERT(!BillRecordCodec::parse("261118001 Ali 26111818 500 50 25 475 500 25 paid 40 10 18-11-2026 14:05:09 #", header, &error),
+                "Bad date must fail");
+    TEST_ASSERT(!BillRecordCodec::parse("261118001 Ali 26111818 500 50 25 475 500 25 paid 40 10 2026-11-18 2pm #", header, &error),
+                "Bad time must fail");
+
+    std::string billId;
+    BillLine line;
+    TEST_ASSERT(!BillRecordCodec::parseDetail("261118001 MILK 250 0 0 #", billId, line, &error), "Zero quantity detail must fail");
+    TEST_ASSERT(!BillRecordCodec::parseDetail("261118001 MILK 250 2 #", billId, line, &error), "Short detail must fail");
     return true;
 }
 
@@ -386,6 +409,8 @@ bool testRepositoryAppendAndLoad() {
     bill.orderId = "26111818";
     bill.paymentStatus = "paid";
     bill.totals = {400.0, 40.0, 20.0, 420.0};
+    bill.date = "2026-11-18";
+    bill.time = "10:00:00";
     bill.lines = {
         {"MILK", 200.0, 20.0, 10.0, 1.0},
         {"BREAD", 200.0, 20.0, 10.0, 1.0}
@@ -400,6 +425,17 @@ bool testRepositoryAppendAndLoad() {
     TEST_ASSERT(loaded[0].id == "261118001", "Bill ID mismatch");
     TEST_ASSERT(loaded[0].lines.size() == 2, "Expected 2 lines in aggregated bill");
     TEST_ASSERT(doubleNear(loaded[0].totals.payable, 420.0), "Payable mismatch");
+
+    // Bill.txt has ONE line for the bill; BillDetail.txt has one line per product
+    {
+        std::ifstream billIn(billFile), detailIn(testDir / "BillDetail.txt");
+        int billLines = 0, detailLines = 0;
+        std::string t;
+        while (std::getline(billIn, t)) ++billLines;
+        while (std::getline(detailIn, t)) ++detailLines;
+        TEST_ASSERT(billLines == 1, "Bill.txt should have 1 line, has " + std::to_string(billLines));
+        TEST_ASSERT(detailLines == 2, "BillDetail.txt should have 2 lines, has " + std::to_string(detailLines));
+    }
 
     // Attempting to append duplicate bill ID should fail
     TEST_ASSERT(!repo.append(bill, &error), "Duplicate bill ID append must be rejected");

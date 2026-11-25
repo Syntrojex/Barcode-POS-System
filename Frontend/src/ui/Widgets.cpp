@@ -609,7 +609,7 @@ void RevenueChart::paintEvent(QPaintEvent *)
     if (peak <= 0 && targetPeak <= 0)
     {
         p.setPen(muted);
-        p.drawText(area, Qt::AlignCenter, "No paid sales today");
+        p.drawText(area, Qt::AlignCenter, "No paid sales in these hours");
     }
 }
 

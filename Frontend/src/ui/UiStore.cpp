@@ -1,4 +1,7 @@
 #include "UiStore.h"
+#include "AppState.h"
+#include "billing/SeasonRepository.h"
+#include <QDir>
 #include <QRegularExpression>
 #include <algorithm>
 
@@ -6,9 +9,9 @@ QString Season::statusOn(const QDate &d) const
 {
     if (end < d)
         return "expired";
-    if (start > d)
-        return "scheduled";
-    return active ? "active" : "scheduled";
+    if (!active)
+        return "inactive"; // isActive = false: never applied, whatever the dates
+    return start > d ? "scheduled" : "active";
 }
 
 int ParkedOrder::itemCount() const
@@ -47,37 +50,7 @@ UiStore::UiStore()
         {"70", "Household & Cleaning", "HSD", "#b6c4ff"},
     };
 
-    const QDate today = QDate::currentDate();
-    auto mk = [](const QString &id, const QString &name, QDate a, QDate b, double pct, bool on) {
-        Season s;
-        s.id = id; s.name = name; s.start = a; s.end = b; s.percent = pct; s.active = on;
-        return s;
-    };
-    const int y = today.year();
-    m_seasons = {
-        mk(QString("SEA-%1-01").arg(y), "Winter Warmth Sale", today.addDays(-3), today.addDays(4), 10, true),
-        mk(QString("SEA-%1-02").arg(y + 1), "Eid-ul-Fitr Grand Fest", QDate(y + 1, 3, 20), QDate(y + 1, 3, 27), 15, false),
-        mk(QString("SEA-%1-03").arg(y + 1), "Pakistan Day Mega Deal", QDate(y + 1, 3, 23), QDate(y + 1, 3, 24), 8, false),
-        mk(QString("SEA-%1-08").arg(y), "Summer Clearance", QDate(y, 6, 15), QDate(y, 6, 30), 5, false),
-        mk(QString("SEA-%1-12").arg(y - 1), "Winter Promo", QDate(y - 1, 12, 1), QDate(y - 1, 12, 31), 12, false),
-    };
-
-    // A couple of parked orders so the "Parked" strip is not empty on first launch.
-    auto line = [](const char *name, const char *ac, int q, double price, double tax, double disc, int id) {
-        ReceiptLine l;
-        l.name = name; l.acronym = ac; l.qty = q; l.price = price; l.tax = tax; l.discount = disc; l.productId = id;
-        return l;
-    };
-    ParkedOrder a;
-    a.code = "HLD-108"; a.customer = "Asad Malik"; a.contact = "0301-5551212";
-    a.parkedAt = QDateTime::currentDateTime().addSecs(-4 * 60);
-    a.lines = {line("Olpers Full Cream Milk 1L", "OLPMILK", 2, 340, 0, 10, 1),
-               line("National Whole Wheat Bread", "NBREAD", 1, 260, 18, 0, 2)};
-    ParkedOrder b;
-    b.code = "HLD-107"; b.customer = "Sana Malik"; b.contact = "0321-9876543";
-    b.parkedAt = QDateTime::currentDateTime().addSecs(-17 * 60);
-    b.lines = {line("Tapal Danedar Tea 190g", "TAPALTEA", 3, 210, 15, 5, 3)};
-    m_parked = {a, b};
+    loadSeasons(); // real seasons from Seasons.txt (no demo seasons)
 }
 
 // ---------------------------------------------------------------- categories
@@ -194,9 +167,57 @@ bool UiStore::removeCategory(const QString &id, QString *error)
 }
 
 // ---------------------------------------------------------------- seasons
+QString UiStore::seasonLabel(const QDate &start, const QDate &end)
+{
+    if (start.year() != end.year())
+        return start.toString("d MMM yyyy") + " - " + end.toString("d MMM yyyy");
+    return start.toString("d MMM") + " - " + end.toString("d MMM yyyy");
+}
+
+QString UiStore::seasonsPath() const
+{
+    return QDir(AppState::instance().dataDir()).filePath("Seasons.txt");
+}
+
+void UiStore::loadSeasons()
+{
+    namespace bb = barcodehub::billing;
+    std::vector<std::string> errors;
+    const auto records = bb::SeasonRepository(seasonsPath().toStdString()).load(&errors);
+    m_seasons.clear();
+    int n = 0;
+    for (const auto &r : records)
+    {
+        Season s;
+        s.start = QDate::fromString(QString::fromStdString(r.startDate), Qt::ISODate);
+        s.end = QDate::fromString(QString::fromStdString(r.endDate), Qt::ISODate);
+        s.percent = r.percent;
+        s.active = r.active;
+        s.id = QString("SEA-%1-%2").arg(s.start.year()).arg(++n, 2, 10, QLatin1Char('0'));
+        s.name = seasonLabel(s.start, s.end);
+        m_seasons.push_back(s);
+    }
+    for (const auto &e : errors)
+        qWarning("%s", e.c_str()); // bad lines are skipped, not fatal
+}
+
+void UiStore::saveSeasons()
+{
+    namespace bb = barcodehub::billing;
+    std::vector<bb::SeasonRecord> records;
+    for (const auto &s : m_seasons)
+        records.push_back({s.start.toString(Qt::ISODate).toStdString(), s.end.toString(Qt::ISODate).toStdString(),
+                           s.percent, s.active});
+    std::string error;
+    if (!bb::SeasonRepository(seasonsPath().toStdString()).save(records, &error))
+        qWarning("Could not save Seasons.txt: %s", error.c_str());
+}
+
 void UiStore::addSeason(const Season &s)
 {
     m_seasons.push_back(s);
+    m_seasons.last().name = seasonLabel(s.start, s.end);
+    saveSeasons();
     emit seasonsChanged();
 }
 
@@ -204,7 +225,12 @@ void UiStore::updateSeason(const QString &id, const Season &s)
 {
     for (auto &x : m_seasons)
         if (x.id == id)
+        {
             x = s;
+            x.id = id;
+            x.name = seasonLabel(s.start, s.end);
+        }
+    saveSeasons();
     emit seasonsChanged();
 }
 
@@ -216,15 +242,26 @@ void UiStore::removeSeason(const QString &id)
             m_seasons.removeAt(i);
             break;
         }
+    saveSeasons();
     emit seasonsChanged();
 }
 
-void UiStore::setSeasonActive(const QString &id, bool on)
+QString UiStore::setSeasonActive(const QString &id, bool on)
 {
     for (auto &x : m_seasons)
         if (x.id == id)
+        {
+            if (on)
+                if (const QString why = validateSeason(x.start, x.end, x.percent, true, id); !why.isEmpty())
+                {
+                    emit seasonsChanged(); // redraw the toggle as it was
+                    return why;
+                }
             x.active = on;
+        }
+    saveSeasons();
     emit seasonsChanged();
+    return QString();
 }
 
 QString UiStore::nextSeasonId() const
@@ -243,50 +280,71 @@ const Season *UiStore::activeSeason(const QDate &d) const
     return nullptr;
 }
 
-QString UiStore::validateSeason(const QString &name, const QDate &start, const QDate &end, double percent) const
+QString UiStore::validateSeason(const QDate &start, const QDate &end, double percent, bool active,
+                                const QString &ignoreId) const
 {
-    if (name.trimmed().isEmpty())
-        return "Give the season a name.";
     if (!start.isValid() || !end.isValid())
         return "Enter valid start and end dates.";
     if (end < start)
         return "The end date must not be before the start date.";
     if (percent <= 0 || percent > 100)
-        return "Discount must be between 0 and 100 percent.";
+        return "Discount percentage must be more than 0 and at most 100.";
+    if (active)
+        for (const auto &s : m_seasons)
+            if (s.id != ignoreId && s.active && s.start <= end && start <= s.end)
+                return QString("These dates overlap the active season %1 (%2%). Change the dates, save it as "
+                               "inactive, or switch that season off first.")
+                    .arg(s.name).arg(s.percent, 0, 'g', 4);
     return QString();
 }
 
 // ---------------------------------------------------------------- parked orders
-QString UiStore::park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines)
+QVector<ParkedOrder> UiStore::parked() const
 {
-    ParkedOrder p;
-    p.code = QString("HLD-%1").arg(m_nextHold++);
-    p.customer = customer.trimmed().isEmpty() ? "Walk-in Customer" : customer;
-    p.contact = contact;
-    p.parkedAt = QDateTime::currentDateTime();
-    p.lines = lines;
-    m_parked.prepend(p);
+    QVector<ParkedOrder> out;
+    for (const auto &o : AppState::instance().heldOrders())
+    {
+        if (o.status != "On Hold")
+            continue;
+        ParkedOrder p;
+        p.code = o.id;
+        p.customer = o.customer;
+        p.contact = o.contact;
+        p.parkedAt = o.time;
+        p.lines = o.lines;
+        out << p;
+    }
+    return out;
+}
+
+QString UiStore::park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines,
+                      const QString &existingId, QString *error)
+{
+    const QString id = AppState::instance().holdOrder(customer, contact, lines, existingId, error);
     emit parkedChanged();
-    return p.code;
+    return id;
 }
 
 bool UiStore::takeParked(const QString &code, ParkedOrder &out)
 {
-    for (int i = 0; i < m_parked.size(); ++i)
-        if (m_parked[i].code == code)
+    for (const auto &o : AppState::instance().heldOrders())
+        if (o.id == code)
         {
-            out = m_parked[i];
-            m_parked.removeAt(i);
-            emit parkedChanged();
+            out.code = o.id;
+            out.customer = o.customer;
+            out.contact = o.contact;
+            out.parkedAt = o.time;
+            out.lines = o.lines;
             return true;
         }
     return false;
 }
 
-void UiStore::discardParked(const QString &code)
+bool UiStore::discardParked(const QString &code, QString *error)
 {
-    ParkedOrder ignored;
-    takeParked(code, ignored);
+    const bool ok = AppState::instance().discardHeldOrder(code, error);
+    emit parkedChanged();
+    return ok;
 }
 
 // ---------------------------------------------------------------- manager sign-off
@@ -297,3 +355,21 @@ bool UiStore::verifyManager(const QString &staffId, const QString &pin, QString 
         *managerName = demoManagerName();
     return ok;
 }
+
+// ---------------------------------------------------------------- approvals for editing paid orders
+void UiStore::grantApproval(const QString &orderId, const QString &manager, const QString &reason)
+{
+    m_approvals[orderId] = Approval{manager, reason, QDateTime::currentDateTime()};
+}
+
+bool UiStore::approvalFor(const QString &orderId, Approval *out) const
+{
+    const auto it = m_approvals.constFind(orderId);
+    if (it == m_approvals.constEnd())
+        return false;
+    if (out)
+        *out = it.value();
+    return true;
+}
+
+void UiStore::revokeApproval(const QString &orderId) { m_approvals.remove(orderId); }

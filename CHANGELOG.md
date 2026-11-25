@@ -23,11 +23,33 @@ All notable changes to **BarcodeHub** are documented in this file.
 - Add management reports: incomplete orders, completed orders, cash sales, all sales, top ten most sold items, and top ten items by remaining stock.
 - Provide separate cashier and manager features in the user interface.
 
-### UI progress (front end only, back end unchanged)
+### Fixed — editing orders (requirements 3 and 10)
 
-- Orders page: "Editable for N days" badge on paid orders (7-day window, amber for the last 3 days, "Window closed" afterwards), **Open** for paid orders (manager approval for cashiers) and **Resume** for in-progress and on-hold orders, including orders parked with F2.
-- Record Order: opening an existing order loads it into the cart ("editing" mode). Saving edits to an existing order is not wired yet because it needs the Increment 3 back end.
-- Reports page: six tabs (incomplete orders, completed orders, cash sales with daily/weekly/monthly/yearly/custom range, all sales, top 10 sold, top 10 by remaining stock) with summary tiles, totals, CSV export and PDF print.
+- Editing a paid order now changes **that** order: it keeps its Order ID and Bill ID (and its payment date, so the
+  7-day window does not restart). `OrderDetail.txt`, `Bill.txt` and `BillDetail.txt` are rewritten and stock moves by
+  the difference only. Previously a new order was created and the original was archived.
+- While a paid order is edited, the units it already took count as available, so a low-stock line can be kept or
+  restored.
+- On-hold orders are real orders now: saved in `Order.txt` with status `on-hold`, listed on the Orders page
+  ("On Hold" tab, one-click Resume), kept after a restart, and paid under the same Order ID. The two hard-coded demo
+  held orders were removed.
+- Every payment or edit backs up the five record files first and puts them all back if any step fails.
+- The 7-day edit window counts from the bill (payment) date and time.
+- Removed the stray duplicate `Frontend/src/ui/RecordOrderPage .cpp`, which the build compiled alongside
+  `RecordOrderPage.cpp`.
+- New backend calls: `OrderManager::saveCartToOrder`, `BillRepository::replace`, `BillingService::rebill`;
+  `discardOrder` also accepts on-hold orders. Covered by `tests/order_edit_test.cpp`.
+
+### Changed — Discounts page follows requirements 13-15
+
+- The Discounts page asks only for what `Seasons.txt` stores: start date, end date, discount percentage and isActive.
+  The season name field and column were removed (the requirements have no name, and the file cannot keep one); a
+  season is shown by its dates, e.g. "23 Nov - 30 Nov 2026".
+- Two active seasons may not share a day, so a bill date always matches at most one seasonal discount (requirement 15).
+  An overlapping season can still be saved as inactive.
+- A season with isActive = false shows as INACTIVE (it used to show as SCHEDULED) and has its own filter tab.
+- The seasonal discount applies to the whole bill; an unused per-category filter was removed (amounts are unchanged).
+- Layout: the form scrolls instead of squashing its labels onto the inputs; table columns no longer clip.
 
 ### Development Notes
 
