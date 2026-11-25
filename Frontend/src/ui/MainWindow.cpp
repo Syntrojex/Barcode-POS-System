@@ -409,7 +409,11 @@ void MainWindow::positionToast()
     if (!m_toast)
         return;
     const QWidget *root = centralWidget();
-    m_toast->move((root->width() + sidebarWidth - m_toast->width()) / 2, root->height() - m_toast->height() - 36);
+    int bottom = root->height() - 36;
+    if (m_stack->currentIndex() == RecordOrder)
+        if (const auto *summary = m_record->findChild<QWidget *>("checkoutSummary"))
+            bottom = summary->mapTo(root, QPoint()).y();
+    m_toast->move((root->width() + sidebarWidth - m_toast->width()) / 2, bottom - m_toast->height());
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)

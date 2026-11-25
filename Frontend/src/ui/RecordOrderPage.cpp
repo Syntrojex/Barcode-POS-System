@@ -6,19 +6,18 @@
 #include "UiKit.h"
 #include "UiStore.h"
 #include "Widgets.h"
+#include <QApplication>
 #include <QDateTime>
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QLineEdit>
-#include <QPainter>
 #include <QScrollArea>
 #include <QShortcut>
 #include <QTimer>
 #include <QTableWidget>
 #include <QVBoxLayout>
-#include <QtMath>
 
 class ElidedLabel final : public QLabel
 {
@@ -62,10 +61,12 @@ namespace
         auto* v = new QVBoxLayout(w);
         v->setContentsMargins(4, 4, 4, 4);
         v->setSpacing(1);
-        auto* t = W::label(top);
+        auto* t = new ElidedLabel;
         t->setStyleSheet("font-weight:700; font-size:13.5px;");
-        t->setWordWrap(true);
-        auto* b = W::label(bottom, "muted");
+        t->setFullText(top);
+        auto* b = new ElidedLabel;
+        b->setObjectName("muted");
+        b->setFullText(bottom);
         v->addWidget(t);
         v->addWidget(b);
         return w;
@@ -73,6 +74,7 @@ namespace
     QTableWidgetItem* cell(const QString& text, const QString& color = "", bool bold = false)
     {
         auto* i = new QTableWidgetItem(text);
+        i->setToolTip(text);
         i->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         if (!color.isEmpty())
             i->setForeground(Theme::readable(QColor(color)));
@@ -88,14 +90,21 @@ namespace
 
 RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
 {
-    QVBoxLayout* root;
-    Ui::pageShell(this, root, true);
+    auto* root = W::pageLayout(this);
+    root->setContentsMargins(10, 6, 10, 6);
+    root->setSpacing(0);
+    root->addWidget(buildBarcodeStrip());
     root->addWidget(buildCustomerStrip());
+    root->addWidget(buildParkedStrip());
     auto* body = new QHBoxLayout;
     body->setSpacing(0);
-    body->addWidget(buildLeft(), 36);
-    body->addWidget(buildRight(), 64);
+    body->addWidget(buildProductPane(), 27);
+    body->addWidget(buildCart(), 73);
     root->addLayout(body, 1);
+    root->addWidget(buildSummary());
+
+    setTabOrder(m_manual, m_addBtn);
+    setTabOrder(m_addBtn, m_descBtn);
 
     connect(&AppState::instance(), &AppState::scanned, this, [this](const QString& ean)
         { showCode(ean, true); });
@@ -105,7 +114,11 @@ RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
         else m_feed->showResult(ean + "  -  not in Product.txt", false);
         AppState::instance().emitScan(ean);
         });
-    connect(m_feed, &CameraFeedWidget::scanError, this, &RecordOrderPage::toast);
+    connect(m_feed, &CameraFeedWidget::scanError, this, [this](const QString& error)
+        {
+            setCameraActive(false);
+            emit toast(error);
+        });
     loadDemoDraft();
 
     // keyboard: F2 hold, F10 checkout, F4 description, F9 camera (only while this page is visible)
@@ -122,6 +135,7 @@ RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
 
     // on-hold chips: redraw when the list changes and every 30 s (the "4m ago" text)
     connect(&UiStore::instance(), &UiStore::parkedChanged, this, &RecordOrderPage::rebuildParked);
+    connect(&UiStore::instance(), &UiStore::seasonsChanged, this, &RecordOrderPage::updateTotals);
     auto* ageTimer = new QTimer(this);
     ageTimer->setInterval(30000);
     connect(ageTimer, &QTimer::timeout, this, &RecordOrderPage::rebuildParked);
@@ -129,14 +143,46 @@ RecordOrderPage::RecordOrderPage(QWidget* parent) : QWidget(parent)
     rebuildParked();
 }
 
+QWidget* RecordOrderPage::buildBarcodeStrip()
+{
+    auto* strip = W::card(this, "strip");
+    auto* h = new QHBoxLayout(strip);
+    h->setContentsMargins(16, 6, 16, 6);
+    h->setSpacing(10);
+
+    auto* label = W::label("Barcode", "h1");
+    h->addWidget(label);
+    m_manual = new QLineEdit;
+    m_manual->setObjectName("checkoutBarcode");
+    m_manual->setPlaceholderText("Scan or type a barcode, then press Enter");
+    m_manual->setAccessibleName("Barcode");
+    m_manual->setMaxLength(12);
+    m_manual->setMinimumHeight(42);
+    m_manual->addAction(Theme::icon("barcode", Theme::outline, 16), QLineEdit::LeadingPosition);
+    label->setBuddy(m_manual);
+    h->addWidget(m_manual, 1);
+    connect(m_manual, &QLineEdit::returnPressed, this, [this]
+        { showCode(m_manual->text(), false); });
+
+    auto* browse = W::button("Browse products", "soft", "products");
+    m_camToggle = W::button("Camera  [F9]", "soft", "camera");
+    for (auto* button : {browse, m_camToggle})
+    {
+        button->setMinimumHeight(40);
+        h->addWidget(button);
+    }
+    connect(browse, &QPushButton::clicked, this, &RecordOrderPage::quickLookup);
+    connect(m_camToggle, &QPushButton::clicked, this, [this]
+        { setCameraActive(m_cameraPanel->isHidden()); });
+    return strip;
+}
+
 QWidget* RecordOrderPage::buildCustomerStrip()
 {
     auto* strip = W::card(this, "strip");
     auto* h = new QHBoxLayout(strip);
-    h->setContentsMargins(14, 8, 14, 8);
+    h->setContentsMargins(16, 5, 16, 5);
     h->setSpacing(12);
-    h->addWidget(W::iconTile("user", Qt::white, "#7fb0ff", "#2b5fe8", 40));
-
     auto field = [&](const QString& cap, QWidget* content, int stretch)
         {
             auto* f = new QFrame;
@@ -144,21 +190,22 @@ QWidget* RecordOrderPage::buildCustomerStrip()
             auto* v = new QVBoxLayout(f);
             v->setContentsMargins(12, 5, 12, 6);
             v->setSpacing(0);
-            v->addWidget(W::label(cap, "caption"));
+            auto* label = W::label(cap, "caption");
+            label->setBuddy(content);
+            v->addWidget(label);
             v->addWidget(content);
             h->addWidget(f, stretch);
         };
-    m_customer = new QLineEdit("Marcus Vance");
+    m_customer = new QLineEdit;
     m_customer->setProperty("flat", true);
     m_customer->setPlaceholderText("Walk-in customer");
     field("CUSTOMER", m_customer, 3);
-    m_contact = new QLineEdit("+1 (555) 019-2834");
+    m_contact = new QLineEdit;
     m_contact->setProperty("flat", true);
     m_contact->setPlaceholderText("Phone (optional)");
     field("PHONE", m_contact, 3);
 
 
-    h->addStretch(1);
     auto* sv = new QVBoxLayout;
     sv->setSpacing(0);
     sv->addWidget(W::label("ORDER", "caption"));
@@ -169,113 +216,70 @@ QWidget* RecordOrderPage::buildCustomerStrip()
     return strip;
 }
 
-QWidget* RecordOrderPage::buildLeft()
+QWidget* RecordOrderPage::buildProductPane()
 {
     auto* col = new QWidget;
     auto* v = new QVBoxLayout(col);
     v->setContentsMargins(0, 0, 0, 0);
     v->setSpacing(0);
-
-    auto* cam = W::card(col);
-    auto* cv = new QVBoxLayout(cam);
-    cv->setContentsMargins(14, 10, 14, 10);
-    cv->setSpacing(8);
-    W::headerRow(cv, "camera", "Scanner");
-    m_feed = new CameraFeedWidget;
-    m_feed->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
-    cv->addWidget(m_feed, 1);
-
-    auto* btns = new QHBoxLayout;
-    btns->setSpacing(8);
-    m_camToggle = W::button("Start camera  [F9]", "primary", "play");
-    btns->addWidget(m_camToggle, 1);
-    cv->addLayout(btns);
-    connect(m_camToggle, &QPushButton::clicked, this, [this]
-        {
-            const bool on = !m_feed->running();
-            m_feed->setRunning(on);
-            const bool running = m_feed->running();
-            m_camToggle->setText(running ? "Stop camera" : "Start camera  [F9]");
-            m_camToggle->setIcon(Theme::icon(running ? "stop" : "play", QColor("white"), 16)); });
-
-    auto* mr = new QHBoxLayout;
-    mr->setSpacing(8);
-    m_manual = new QLineEdit;
-    m_manual->setPlaceholderText("Enter barcode");
-    m_manual->setAccessibleName("Barcode");
-    m_manual->setToolTip("Enter a barcode and press Enter to find the product.");
-    m_manual->setMaxLength(12);
-    m_manual->setMinimumHeight(40);
-    m_manual->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
-    auto* browse = W::button("Browse", "soft", "products");
-    browse->setMinimumHeight(40);
-    mr->addWidget(m_manual, 1);
-    mr->addWidget(browse);
-    cv->addLayout(mr);
-    connect(m_manual, &QLineEdit::returnPressed, this, [this]
-        { showCode(m_manual->text(), false); });
-    connect(browse, &QPushButton::clicked, this, &RecordOrderPage::quickLookup);
-    v->addWidget(cam, 5);
 
     auto* pc = W::card(col);
     auto* pv = new QVBoxLayout(pc);
-    pv->setContentsMargins(14, 10, 14, 10);
-    pv->setSpacing(7);
+    pv->setContentsMargins(14, 7, 14, 7);
+    pv->setSpacing(4);
     m_pBadge = W::badge("—", "grey");
-    W::headerRow(pv, "shield", "Detected product", m_pBadge);
+    W::headerRow(pv, "products", "Product preview", m_pBadge);
 
     auto* info = W::card(pc, "subCard");
     auto* detail = new QVBoxLayout(info);
-    detail->setContentsMargins(10, 8, 10, 8);
-    detail->setSpacing(3);
+    detail->setContentsMargins(10, 5, 10, 5);
+    detail->setSpacing(2);
     m_pName = new ElidedLabel;
     m_pName->setObjectName("h1");
     detail->addWidget(m_pName);
-    auto* ih = new QHBoxLayout;
-    ih->setSpacing(8);
-    m_pThumb = new QLabel;
-    m_pThumb->setFixedSize(48, 58);
-    m_pThumb->setAlignment(Qt::AlignCenter);
-    m_pThumb->setScaledContents(true);
-    ih->addWidget(m_pThumb);
-    auto* iv = new QVBoxLayout;
-    iv->setSpacing(2);
-    m_pPrice = W::label("", "checkoutPrice");
-    iv->addWidget(m_pPrice);
     m_pMeta = W::label("Scan or enter a barcode.", "muted");
     m_pMeta->setWordWrap(true);
-    iv->addWidget(m_pMeta);
+    detail->addWidget(m_pMeta);
+    auto* amounts = new QHBoxLayout;
+    m_pPrice = W::label("", "checkoutPrice");
     m_pStock = W::label("", "checkoutStock");
-    iv->addWidget(m_pStock);
-    ih->addLayout(iv, 1);
-    detail->addLayout(ih);
+    amounts->addWidget(m_pPrice);
+    amounts->addWidget(m_pStock, 0, Qt::AlignRight);
+    detail->addLayout(amounts);
     pv->addWidget(info);
 
     m_addBtn = W::button("Add to order", "primary", "cart");
-    m_addBtn->setMinimumHeight(42);
+    m_addBtn->setMinimumHeight(36);
     m_addBtn->setEnabled(false);
-    m_descBtn = W::button("Description", "soft", "search");
+    m_descBtn = W::button("Description  [F4]", "flat", "info");
     m_descBtn->setEnabled(false);
-    pv->addWidget(m_descBtn);
     pv->addWidget(m_addBtn);
-    connect(m_descBtn, &QPushButton::clicked, this, [this]
-        { if (m_preview && m_preview->id > 0) Dialogs::productDescription(this, m_preview->id); });
+    pv->addWidget(m_descBtn);
+    connect(m_descBtn, &QPushButton::clicked, this, &RecordOrderPage::describeCurrent);
     connect(m_addBtn, &QPushButton::clicked, this, [this]
-        { if (m_preview) addToCart(*m_preview); });
-    v->addWidget(pc, 3);
+        {
+            if (m_preview)
+                addToCart(*m_preview);
+            focusInput();
+        });
+    v->addWidget(pc, 0, Qt::AlignTop);
+
+    m_cameraPanel = W::card(col);
+    auto* cv = new QVBoxLayout(m_cameraPanel);
+    cv->setContentsMargins(10, 5, 10, 5);
+    m_feed = new CameraFeedWidget;
+    m_feed->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_feed->setFixedHeight(90);
+    cv->addWidget(m_feed);
+    m_cameraPanel->hide();
+    v->addWidget(m_cameraPanel);
+    v->addStretch();
     return col;
 }
 
-QWidget* RecordOrderPage::buildRight()
+QWidget* RecordOrderPage::buildCart()
 {
-    auto* col = new QWidget;
-    auto* v = new QVBoxLayout(col);
-    v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(0);
-
-    v->addWidget(buildParkedStrip());
-
-    auto* oc = W::card(col);
+    auto* oc = W::card(this);
     auto* ov = new QVBoxLayout(oc);
     ov->setContentsMargins(0, 14, 0, 10);
     ov->setSpacing(6);
@@ -283,8 +287,7 @@ QWidget* RecordOrderPage::buildRight()
     auto* head = new QHBoxLayout;
     head->setContentsMargins(18, 0, 14, 0);
     head->setSpacing(10);
-    head->addWidget(W::iconLabel("orders", Theme::primary, 20));
-    head->addWidget(W::label("Current order", "h1"));
+    head->addWidget(W::label("Cart", "h1"));
     m_itemsBadge = W::badge("0 items", "grey");
     head->addWidget(m_itemsBadge);
     head->addStretch();
@@ -293,75 +296,65 @@ QWidget* RecordOrderPage::buildRight()
     ov->addLayout(head);
     connect(clear, &QPushButton::clicked, this, &RecordOrderPage::newDraft);
 
-    m_table = new QTableWidget(0, 6);
-    m_table->setHorizontalHeaderLabels({ "PRODUCT", "PRICE", "QTY", "DISCOUNT", "TOTAL", "" });
-    m_table->verticalHeader()->hide();
-    m_table->setShowGrid(false);
+    m_table = Ui::makeTable({"PRODUCT", "UNIT PRICE", "QTY", "DISCOUNT", "LINE TOTAL", ""});
+    m_table->setAccessibleName("Current order");
     m_table->setSelectionMode(QAbstractItemView::NoSelection);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->setFocusPolicy(Qt::NoFocus);
-    m_table->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     auto* hh = m_table->horizontalHeader();
     hh->setSectionResizeMode(QHeaderView::Fixed);
     hh->setSectionResizeMode(0, QHeaderView::Stretch);
-    hh->setHighlightSections(false);
-    hh->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_table->setColumnWidth(1, 78);
-    m_table->setColumnWidth(2, 112);
-    m_table->setColumnWidth(3, 92);
-    m_table->setColumnWidth(4, 96);
-    m_table->setColumnWidth(5, 52);
+    m_table->setColumnWidth(1, 95);
+    m_table->setColumnWidth(2, 116);
+    m_table->setColumnWidth(3, 95);
+    m_table->setColumnWidth(4, 104);
+    m_table->setColumnWidth(5, 42);
+    m_table->horizontalHeaderItem(4)->setToolTip("Includes item discounts and tax. Order discounts appear in the summary.");
     m_table->setWordWrap(false);
     ov->addWidget(m_table, 1);
-    v->addWidget(oc, 1);
+    return oc;
+}
 
-    auto* tc = W::card(col, "totals");
+QWidget* RecordOrderPage::buildSummary()
+{
+    auto* tc = W::card(this, "totals");
+    tc->setObjectName("checkoutSummary");
     auto* th = new QHBoxLayout(tc);
-    th->setContentsMargins(18, 14, 18, 14);
-    th->setSpacing(18);
-    auto* grid = new QVBoxLayout;
-    grid->setSpacing(8);
+    th->setContentsMargins(14, 8, 14, 8);
+    th->setSpacing(12);
     auto row = [&](const QString& k, QLabel*& val)
         {
-            auto* r = new QHBoxLayout;
+            auto* r = new QVBoxLayout;
+            r->setSpacing(2);
             r->addWidget(W::label(k, "muted"));
-            r->addStretch();
             val = W::label("PKR 0.00");
-            val->setStyleSheet("font-weight:800; font-size:14px;");
+            val->setStyleSheet("font-weight:700; font-size:14px;");
             r->addWidget(val);
-            grid->addLayout(r);
+            th->addLayout(r);
         };
     row("Subtotal", m_gross);
-    row("Discount", m_disc);
+    row("Discounts", m_disc);
     row("Tax", m_tax);
-    grid->addStretch();
-    th->addLayout(grid, 1);
+    th->addStretch(1);
 
     auto* tb = W::card(tc, "totalBox");
     auto* tv = new QVBoxLayout(tb);
-    tv->setContentsMargins(18, 12, 18, 14);
-    tv->setSpacing(2);
-    auto* cap = W::label("TOTAL", "caption");
+    tv->setContentsMargins(14, 5, 14, 5);
+    tv->setSpacing(0);
+    auto* cap = W::label("NET PAYABLE", "caption");
     tv->addWidget(cap);
-    m_total = W::label("PKR 0.00");
-    m_total->setStyleSheet("font-size:34px; font-weight:800; color:white;");
+    m_total = W::label("PKR 0.00", "checkoutPayable");
+    m_total->setStyleSheet("font-size:28px; font-weight:800;");
     tv->addWidget(m_total);
-    auto* actions = new QHBoxLayout;
-    actions->setSpacing(8);
+    th->addWidget(tb);
     m_hold = W::button("Hold  [F2]", "soft", "pause");
     m_hold->setMinimumHeight(44);
     m_hold->setToolTip("Put this order on hold and start a new one (one press, no questions)");
     m_checkout = W::button("Checkout  [F10]", "primary", "check");
     m_checkout->setMinimumHeight(44);
-    actions->addWidget(m_hold, 2);
-    actions->addWidget(m_checkout, 3);
-    tv->addLayout(actions);
+    th->addWidget(m_hold);
+    th->addWidget(m_checkout);
     connect(m_hold, &QPushButton::clicked, this, &RecordOrderPage::holdOrder);
-    th->addWidget(tb, 1);
     connect(m_checkout, &QPushButton::clicked, this, &RecordOrderPage::checkout);
-    v->addWidget(tc);
-    return col;
+    return tc;
 }
 
 // ---------------------------------------------------------------- behaviour
@@ -373,12 +366,14 @@ void RecordOrderPage::focusInput()
 
 void RecordOrderPage::simulateScan()
 {
-    if (!m_feed->running()) m_feed->setRunning(true);
-    if (!m_feed->running()) emit toast("Unable to start camera scanning");
-    else {
-        m_camToggle->setText("Stop camera");
-        m_camToggle->setIcon(Theme::icon("stop", QColor("white"), 16));
-    }
+    setCameraActive(true);
+}
+
+void RecordOrderPage::setCameraActive(bool active)
+{
+    m_cameraPanel->setVisible(active);
+    m_camToggle->setText(active ? "Stop camera  [F9]" : "Camera  [F9]");
+    m_feed->setRunning(active);
 }
 
 void RecordOrderPage::quickLookup()
@@ -390,6 +385,7 @@ void RecordOrderPage::quickLookup()
     const QString pick = QInputDialog::getItem(this, "Browse products", "Choose a product:", items, 0, false, &ok);
     if (ok)
         showCode(pick.section("  -  ", 0, 0), false);
+    focusInput();
 }
 
 void RecordOrderPage::showCode(const QString& codeIn, bool fromScanner)
@@ -419,7 +415,6 @@ void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
     m_preview = p;
     m_addBtn->setEnabled(p.has_value() && p->stock > 0);
     m_descBtn->setEnabled(p.has_value() && p->id > 0);
-    m_pThumb->setVisible(p.has_value());
     m_pPrice->setVisible(p.has_value());
     m_pStock->setVisible(p.has_value());
     if (!p)
@@ -430,7 +425,6 @@ void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
         m_pMeta->setToolTip({});
         m_pStock->clear();
         W::setBadge(m_pBadge, "—", "grey");
-        m_pThumb->clear();
         return;
     }
     m_pName->setFullText(p->name);
@@ -444,34 +438,6 @@ void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
     W::setBadge(m_pBadge, p->stock == 0 ? "Out of stock" : low ? "Low stock" : "In stock",
         p->stock == 0 ? "red" : low ? "amber" : "green");
 
-    // little 3D "box" thumbnail
-    QPixmap pm(120, 144);
-    pm.setDevicePixelRatio(2);
-    pm.fill(Qt::transparent);
-    QPainter pa(&pm);
-    pa.setRenderHint(QPainter::Antialiasing);
-    pa.setPen(Qt::NoPen);
-    pa.setBrush(QColor(20, 40, 110, 40));
-    pa.drawEllipse(QRectF(6, 60, 46, 8));
-    QLinearGradient fg(10, 8, 10, 62);
-    fg.setColorAt(0, QColor("#7fb0ff"));
-    fg.setColorAt(1, QColor("#2b5fe8"));
-    pa.setBrush(fg);
-    pa.drawRoundedRect(QRectF(8, 14, 34, 46), 4, 4);
-    pa.setBrush(QColor("#1a3fae"));
-    pa.drawPolygon(QPolygonF({ {42, 14}, {50, 8}, {50, 54}, {42, 60} }));
-    pa.setBrush(QColor("#a9ccff"));
-    pa.drawPolygon(QPolygonF({ {8, 14}, {16, 8}, {50, 8}, {42, 14} }));
-    pa.setBrush(QColor(255, 255, 255, 230));
-    pa.drawRoundedRect(QRectF(13, 26, 24, 22), 3, 3);
-    pa.setPen(QColor("#1a3fae"));
-    QFont f = pa.font();
-    f.setPixelSize(8);
-    f.setBold(true);
-    pa.setFont(f);
-    pa.drawText(QRectF(13, 26, 24, 22), Qt::AlignCenter, p->name.section(' ', 0, 0).left(5).toUpper());
-    pa.end();
-    m_pThumb->setPixmap(pm);
 }
 
 void RecordOrderPage::addToCart(const ProductInfo& p, int qty)
@@ -516,8 +482,14 @@ void RecordOrderPage::changeQty(int row, int delta)
         emit toast(problem);
         return;
     }
+    const auto* stepper = m_table->cellWidget(row, 2);
+    const auto* focused = QApplication::focusWidget();
+    const QString control = focused && stepper && stepper->isAncestorOf(focused) ? focused->objectName() : QString();
     l.qty = nq;
     rebuildTable();
+    if (!control.isEmpty())
+        if (auto* button = m_table->cellWidget(row, 2)->findChild<QPushButton*>(control))
+            button->setFocus();
 }
 
 void RecordOrderPage::removeRow(int row)
@@ -526,6 +498,7 @@ void RecordOrderPage::removeRow(int row)
         return;
     m_cart.removeAt(row);
     rebuildTable();
+    focusInput();
 }
 
 void RecordOrderPage::rebuildTable()
@@ -538,10 +511,16 @@ void RecordOrderPage::rebuildTable()
         const double gross = l.p.price * l.qty;
         const double disc = l.p.discount * l.qty;
         const double tax = l.p.tax * l.qty;
-        m_table->setRowHeight(r, 62);
+        m_table->setRowHeight(r, 54);
         m_table->setCellWidget(r, 0, twoLine(l.p.name, l.p.sku + "  •  " + l.p.unit));
         m_table->setItem(r, 1, cell(W::money(l.p.price), "", true));
         auto* stp = new QtyStepper(l.qty);
+        for (auto* button : stp->findChildren<QPushButton*>())
+        {
+            const QString action = button->text() == "+" ? "Increase quantity" : "Decrease quantity";
+            button->setObjectName(action);
+            button->setAccessibleName(action + " for " + l.p.name);
+        }
         m_table->setCellWidget(r, 2, stp);
         connect(stp, &QtyStepper::minus, this, [this, r]
             { changeQty(r, -1); });
@@ -554,6 +533,7 @@ void RecordOrderPage::rebuildTable()
         del->setIcon(Theme::icon("trash", Theme::error, 18));
         del->setCursor(Qt::PointingHandCursor);
         del->setToolTip("Remove");
+        del->setAccessibleName("Remove " + l.p.name);
         auto* wrap = new QWidget;
         auto* wl = new QHBoxLayout(wrap);
         wl->setContentsMargins(0, 0, 0, 0);
@@ -568,21 +548,16 @@ void RecordOrderPage::rebuildTable()
 
 void RecordOrderPage::updateTotals()
 {
-    double gross = 0, disc = 0, tax = 0;
-    int items = 0;
-    for (const auto& l : m_cart)
-    {
-        gross += l.p.price * l.qty;
-        disc += l.p.discount * l.qty;
-        tax += l.p.tax * l.qty;
-        items += l.qty;
-    }
-    const double total = gross - disc + tax;
+    const auto quote = Pricing::quote(cartLines(), 0);
+    const int items = quote.units;
     W::setBadge(m_itemsBadge, QString("%1 item%2").arg(items).arg(items == 1 ? "" : "s"), items ? "blue" : "grey");
-    m_gross->setText(W::money(gross));
-    m_disc->setText(disc > 0 ? W::money(-disc) : "PKR 0.00");
-    m_tax->setText(W::money(tax));
-    m_total->setText(W::money(total));
+    m_gross->setText(W::money(quote.gross));
+    m_disc->setText(W::money(-quote.totalDiscount()));
+    m_disc->setToolTip(QString("Item discounts %1 · Seasonal discounts %2")
+        .arg(W::money(quote.itemDiscount), W::money(quote.seasonal)));
+    m_tax->setText(W::money(quote.tax));
+    m_total->setText(W::money(quote.payable));
+    m_total->setMinimumWidth(qMax(176, m_total->sizeHint().width() + 4));
     m_checkout->setEnabled(items > 0);
     m_hold->setEnabled(items > 0);
 }
@@ -601,6 +576,7 @@ void RecordOrderPage::newDraft()
     setPreview(std::nullopt);
     rebuildTable();
     m_sessionId->setText("#" + AppState::instance().nextOrderId());
+    focusInput();
     emit toast("New order started");
 }
 
@@ -630,7 +606,10 @@ void RecordOrderPage::checkout()
     req.lines = o.lines;
     Dialogs::PaymentResult res;
     if (!Dialogs::payment(this, req, res))
+    {
+        focusInput();
         return;
+    }
     const QString mode = res.mode, merchant = res.merchant;
     const double tendered = res.tendered;
     const auto quote = Pricing::quote(o.lines, res.specialPercent);
@@ -656,6 +635,7 @@ void RecordOrderPage::checkout()
     setPreview(std::nullopt);
     rebuildTable();
     m_sessionId->setText("#" + AppState::instance().nextOrderId());
+    focusInput();
     emit toast("Order " + o.id + " paid - " + W::money(o.total));
 }
 // ---- placeholder bodies for the Increment 3 actions (the redesigned screen replaces them) ----
@@ -663,7 +643,10 @@ void RecordOrderPage::setRole(UserRole role) { m_role = role; }
 void RecordOrderPage::describeCurrent()
 {
     if (m_preview && m_preview->id > 0)
+    {
         Dialogs::productDescription(this, m_preview->id);
+        focusInput();
+    }
 }
 
 // ---------------------------------------------------------------- on hold (parked orders)
@@ -690,7 +673,7 @@ QWidget* RecordOrderPage::buildParkedStrip()
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll->setFixedHeight(52);
+    scroll->setFixedHeight(46);
     scroll->setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }");
     auto* inner = new QWidget;
     m_parkChips = new QHBoxLayout(inner);
@@ -698,8 +681,9 @@ QWidget* RecordOrderPage::buildParkedStrip()
     m_parkChips->setSpacing(8);
     scroll->setWidget(inner);
     h->addWidget(scroll, 1);
-    m_parkEmpty = W::label("No orders on hold. Press F2 to park the current order.", "muted");
-    h->addWidget(m_parkEmpty);
+    m_parkedList = scroll;
+    m_parkEmpty = W::label("No held orders", "muted");
+    h->addWidget(m_parkEmpty, 1);
     return strip;
 }
 
@@ -709,11 +693,15 @@ void RecordOrderPage::rebuildParked()
     while (QLayoutItem* it = m_parkChips->takeAt(0))
     {
         if (QWidget* w = it->widget())
+        {
+            w->hide();
             w->deleteLater();
+        }
         delete it;
     }
     const auto& parked = UiStore::instance().parked();
     m_parkTitle->setText(QString("ON HOLD (%1)").arg(parked.size()));
+    m_parkedList->setVisible(!parked.isEmpty());
     m_parkEmpty->setVisible(parked.isEmpty());
     const QDateTime now = QDateTime::currentDateTime();
     for (const auto& p : parked)
@@ -722,15 +710,16 @@ void RecordOrderPage::rebuildParked()
         const QString ago = secs < 60 ? QString("just now")
             : secs < 3600 ? QString("%1m ago").arg(secs / 60)
             : QString("%1h ago").arg(secs / 3600);
-        const QString text = QString("#%1   %2  •  %3  •  %4   %5")
-            .arg(p.code, p.customer.left(18), QString::number(p.itemCount()), W::money(p.total()), ago);
+        const QString text = QString("#%1 · %2").arg(p.code, p.customer.left(18));
         auto* chip = W::button(text, "soft", "arrow-right");
         chip->setMinimumHeight(36);
-        chip->setToolTip("Click to resume this order");
+        chip->setToolTip(QString("Resume %1 · %2 items · %3 · %4")
+            .arg(p.customer).arg(p.itemCount()).arg(W::money(p.total()), ago));
         const QString code = p.code;
         connect(chip, &QPushButton::clicked, this, [this, code] { resumeParked(code); });
         auto* del = W::button("", "flat", "trash");
         del->setToolTip("Discard this held order");
+        del->setAccessibleName("Discard held order " + code);
         connect(del, &QPushButton::clicked, this, [this, code]
             {
                 UiStore::instance().discardParked(code);
