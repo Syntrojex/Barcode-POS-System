@@ -58,13 +58,13 @@ struct OrderRecord
     QVector<ReceiptLine> lines;
     double subtotal = 0, discount = 0, tax = 0, total = 0; // total = subtotal - discount + tax; discount = ALL discounts
     double tendered = 0; // amount received (cash); 0 for card / wallet
-    // Breakdown of `discount` (known for orders paid in this session; bills reloaded from disk only keep the total,
-    // because the Increment 2 Bill.txt stores one discount per line - see Pricing.h).
+    // Breakdown of discount stored on the bill. Legacy bills only store the combined discount.
     double seasonal = 0, special = 0;
     double seasonalPercent = 0, specialPercent = 0;
     QString seasonName;
     double itemDiscount() const { return discount - seasonal - special; }
     double change() const { return tendered > total ? tendered - total : 0.0; } // balance returned
+    QDateTime paymentTime() const { return paidAt.isValid() ? paidAt : time; }
     int itemCount() const;
     void recompute();
     QString summary() const; // "3 items  Milk, Bread, +1"

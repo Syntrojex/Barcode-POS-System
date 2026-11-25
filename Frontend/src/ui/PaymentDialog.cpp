@@ -64,9 +64,11 @@ namespace Dialogs
         // special discount: typed percent, at most 8 percent (requirement 8)
         auto *spBox = W::card(nullptr, "field");
         auto *sh = new QHBoxLayout(spBox);
-        sh->setContentsMargins(10, 8, 10, 8);
-        sh->setSpacing(8);
-        sh->addWidget(W::label("Special Discount", "muted"));
+        sh->setContentsMargins(8, 8, 8, 8);
+        sh->setSpacing(6);
+        auto *discountLabel = W::label("Special Discount", "muted");
+        discountLabel->setWordWrap(true);
+        sh->addWidget(discountLabel, 1);
         auto *pct = new QDoubleSpinBox;
         pct->setRange(0, UiStore::kSpecialDiscountCapPercent);
         pct->setDecimals(1);
@@ -75,10 +77,10 @@ namespace Dialogs
         pct->setToolTip("Special discount, at most 8 percent");
         pct->setMinimumWidth(84);
         sh->addWidget(pct);
-        sh->addWidget(W::badge(QString("CAPPED AT %1% MAX").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 0), "grey"));
-        sh->addStretch();
+        sh->addWidget(W::badge(QString("Max %1%").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 0), "grey"));
         special = W::label("PKR 0.00");
         special->setStyleSheet("font-weight:800; font-size:14px;");
+        special->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         sh->addWidget(special);
         bv->addWidget(spBox);
 
@@ -212,7 +214,7 @@ namespace Dialogs
             }
             else
             {
-                gate->addItems({"HBL - POS Terminal #04", "Meezan Bank - POS", "UBL - POS Terminal", "Allied Bank - POS"});
+                gate->addItems({"HBL - POS Terminal 04", "Meezan Bank - POS", "UBL - POS Terminal", "Allied Bank - POS"});
                 gateCap->setText("CARD / DIGITAL GATEWAY ROUTE");
             }
             gate->setCurrentIndex(0);

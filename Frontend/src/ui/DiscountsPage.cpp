@@ -20,7 +20,7 @@ using namespace Ui;
 DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
 {
     QVBoxLayout *root;
-    pageShell(this, root);
+    pageShell(this, root, true);
     root->setSpacing(12);
 
     // ---- banner
@@ -36,6 +36,8 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     m_bannerTitle->setStyleSheet("color:white; font-size:17px; font-weight:800;");
     m_bannerSub = W::label("");
     m_bannerSub->setStyleSheet("color:#c9d8fb;");
+    m_bannerTitle->setWordWrap(true);
+    m_bannerSub->setWordWrap(true);
     bv->addWidget(m_bannerTitle);
     bv->addWidget(m_bannerSub);
     bh->addLayout(bv, 1);
@@ -60,13 +62,9 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     auto *lv = new QVBoxLayout(list);
     lv->setContentsMargins(16, 14, 16, 12);
     lv->setSpacing(10);
-    lv->addWidget(W::label("Seasons (Seasons.txt)", "h1"));
-    auto *sub = W::label("When a bill's date is inside an active season, its discount percentage is applied and saved "
-                         "in the bill's seasonal discount field.", "muted");
-    sub->setWordWrap(true);
-    lv->addWidget(sub);
-    auto *lh = new QHBoxLayout; // filter tabs get their own row, so they never squeeze the title
-    lh->setSpacing(6);
+    lv->addWidget(W::label("Promotional seasons", "h1"));
+    auto *lh = new QHBoxLayout;
+    lh->setSpacing(4);
     for (const QString &name : {"All", "Active", "Scheduled", "Inactive", "Expired"})
     {
         auto *btn = W::button(name, "tab");
@@ -85,10 +83,9 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     // the four fields of a Seasons.txt line, then today's status and the actions
     m_table = makeTable({"START DATE", "END DATE", "DISCOUNT %", "IS ACTIVE", "STATUS TODAY", ""});
     auto *hh = m_table->horizontalHeader();
-    // fixed widths, so the headers and badges are never cut off
     // fixed widths; the last (actions) column takes whatever room is left over
     hh->setSectionResizeMode(QHeaderView::Fixed);
-    const int widths[] = {128, 128, 104, 96, 132, 70};
+    const int widths[] = {112, 112, 96, 88, 112, 96};
     for (int cidx = 0; cidx <= 5; ++cidx)
         m_table->setColumnWidth(cidx, widths[cidx]);
     hh->setStretchLastSection(true);
@@ -104,25 +101,16 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     fv->setSpacing(8);
     m_formTitle = W::label("Add Seasonal Discount", "h1");
     fv->addWidget(m_formTitle);
-    auto *formSub = W::label("Saved as one line of Seasons.txt: start date, end date, discount percentage, isActive.", "muted");
-    formSub->setWordWrap(true);
-    fv->addWidget(formSub);
     auto *dates = new QHBoxLayout;
     dates->setSpacing(10);
     auto *sv = new QVBoxLayout;
     sv->setSpacing(4);
     sv->addWidget(W::label("START DATE", "caption"));
-    m_start = new QDateEdit(QDate::currentDate());
+    m_start = dateEdit(QDate::currentDate(), "dd MMM yyyy", 40);
     auto *ev = new QVBoxLayout;
     ev->setSpacing(4);
     ev->addWidget(W::label("END DATE", "caption"));
-    m_end = new QDateEdit(QDate::currentDate().addDays(7));
-    for (auto *de : {m_start, m_end})
-    {
-        de->setCalendarPopup(true);
-        de->setDisplayFormat("dd MMM yyyy");
-        de->setMinimumHeight(40);
-    }
+    m_end = dateEdit(QDate::currentDate().addDays(7), "dd MMM yyyy", 40);
     sv->addWidget(m_start);
     ev->addWidget(m_end);
     dates->addLayout(sv, 1);
@@ -138,24 +126,18 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     m_percent->setValue(10);
     m_percent->setMinimumHeight(40);
     fv->addWidget(m_percent);
-    m_active = new QCheckBox("Active (isActive = true)");
-    m_active->setToolTip("An active season is applied automatically to every bill whose date is inside it.");
+    m_active = new QCheckBox("Apply automatically during this season");
     m_active->setMinimumHeight(30);
     m_active->setChecked(true);
     fv->addWidget(m_active);
-    m_error = W::label("");
+    m_error = W::label("", "errorText");
     m_error->setWordWrap(true);
-    m_error->setStyleSheet("color:#ba1a1a; font-weight:600;");
     fv->addWidget(m_error);
     fv->addStretch();
-    auto *note = W::card(form, "subCard");
-    auto *nv = new QVBoxLayout(note);
-    nv->setContentsMargins(12, 10, 12, 10);
-    nv->addWidget(W::label("POS policy note", "h2"));
-    auto *nl = W::label("Special manual discounts entered by cashiers at checkout are capped at 8% maximum.", "muted");
+    auto *nl = W::label(QString("Cashiers can apply up to %1% manually at checkout.")
+                            .arg(UiStore::kSpecialDiscountCapPercent), "muted");
     nl->setWordWrap(true);
-    nv->addWidget(nl);
-    fv->addWidget(note);
+    fv->addWidget(nl);
     auto *btns = new QHBoxLayout;
     auto *cancel = W::button("Cancel", "soft");
     m_save = W::button("Save Discount", "primary", "check");
@@ -193,7 +175,7 @@ void DiscountsPage::rebuild()
                                    .arg(act->percent, 0, 'g', 4).arg(act->name));
         m_bannerSub->setText("Applied automatically to every bill and shown in the bill's seasonal discount field. " +
                              QString::number(today.daysTo(act->end)) + " days remaining.");
-        m_banner->setStyleSheet("#totalBox{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #0b7a36,stop:1 #12a150);}");
+        m_banner->setStyleSheet("#totalBox{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #0b5639,stop:1 #126840);}");
         m_rate->setText(QString("%1%").arg(act->percent, 0, 'g', 4));
         m_rateSub->setText("Until " + act->end.toString("d MMM yyyy"));
     }
@@ -201,7 +183,7 @@ void DiscountsPage::rebuild()
     {
         m_bannerTitle->setText("No seasonal discount is active right now");
         m_bannerSub->setText("Bills are created without a seasonal discount until a season is active and its dates match today.");
-        m_banner->setStyleSheet("#totalBox{background:#55617c;}");
+        m_banner->setStyleSheet("#totalBox{background:#404c65;}");
         m_rate->setText("0%");
         m_rateSub->setText("No active season");
     }

@@ -37,7 +37,10 @@ namespace
         while (QLayoutItem *it = l->takeAt(0))
         {
             if (QWidget *w = it->widget())
+            {
+                w->hide();
                 w->deleteLater();
+            }
             delete it;
         }
     }
@@ -47,13 +50,13 @@ namespace
 ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent)
 {
     QVBoxLayout *root;
-    pageShell(this, root);
+    pageShell(this, root, true);
     root->setSpacing(12);
 
     auto *csv = W::button("Export CSV Data", "soft", "export");
-    auto *pdf = W::button("Export / Print as PDF  Ctrl+P", "primary", "print");
-    root->addWidget(sectionHeader("SHIFT", "Business Reports & Analytics",
-                                  "Audit register velocity, cashier cash reconciliation and product turnover", {csv, pdf}));
+    auto *pdf = W::button("Export / Print as PDF", "primary", "print");
+    root->addWidget(sectionHeader("MANAGER REPORTS", "Business Reports & Analytics",
+                                  "Audit orders, cash sales and product turnover.", {csv, pdf, kbd("Ctrl+P")}));
     connect(csv, &QPushButton::clicked, this, &ReportsPage::exportCsv);
     connect(pdf, &QPushButton::clicked, this, &ReportsPage::exportPdf);
     auto *print = new QShortcut(QKeySequence("Ctrl+P"), this);
@@ -81,11 +84,13 @@ ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent)
     m_tiles->setSpacing(12);
     root->addLayout(m_tiles);
 
-    // ---- period bar (cash sales / all sales / completed / top sold)
+    // Keep the period buttons and custom dates on separate rows at minimum width.
     m_periodBar = W::card(this);
-    auto *ph = new QHBoxLayout(m_periodBar);
-    ph->setContentsMargins(14, 8, 14, 8);
-    ph->setSpacing(6);
+    auto *periodLayout = new QVBoxLayout(m_periodBar);
+    periodLayout->setContentsMargins(16, 10, 16, 10);
+    periodLayout->setSpacing(8);
+    auto *ph = new QHBoxLayout;
+    ph->setSpacing(8);
     ph->addWidget(W::label("TIME PERIOD", "caption"));
     for (int i = 0; i < 5; ++i)
     {
@@ -95,24 +100,28 @@ ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent)
         m_periodButtons << b;
         connect(b, &QPushButton::clicked, this, [this, i] { setPeriod(i); });
     }
-    ph->addSpacing(16);
-    ph->addWidget(W::label("CUSTOM RANGE", "caption"));
-    m_fromEdit = new QDateEdit(QDate::currentDate());
-    m_toEdit = new QDateEdit(QDate::currentDate());
-    for (auto *e : {m_fromEdit, m_toEdit})
-    {
-        e->setCalendarPopup(true);
-        e->setDisplayFormat("dd-MMM-yyyy");
-        e->setMinimumHeight(36);
-    }
-    ph->addWidget(m_fromEdit);
-    ph->addWidget(W::label("to", "muted"));
-    ph->addWidget(m_toEdit);
-    auto *filter = W::button("Filter", "primary", "filter");
-    ph->addWidget(filter);
     ph->addStretch();
-    connect(filter, &QPushButton::clicked, this, [this]
-            { m_from = m_fromEdit->date(); m_to = m_toEdit->date(); if (m_to < m_from) std::swap(m_from, m_to); setPeriod(Custom); });
+    periodLayout->addLayout(ph);
+    auto *range = new QHBoxLayout;
+    range->setSpacing(8);
+    range->addWidget(W::label("CUSTOM RANGE", "caption"));
+    m_fromEdit = dateEdit(QDate::currentDate(), "dd-MMM-yyyy", 34);
+    m_toEdit = dateEdit(QDate::currentDate(), "dd-MMM-yyyy", 34);
+    range->addWidget(m_fromEdit);
+    range->addWidget(W::label("to", "muted"));
+    range->addWidget(m_toEdit);
+    auto *apply = W::button("Filter", "primary", "filter");
+    range->addWidget(apply);
+    range->addStretch();
+    periodLayout->addLayout(range);
+    connect(apply, &QPushButton::clicked, this, [this]
+        {
+            m_from = m_fromEdit->date();
+            m_to = m_toEdit->date();
+            if (m_to < m_from)
+                std::swap(m_from, m_to);
+            setPeriod(Custom);
+        });
     root->addWidget(m_periodBar);
 
     // ---- ledger + side panel
@@ -122,12 +131,12 @@ ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent)
     auto *lv = new QVBoxLayout(ledger);
     lv->setContentsMargins(0, 14, 0, 0);
     lv->setSpacing(8);
-    auto *lh = new QHBoxLayout;
+    auto *lh = new QVBoxLayout;
     lh->setContentsMargins(18, 0, 18, 0);
     m_ledgerTitle = W::label("", "h1");
     m_ledgerSub = W::label("", "muted");
+    m_ledgerSub->setWordWrap(true);
     lh->addWidget(m_ledgerTitle);
-    lh->addStretch();
     lh->addWidget(m_ledgerSub);
     lv->addLayout(lh);
     m_table = makeTable({"-"});
@@ -167,7 +176,7 @@ ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent)
 
     connect(&AppState::instance(), &AppState::changed, this, &ReportsPage::refresh);
     setPeriod(All);
-    setTab(CashSales);
+    setTab(Incomplete);
 }
 
 void ReportsPage::refresh() { render(); }
@@ -222,7 +231,7 @@ QVector<ReportsPage::TopItem> ReportsPage::topSold(int limit) const
     {
         if (o.status != "Paid")
             continue;
-        const QDate d = o.time.date();
+        const QDate d = o.paymentTime().date();
         if (m_from.isValid() && (d < m_from || d > m_to))
             continue;
         for (const auto &l : o.lines)
@@ -258,7 +267,7 @@ ReportsPage::Report ReportsPage::build(int tab) const
     {
         if (!m_from.isValid())
             return true;
-        const QDate d = o.time.date();
+        const QDate d = o.status == "Paid" ? o.paymentTime().date() : o.time.date();
         return d >= m_from && d <= m_to;
     };
     const QString dt = "yyyy-MM-dd HH:mm";
@@ -352,10 +361,10 @@ ReportsPage::Report ReportsPage::build(int tab) const
             else if (o.payment.compare("card", Qt::CaseInsensitive) == 0) ++cardN;
             else ++walletN;
             if (cash)
-                r.rows.push_back({o.time.toString(dt), "#" + o.id, o.customer, QString::number(o.itemCount()),
+                r.rows.push_back({o.paymentTime().toString(dt), "#" + o.id, o.customer, QString::number(o.itemCount()),
                                   W::money(o.total), W::money(-o.discount)});
             else
-                r.rows.push_back({o.time.toString(dt), "#" + o.id, o.customer, cap(o.payment), QString::number(o.itemCount()),
+                r.rows.push_back({o.paymentTime().toString(dt), "#" + o.id, o.customer, cap(o.payment), QString::number(o.itemCount()),
                                   W::money(o.total), W::money(-o.discount)});
             sum += o.total;
             disc += o.discount;
@@ -464,6 +473,12 @@ void ReportsPage::render()
         m_table->setRowHeight(row, 46);
         for (int c = 0; c < r.headers.size() && c < r.rows[row].size(); ++c)
         {
+            if (r.headers[c] == "STATUS" && m_tab <= Completed)
+            {
+                const auto &status = r.rows[row][c];
+                m_table->setCellWidget(row, c, wrapW(W::badge(status, W::statusBadgeKind(status))));
+                continue;
+            }
             const bool accent = r.accent.contains(c);
             const Qt::Alignment a = (r.right.value(c) ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter;
             m_table->setItem(row, c, item(r.rows[row][c], a, accent ? "#004ac6" : "", accent));
@@ -490,13 +505,14 @@ void ReportsPage::render()
             auto *v = new QVBoxLayout(rowW);
             v->setContentsMargins(0, 0, 0, 0);
             v->setSpacing(3);
-            auto *h = new QHBoxLayout;
-            h->setSpacing(8);
-            h->addWidget(W::badge(QString::number(i + 1), "blue"));
             auto *name = W::label(t.name);
             name->setStyleSheet("font-weight:700;");
-            h->addWidget(name, 1);
+            name->setWordWrap(true);
+            v->addWidget(name);
+            auto *h = new QHBoxLayout;
+            h->setSpacing(8);
             h->addWidget(W::label(QString("%1 sold").arg(t.units), "muted"));
+            h->addStretch();
             h->addWidget(W::badge(t.stock <= 0 ? "DEPLETED" : QString("Stock: %1").arg(t.stock),
                                   t.stock <= 0 ? "red" : t.stock <= low ? "amber" : "grey"));
             v->addLayout(h);

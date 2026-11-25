@@ -332,10 +332,8 @@ namespace Dialogs
         v->setContentsMargins(28, 24, 28, 22);
         v->setSpacing(12);
 
-        auto *title = new QLabel("Sign in to Syntro-Check");
-        title->setStyleSheet("font-size:20px; font-weight:800; color:#1b2b55;");
-        auto *sub = new QLabel("Enter your name and choose your role.");
-        sub->setStyleSheet("color:#5b6478;");
+        auto *title = W::label("Sign in to Syntro-Check", "modalTitle");
+        auto *sub = W::label("Enter your name and choose your role.", "muted");
         v->addWidget(title);
         v->addWidget(sub);
 
@@ -355,8 +353,7 @@ namespace Dialogs
         row->addWidget(manager);
         v->addLayout(row);
 
-        auto *hint = new QLabel("Cashier: record orders and generate bills.\nManager: view products only.");
-        hint->setStyleSheet("color:#8a94ab; font-size:11px;");
+        auto *hint = W::label("Cashier: record orders and generate bills.\nManager: manage the catalog and view reports.", "muted");
         v->addWidget(hint);
 
         QObject::connect(cashier, &QPushButton::clicked, &d, [&] { role = UserRole::Cashier; d.accept(); });

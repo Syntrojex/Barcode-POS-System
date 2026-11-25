@@ -6,8 +6,8 @@
  * @author Ali Abdullah (25L-3022)
  *
  * Implements the core Point of Sale GUI workflow for Increment 2:
- * - Dual-pane layout: Camera scanner & manual barcode entry on the left, shopping cart & totals on the right.
- * - Keyboard shortcuts: F9 (Camera Scan), F4 (Product Description), F10 (Checkout), F2 (Focus Barcode Input).
+ * - Barcode entry, product preview, cart and a fixed checkout summary.
+ * - Keyboard shortcuts: F2 (Hold), F4 (Product Description), F9 (Camera), F10 (Checkout).
  * - Real-time stock validation and dynamic bill subtotal calculation.
  * - Integration with Dialogs::payment() and Dialogs::receipt().
  */
@@ -15,6 +15,7 @@
 #include "AppState.h"
 #include "UserRole.h"
 #include <QMap>
+#include <QPair>
 #include <QVector>
 #include <QWidget>
 #include <optional>
@@ -22,6 +23,7 @@
 class QFrame;
 class QHBoxLayout;
 class QLabel;
+class ElidedLabel;
 class QLineEdit;
 class QPushButton;
 class QTableWidget;
@@ -42,13 +44,13 @@ public:
     explicit RecordOrderPage(QWidget* parent = nullptr);
 
 public slots:
-    /** @brief Shifts keyboard focus to the barcode input field (F2). */
+    /** @brief Shifts keyboard focus to the barcode input field. */
     void focusInput();
 
-    /** @brief Initiates camera barcode scanning or simulates a scan input (F9 shortcut). */
+    /** @brief Starts the camera scanner. */
     void simulateScan();
 
-    /** @brief Opens the Product Description modal for the currently highlighted or entered item (F4 shortcut). */
+    /** @brief Opens the catalog picker. */
     void quickLookup();
 
     /** @brief Triggers order checkout and launches the payment settlement dialog (F10 shortcut). */
@@ -60,6 +62,12 @@ public slots:
      * @param fromScanner True if emitted from camera scanner; false if typed manually.
      */
     void showCode(const QString& code, bool fromScanner);
+
+    /**
+     * @brief Adds a batch of checked barcode-scanned items (EAN, quantity) directly to the cart
+     *        so the cashier can generate a collective bill.
+     */
+    QVector<QPair<QString, int>> addScannedBatch(const QVector<QPair<QString, int>>& items);
 
     /** @brief Discards the current cart and resets the interface for a new customer transaction. */
     void newDraft();
@@ -100,14 +108,18 @@ private:
         int qty = 1;    ///< Quantity added to cart.
     };
 
+    QWidget* buildBarcodeStrip();
     QWidget* buildCustomerStrip();
     QWidget* buildEditBanner();  ///< amber "Editing order #..." bar (hidden unless an order is being edited)
     void setEditMode(const QString& orderId, const QString& text); ///< empty id = leave edit mode
     QWidget* buildParkedStrip(); ///< "Parked (n)" chips of the orders on hold
-    QWidget* buildLeft();
-    QWidget* buildRight();
+    QWidget* buildProductPane();
+    QWidget* buildCart();
+    QWidget* buildSummary();
+    void setCameraActive(bool active);
     void setPreview(const std::optional<ProductInfo>& p);
-    void addToCart(const ProductInfo& p, int qty = 1);
+    void processBarcode(const QString& codeIn, bool fromScanner, bool playAudio);
+    bool addToCart(const ProductInfo& p, int qty = 1);
     void changeQty(int row, int delta);
     void removeRow(int row);
     void rebuildTable();
@@ -131,28 +143,27 @@ private:
     QLabel* m_sessionId;
 
     CameraFeedWidget* m_feed;
+    QWidget* m_cameraPanel;
     QPushButton* m_camToggle;
     QPushButton* m_addBtn;
     QPushButton* m_descBtn;
-    QLabel* m_pName;
+    ElidedLabel* m_pName;
     QLabel* m_pPrice;
     QLabel* m_pMeta;
     QLabel* m_pStock;
-    QLabel* m_pThumb;
     QLabel* m_pBadge;
 
     QTableWidget* m_table;
     QLabel* m_itemsBadge;
     QLabel* m_gross;
     QLabel* m_disc;
-    QLabel* m_seasonal = nullptr;    // seasonal discount (active season), shown before payment
-    QLabel* m_seasonalKey = nullptr; // "Seasonal (10%)"
     QLabel* m_tax;
     QLabel* m_total;
     QPushButton* m_checkout;
     QPushButton* m_hold;
     QLabel* m_parkTitle;
     QLabel* m_parkEmpty;
+    QWidget* m_parkedList;
     QHBoxLayout* m_parkChips;
     QFrame* m_editBanner = nullptr;
     QLabel* m_editText = nullptr;

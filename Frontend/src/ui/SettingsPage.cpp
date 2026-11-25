@@ -50,7 +50,9 @@ SettingsPage::SettingsPage(QWidget* parent) : QWidget(parent)
     form->addRow("Scanning", autoAdd);
     form->addRow("", beep);
     v->addLayout(form);
-    v->addWidget(W::label("Tax and discount come per product from Product.txt. Use the Dark Mode button at the top to switch themes.", "muted"));
+    auto *note = W::label("Tax and discounts come from the product catalog. Change the theme from the top bar.", "muted");
+    note->setWordWrap(true);
+    v->addWidget(note);
     v->addStretch();
     auto* h = new QHBoxLayout;
     h->addStretch();

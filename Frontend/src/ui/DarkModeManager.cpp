@@ -121,7 +121,7 @@ QString DarkModeManager::getActiveStyleSheet() const
         )");
     }
 
-    return Theme::themedSheet(base + "\n" + toggleStyle); // magenta palette for the toggle too
+    return base + "\n" + toggleStyle;
 }
 
 QIcon DarkModeManager::createSunIcon(const QColor& color, int size)
@@ -199,11 +199,11 @@ QPushButton* DarkModeManager::createTopBarToggle(QWidget* parent)
 
     auto updateButtonState = [this, btn]() {
         if (m_isDark) {
-            btn->setIcon(createSunIcon(Theme::themed("#facc15"), 18)); // Vibrant warm yellow sun
+            btn->setIcon(createSunIcon(QColor("#facc15"), 18)); // Vibrant warm yellow sun
             btn->setText("  Light Mode");
             btn->setToolTip("Switch to Light Theme (Alt+D)");
         } else {
-            btn->setIcon(createMoonIcon(Theme::themed("#4338ca"), 18)); // Indigo crescent moon
+            btn->setIcon(createMoonIcon(QColor("#4338ca"), 18)); // Indigo crescent moon
             btn->setText("  Dark Mode");
             btn->setToolTip("Switch to Dark Theme (Alt+D)");
         }

@@ -1,0 +1,23 @@
+# Used by the "qt-mingw" preset. Qt Creator's preset kit sometimes has no compiler and CMake then
+# picks Visual Studio's cl.exe, which cannot build against Qt's MinGW libraries
+# ("Qt requires a C++17 compiler ... /Zc:__cplusplus"). This makes sure Qt's own MinGW g++ is used.
+if(NOT CMAKE_CXX_COMPILER OR CMAKE_CXX_COMPILER MATCHES "[cC][lL]\\.exe$")
+    set(_roots "$ENV{QT_INSTALL_ROOT}" "C:/Qt" "D:/Qt" "E:/Qt")
+    set(_gxx "")
+    foreach(_r IN LISTS _roots)
+        if(_r)
+            file(GLOB _found "${_r}/Tools/mingw*_64/bin/g++.exe")
+            list(SORT _found COMPARE NATURAL ORDER DESCENDING)
+            if(_found)
+                list(GET _found 0 _gxx)
+                break()
+            endif()
+        endif()
+    endforeach()
+    if(_gxx)
+        get_filename_component(_bin "${_gxx}" DIRECTORY)
+        set(CMAKE_CXX_COMPILER "${_bin}/g++.exe" CACHE FILEPATH "Qt MinGW C++ compiler" FORCE)
+        set(CMAKE_C_COMPILER "${_bin}/gcc.exe" CACHE FILEPATH "Qt MinGW C compiler" FORCE)
+        set(ENV{PATH} "${_bin};$ENV{PATH}")
+    endif()
+endif()

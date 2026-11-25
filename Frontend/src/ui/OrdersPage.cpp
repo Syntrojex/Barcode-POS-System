@@ -4,20 +4,10 @@
 #include "UiKit.h"
 #include "UiStore.h"
 #include "Widgets.h"
-#include <QApplication>
-#include <QCheckBox>
-#include <QDoubleSpinBox>
-#include <QFile>
-#include <QFileDialog>
-#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
-#include <QListWidget>
-#include <QSpinBox>
 #include <QTableWidget>
-#include <QTextStream>
-#include <QTime>
 #include <QVBoxLayout>
 
 using namespace Ui; // makeTable, item, wrapW, pageShell, writeCsv (see UiKit.h)
@@ -28,23 +18,27 @@ OrdersPage::OrdersPage(QWidget* parent) : QWidget(parent)
 {
     QVBoxLayout* root;
     pageShell(this, root);
+    root->setSpacing(8);
+    root->addWidget(sectionHeader({}, "Orders Management", "Search, review, and resume customer orders."));
 
-    auto* card = W::card(this);
+    auto* card = W::card(this, "subCard");
     auto* v = new QVBoxLayout(card);
-    v->setContentsMargins(18, 14, 18, 10);
-    v->setSpacing(10);
+    v->setContentsMargins(16, 16, 16, 12);
+    v->setSpacing(8);
 
     auto* tools = new QHBoxLayout;
     tools->setSpacing(8);
     m_orderSearch = new QLineEdit;
+    m_orderSearch->setAccessibleName("Search orders");
+    m_orderSearch->setClearButtonEnabled(true);
     m_orderSearch->setPlaceholderText("Search by order number, customer or phone…");
     m_orderSearch->setMinimumHeight(40);
     m_orderSearch->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
     m_custSearch = new QLineEdit; // kept hidden: legacy field, not shown
     m_custSearch->hide();
-    tools->addWidget(m_orderSearch, 3);
-    tools->addStretch(1);
+    tools->addWidget(m_orderSearch, 1);
     auto* exp = W::button("Export CSV", "soft", "export");
+    exp->setMinimumHeight(40);
     tools->addWidget(exp);
     v->addLayout(tools);
 
@@ -67,16 +61,25 @@ OrdersPage::OrdersPage(QWidget* parent) : QWidget(parent)
     v->addLayout(tabs);
 
     m_table = makeTable({ "ORDER ID", "DATE & TIME", "CUSTOMER", "ITEMS SUMMARY", "PAYMENT", "AMOUNT", "STATUS", "EDIT WINDOW", "ACTIONS" });
+    m_table->setProperty("managementTable", true);
+    m_table->setAlternatingRowColors(true);
+    m_table->setAccessibleName("Orders");
     m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setMinimumSectionSize(70);
     for (int c : {0, 1, 4, 5})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     for (int c : {2, 6, 7, 8})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::Fixed);
-    m_table->setColumnWidth(2, 175);
-    m_table->setColumnWidth(6, 120);
-    m_table->setColumnWidth(7, 170);
-    m_table->setColumnWidth(8, 190);
+    m_table->setColumnWidth(2, 152);
+    m_table->setColumnWidth(6, 112);
+    m_table->setColumnWidth(7, 132);
+    m_table->setColumnWidth(8, 177);
     v->addWidget(m_table, 1);
+    m_empty = W::label("", "muted");
+    m_empty->setAlignment(Qt::AlignCenter);
+    m_empty->setMinimumHeight(64);
+    m_empty->setWordWrap(true);
+    v->addWidget(m_empty);
     m_showing = W::label("", "muted");
     v->addWidget(m_showing);
     root->addWidget(card, 1);
@@ -108,11 +111,8 @@ void OrdersPage::rebuild()
     QString q = m_orderSearch->text().trimmed();
     q.remove('#');
     QVector<OrderRecord> rows;
-    int hold = 0;
     for (const auto& o : all)
     {
-        if (o.status == "On Hold" || o.status == "In Progress")
-            ++hold;
         if (m_filter != "All" && o.status != m_filter)
             continue;
         if (!q.isEmpty() && !o.id.contains(q, Qt::CaseInsensitive) && !o.customer.contains(q, Qt::CaseInsensitive) &&
@@ -121,12 +121,12 @@ void OrdersPage::rebuild()
         rows << o;
     }
     auto& st = AppState::instance();
-    (void)hold;
+    m_table->setRowCount(0);
     m_table->setRowCount(rows.size());
     for (int r = 0; r < rows.size(); ++r)
     {
         const auto& o = rows[r];
-        m_table->setRowHeight(r, 60);
+        m_table->setRowHeight(r, 54);
         m_table->setItem(r, 0, item("#" + o.id, Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
         m_table->setItem(r, 1, item(o.time.toString("yyyy-MM-dd HH:mm") + "\n" + o.shift));
         {
@@ -136,13 +136,15 @@ void OrdersPage::rebuild()
             cl->setSpacing(0);
             auto* n = W::label(o.customer + (o.tier == "VIP" ? "  [VIP]" : ""));
             n->setStyleSheet("font-weight:700;");
-            auto* c = W::label(o.contact);
-            c->setStyleSheet("color:#737686; font-size:11.5px;");
+            cw->setToolTip(n->text() + "\n" + o.contact);
+            auto* c = W::label(o.contact, "muted");
             cl->addWidget(n);
             cl->addWidget(c);
             m_table->setCellWidget(r, 2, cw);
         }
-        m_table->setItem(r, 3, item(o.summary()));
+        auto* summary = item(o.summary());
+        summary->setToolTip(o.summary());
+        m_table->setItem(r, 3, summary);
         m_table->setItem(r, 4, item(o.payment));
         m_table->setItem(r, 5, item(W::money(o.total), Qt::AlignRight | Qt::AlignVCenter, "", true));
         m_table->setCellWidget(r, 6, wrapW(W::badge(o.status, W::statusBadgeKind(o.status))));
@@ -151,8 +153,8 @@ void OrdersPage::rebuild()
         QLabel* windowBadge = nullptr;
         if (o.status == "Paid")
             windowBadge = daysLeft > 0
-                ? W::badge(QString("Editable for %1 day%2").arg(daysLeft).arg(daysLeft == 1 ? "" : "s"), daysLeft <= 2 ? "amber" : "green")
-                : W::badge("Locked (7 days over)", "grey");
+                ? W::badge(QString("Editable · %1d").arg(daysLeft), daysLeft <= 2 ? "amber" : "green")
+                : W::badge("Window closed", "grey");
         else if (o.status == "In Progress" || o.status == "On Hold")
             windowBadge = W::badge("Not paid yet", "blue");
         else
@@ -165,12 +167,16 @@ void OrdersPage::rebuild()
         h->setSpacing(4);
         const OrderRecord copy = o;
         auto* view = W::button("", "flat", "eye");
+        view->setFixedWidth(34);
         view->setToolTip("View details");
+        view->setAccessibleName("View details for order " + o.id);
         h->addWidget(view);
         connect(view, &QPushButton::clicked, this, [this, copy]
             { Dialogs::orderDetails(this, copy); });
         auto* rc = W::button("", "flat", "bills");
-        rc->setToolTip("Receipt");
+        rc->setFixedWidth(34);
+        rc->setToolTip(o.billId.isEmpty() ? "Receipt" : "View Bill");
+        rc->setAccessibleName(rc->toolTip() + " for order " + o.id);
         h->addWidget(rc);
         connect(rc, &QPushButton::clicked, this, [this, copy]
             { Dialogs::receipt(this, copy); });
@@ -195,7 +201,9 @@ void OrdersPage::rebuild()
         h->addStretch();
         m_table->setCellWidget(r, 8, w);
     }
-    m_showing->setText(QString("%1 of %2 orders").arg(rows.size()).arg(all.size()));
+    m_empty->setText(all.isEmpty() ? "No orders recorded yet." : "No orders match the current search and status.");
+    m_empty->setVisible(rows.isEmpty());
+    m_showing->setText(QString("Showing %1 of %2 orders").arg(rows.size()).arg(all.size()));
 }
 
 void OrdersPage::setRole(UserRole role) { m_role = role; }

@@ -505,7 +505,7 @@ int AppState::editDaysLeft(const OrderRecord& o) const
 {
     if (o.status != "Paid")
         return -1;
-    const QDateTime paid = o.paidAt.isValid() ? o.paidAt : o.time; // "within 7 days of the order payment"
+    const QDateTime paid = o.paymentTime();
     const qint64 window = qint64(kEditWindowDays) * 86400;
     const qint64 secs = paid.secsTo(QDateTime::currentDateTime());
     if (secs > window)
@@ -664,10 +664,9 @@ void AppState::refreshOrders()
             rec.tendered = bill->amountReceived;
         }
         if (rec.time.date() == today)
-        {
             ++m_baseOrders;
-            if (rec.status == "Paid") m_baseSales += rec.total;
-        }
+        if (rec.status == "Paid" && rec.paymentTime().date() == today)
+            m_baseSales += rec.total;
         m_orders.push_back(std::move(rec));
     }
     std::sort(m_orders.begin(), m_orders.end(), [](const OrderRecord& a, const OrderRecord& b) { return a.time > b.time; });

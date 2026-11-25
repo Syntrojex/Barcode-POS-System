@@ -73,7 +73,9 @@ private:
     bool m_loggedOut = false;
     QStackedWidget *m_stack;
     QVector<QPushButton *> m_nav;
-    QLabel *m_clockTime, *m_clockDate, *m_toast;
+    QLabel *m_pageTitle, *m_pageSubtitle;
+    QLabel *m_clockTime, *m_clockDate;
+    QLabel *m_toast = nullptr;
     QTimer *m_toastTimer;
 
     DashboardPage *m_dashboard;

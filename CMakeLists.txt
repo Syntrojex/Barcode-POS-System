@@ -317,6 +317,20 @@ if(NOT CAMERA_MODE STREQUAL "OFF")
     endif()
 endif()
 
+# Optional scan feedback. On Windows use asynchronous file-based WinMM playback.
+set(SCAN_AUDIO_BACKEND "NONE")
+if(WIN32)
+    set(SCAN_AUDIO_BACKEND "WINMM")
+elseif(QT_VERSION_MAJOR EQUAL 6)
+    if(NOT TARGET Qt6::Multimedia)
+        find_package(Qt6 QUIET COMPONENTS Multimedia)
+    endif()
+    if(TARGET Qt6::Multimedia)
+        set(SCAN_AUDIO_BACKEND "QT_MULTIMEDIA")
+    endif()
+endif()
+message(STATUS "Scan audio: ${SCAN_AUDIO_BACKEND}")
+
 # ============================================================
 # FRONTEND
 # ============================================================
@@ -344,6 +358,7 @@ list(FILTER UI_HEADERS EXCLUDE REGEX
 add_library(barcode_ui STATIC
     ${UI_SOURCES}
     ${UI_HEADERS}
+    Frontend/resources/scan_audio.qrc
 )
 
 target_include_directories(barcode_ui PUBLIC
@@ -373,6 +388,16 @@ if(CAMERA_ENABLED)
         target_link_libraries(barcode_ui PUBLIC ${OpenCV_LIBS})
         target_compile_definitions(barcode_ui PUBLIC WITH_CAMERA_OPENCV)
     endif()
+endif()
+
+if(SCAN_AUDIO_BACKEND STREQUAL "QT_MULTIMEDIA")
+    if(NOT (CAMERA_ENABLED AND CAMERA_LIB STREQUAL "QT"))
+        target_link_libraries(barcode_ui PUBLIC Qt6::Multimedia)
+    endif()
+    target_compile_definitions(barcode_ui PUBLIC WITH_SCAN_AUDIO_QT)
+elseif(SCAN_AUDIO_BACKEND STREQUAL "WINMM")
+    target_link_libraries(barcode_ui PRIVATE winmm)
+    target_compile_definitions(barcode_ui PUBLIC WITH_SCAN_AUDIO_WINMM)
 endif()
 
 # ============================================================
@@ -457,5 +482,53 @@ if(WIN32)
     else()
         message(STATUS
             "windeployqt not found; optional deployment targets disabled")
+    endif()
+endif()
+
+if(BUILD_TESTING AND QT_VERSION_MAJOR EQUAL 6)
+    find_package(Qt6 QUIET COMPONENTS Test)
+    if(TARGET Qt6::Test)
+        add_executable(scan_audio_tests
+            tests/scan_audio_tests.cpp
+        )
+        target_link_libraries(scan_audio_tests PRIVATE
+            barcode_ui
+            Qt6::Test
+        )
+        add_test(NAME scan_audio COMMAND scan_audio_tests)
+        add_executable(scanner_checklist_tests
+            tests/scanner_checklist_tests.cpp
+        )
+        target_link_libraries(scanner_checklist_tests PRIVATE
+            barcode_ui
+            Qt6::Test
+        )
+        add_test(NAME scanner_checklist COMMAND scanner_checklist_tests)
+        if(WIN32)
+            get_target_property(_qt_core_loc Qt6::Core IMPORTED_LOCATION_DEBUG)
+            if(NOT _qt_core_loc)
+                get_target_property(_qt_core_loc Qt6::Core IMPORTED_LOCATION_RELEASE)
+            endif()
+            if(NOT _qt_core_loc)
+                get_target_property(_qt_core_loc Qt6::Core IMPORTED_LOCATION)
+            endif()
+            if(_qt_core_loc)
+                get_filename_component(_qt_bin_dir "${_qt_core_loc}" DIRECTORY)
+                get_filename_component(_qt_root_dir "${_qt_bin_dir}" DIRECTORY)
+                if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.22")
+                    set_tests_properties(scan_audio scanner_checklist PROPERTIES
+                        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir};QT_QPA_PLATFORM=set:offscreen;QT_PLUGIN_PATH=set:${_qt_root_dir}/plugins"
+                    )
+                else()
+                    set_tests_properties(scan_audio scanner_checklist PROPERTIES
+                        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=${_qt_root_dir}/plugins"
+                    )
+                endif()
+            endif()
+        else()
+            set_tests_properties(scan_audio scanner_checklist PROPERTIES
+                ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            )
+        endif()
     endif()
 endif()
