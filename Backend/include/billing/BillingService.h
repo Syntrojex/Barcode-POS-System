@@ -85,6 +85,15 @@ public:
                   double* change = nullptr, std::string* error = nullptr,
                   const BillAdjustments& adjustments = {});
 
+    /**
+     * @brief Re-bills an order that is already paid, after its lines were edited (requirement 3).
+     *        The order stays paid and keeps its Bill ID and the original bill date/time (the payment
+     *        moment that the 7-day edit window counts from); amounts, payment and lines are replaced.
+     */
+    bool rebill(const std::string& orderId, const PaymentRequest& payment, Bill& bill,
+                double* change = nullptr, std::string* error = nullptr,
+                const BillAdjustments& adjustments = {});
+
 private:
     order::OrderManager& orders_;           ///< Managed order subsystem.
     BillRepository& bills_;                 ///< Repository managing Bill.txt file I/O.

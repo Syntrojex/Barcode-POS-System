@@ -179,6 +179,15 @@ if(BUILD_TESTING)
 
     add_test(NAME checkout COMMAND checkout_test)
 
+    # Editing a paid order in place / on-hold orders kept in Order.txt (Increment 3, requirements 3 and 10)
+    add_executable(order_edit_test
+        tests/order_edit_test.cpp
+    )
+
+    target_link_libraries(order_edit_test PRIVATE backend_core)
+
+    add_test(NAME order_edit COMMAND order_edit_test)
+
     # Seasons.txt reader/writer
     add_executable(season_test
         tests/season_test.cpp

@@ -143,7 +143,26 @@ bool BillRepository::append(const Bill& bill, std::string* error) {
         }
     }
     all.push_back(bill);
+    return writeAll(all, error);
+}
 
+bool BillRepository::replace(const Bill& bill, std::string* error) {
+    if (bill.lines.empty()) {
+        if (error) *error = "Cannot save a bill without products.";
+        return false;
+    }
+    std::vector<Bill> all;
+    if (!loadAll(all, error)) return false;
+    const auto found = std::find_if(all.begin(), all.end(), [&](const Bill& b) { return b.id == bill.id; });
+    if (found == all.end()) {
+        if (error) *error = "Bill ID " + bill.id + " was not found.";
+        return false;
+    }
+    *found = bill;   // same Bill ID, so Bill IDs stay unique; its old BillDetail lines are dropped
+    return writeAll(all, error);
+}
+
+bool BillRepository::writeAll(const std::vector<Bill>& all, std::string* error) {
     // Both files are rewritten in the Increment 3 format (old bills are converted on the way).
     std::vector<std::string> billLines, detailLines;
     for (const auto& b : all) {

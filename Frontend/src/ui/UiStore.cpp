@@ -1,4 +1,5 @@
 #include "UiStore.h"
+#include "AppState.h"
 #include "billing/SeasonRepository.h"
 #include <QDir>
 #include <QRegularExpression>
@@ -50,23 +51,6 @@ UiStore::UiStore()
     };
 
     loadSeasons(); // real seasons from Seasons.txt (no demo seasons)
-
-    // A couple of parked orders so the "Parked" strip is not empty on first launch.
-    auto line = [](const char *name, const char *ac, int q, double price, double tax, double disc, int id) {
-        ReceiptLine l;
-        l.name = name; l.acronym = ac; l.qty = q; l.price = price; l.tax = tax; l.discount = disc; l.productId = id;
-        return l;
-    };
-    ParkedOrder a;
-    a.code = "HLD-108"; a.customer = "Asad Malik"; a.contact = "0301-5551212";
-    a.parkedAt = QDateTime::currentDateTime().addSecs(-4 * 60);
-    a.lines = {line("Olpers Full Cream Milk 1L", "OLPMILK", 2, 340, 0, 10, 1),
-               line("National Whole Wheat Bread", "NBREAD", 1, 260, 18, 0, 2)};
-    ParkedOrder b;
-    b.code = "HLD-107"; b.customer = "Sana Malik"; b.contact = "0321-9876543";
-    b.parkedAt = QDateTime::currentDateTime().addSecs(-17 * 60);
-    b.lines = {line("Tapal Danedar Tea 190g", "TAPALTEA", 3, 210, 15, 5, 3)};
-    m_parked = {a, b};
 }
 
 // ---------------------------------------------------------------- categories
@@ -300,36 +284,52 @@ QString UiStore::validateSeason(const QString &name, const QDate &start, const Q
 }
 
 // ---------------------------------------------------------------- parked orders
-QString UiStore::park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines)
+QVector<ParkedOrder> UiStore::parked() const
 {
-    ParkedOrder p;
-    p.code = QString("HLD-%1").arg(m_nextHold++);
-    p.customer = customer.trimmed().isEmpty() ? "Walk-in Customer" : customer;
-    p.contact = contact;
-    p.parkedAt = QDateTime::currentDateTime();
-    p.lines = lines;
-    m_parked.prepend(p);
+    QVector<ParkedOrder> out;
+    for (const auto &o : AppState::instance().heldOrders())
+    {
+        if (o.status != "On Hold")
+            continue;
+        ParkedOrder p;
+        p.code = o.id;
+        p.customer = o.customer;
+        p.contact = o.contact;
+        p.parkedAt = o.time;
+        p.lines = o.lines;
+        out << p;
+    }
+    return out;
+}
+
+QString UiStore::park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines,
+                      const QString &existingId, QString *error)
+{
+    const QString id = AppState::instance().holdOrder(customer, contact, lines, existingId, error);
     emit parkedChanged();
-    return p.code;
+    return id;
 }
 
 bool UiStore::takeParked(const QString &code, ParkedOrder &out)
 {
-    for (int i = 0; i < m_parked.size(); ++i)
-        if (m_parked[i].code == code)
+    for (const auto &o : AppState::instance().heldOrders())
+        if (o.id == code)
         {
-            out = m_parked[i];
-            m_parked.removeAt(i);
-            emit parkedChanged();
+            out.code = o.id;
+            out.customer = o.customer;
+            out.contact = o.contact;
+            out.parkedAt = o.time;
+            out.lines = o.lines;
             return true;
         }
     return false;
 }
 
-void UiStore::discardParked(const QString &code)
+bool UiStore::discardParked(const QString &code, QString *error)
 {
-    ParkedOrder ignored;
-    takeParked(code, ignored);
+    const bool ok = AppState::instance().discardHeldOrder(code, error);
+    emit parkedChanged();
+    return ok;
 }
 
 // ---------------------------------------------------------------- manager sign-off

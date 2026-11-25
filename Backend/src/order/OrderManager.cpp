@@ -578,8 +578,9 @@ bool OrderManager::discardOrder(const std::string& orderId, std::string* error) 
     const auto it = std::find_if(orders.begin(), orders.end(), [&](const Order& order) {
         return order.id == orderId;
     });
-    if (it == orders.end() || it->status != OrderStatus::InProgress) {
-        if (error) *error = "Only existing in-progress orders may be discarded.";
+    if (it == orders.end() ||
+        (it->status != OrderStatus::InProgress && it->status != OrderStatus::OnHold)) {
+        if (error) *error = "Only existing unpaid (in-progress or on-hold) orders may be discarded.";
         return false;
     }
     const auto oldDetails = details;
@@ -621,6 +622,54 @@ bool OrderManager::updateOrder(const Order& order, std::string* error) {
     updated.time = found->time;
     *found = updated;
     return writeOrdersTo(orderFile_, orders, error);
+}
+
+bool OrderManager::saveCartToOrder(const std::string& orderId,
+                                   const std::string& customerName,
+                                   const std::string& customerContact,
+                                   std::string* error) {
+    clearError(error);
+    if (cart_.empty()) {
+        if (error) *error = "Cannot save an order with an empty cart.";
+        return false;
+    }
+    if (customerName.empty()) {
+        if (error) *error = "Customer name is required.";
+        return false;
+    }
+    std::vector<Order> orders;
+    std::vector<OrderDetail> details;
+    if (!loadOrders(orders, error) || !loadOrderDetails(details, error)) return false;
+    const auto found = std::find_if(orders.begin(), orders.end(), [&](const Order& o) {
+        return o.id == orderId;
+    });
+    if (found == orders.end()) {
+        if (error) *error = "Order ID was not found.";
+        return false;
+    }
+    if (found->status == OrderStatus::Archived) {
+        if (error) *error = "An archived order cannot be changed.";
+        return false;
+    }
+    found->customerName = customerName;
+    found->customerContact = customerContact;
+    if (!found->isValid(error)) return false;
+
+    const auto oldDetails = details;
+    details.erase(std::remove_if(details.begin(), details.end(), [&](const OrderDetail& d) {
+        return d.orderId == orderId;
+    }), details.end());
+    for (const auto& item : cart_) {
+        details.push_back(OrderDetail{orderId, item.product.productId, item.product.barcode, item.quantity});
+    }
+    if (!writeDetailsTo(orderDetailFile_, details, error)) return false;
+    if (!writeOrdersTo(orderFile_, orders, error)) {
+        std::string ignored;
+        writeDetailsTo(orderDetailFile_, oldDetails, &ignored);
+        return false;
+    }
+    clearCart();
+    return true;
 }
 
 bool OrderManager::loadOrders(std::vector<Order>& orders, std::string* error) const {
