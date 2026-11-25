@@ -514,6 +514,8 @@ QToolTip { background: @navy@; color: @white@; border: 1px solid #415274; paddin
 #logoBox QLabel { color: @white@; font-weight: 700; font-size: 18px; background: transparent; }
 #brand { color: @white@; font-size: 18px; font-weight: 700; }
 #brandSub { color: #b9c6da; font-size: 11px; }
+#sidebar #tagBlue, #sidebar #tagGrey { background: transparent; color: #b9c6da; font-size: 11px; font-weight: 400; padding: 0; }
+#sidebar #navSection { color: #a4b2ca; font-size: 11px; font-weight: 600; padding: 0 12px; }
 #userCard { background: #202f50; border: 1px solid #394969; border-radius: 12px; }
 #avatar { color: @white@; font-weight: 700; font-size: 12px; }
 #userName { color: @white@; font-weight: 700; background: transparent; }
@@ -539,6 +541,17 @@ QToolTip { background: @navy@; color: @white@; border: 1px solid #415274; paddin
 #chip { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
 #clockTime { font-weight: 700; font-size: 14px; }
 #clockDate { color: @muted@; font-size: 11px; }
+#topbar #readyPill { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
+#topbar #readyText { color: @muted@; font-weight: 600; }
+#topbar #topAvatar { color: @white@; font-weight: 700; border: 1px solid transparent; }
+#topbar #topAvatar:hover { background: @brandHover@; }
+#topbar #topAvatar:pressed, #topbar #topAvatar:open { background: @brandPressed@; }
+#topbar #topAvatar:focus { border-color: #dce6ff; }
+QToolButton#topAvatar::menu-indicator { image: none; width: 0; }
+QMenu#accountMenu { background: @panel@; border: 1px solid @divider@; padding: 4px; }
+QMenu#accountMenu::item { padding: 8px 12px; border-radius: 6px; }
+QMenu#accountMenu::item:selected { background: @hover@; color: @text@; }
+QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8px; }
 
 /* Match the shared controls even after DarkModeManager appends its toggle rules. */
 #topbar #darkModeToggle { background: @panel@; border: 1px solid @outline@; border-radius: 10px; padding: 5px 12px; color: @text@; font-size: 12px; font-weight: 600; }

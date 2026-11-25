@@ -17,6 +17,7 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDateTime>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QMessageBox>
@@ -31,21 +32,24 @@ namespace
 {
     struct NavDef
     {
-        const char *text, *icon;
+        const char *text, *icon, *subtitle;
     };
     // Same order as Pages::Id / the sidebar of the design.
     const NavDef kNav[Pages::Count] = {
-        {"Dashboard", "dashboard"},    {"Record Order", "cart"},   {"Orders", "orders"},
-        {"Inventory", "inventory"},    {"Products", "products"},   {"Categories", "categories"},
-        {"Barcode Scanner", "barcode"}, {"Bills", "bills"},        {"Reports", "reports"},
-        {"Discounts", "percent"},      {"Settings", "settings"}};
+        {"Dashboard", "dashboard", "Track sales and recent activity"},
+        {"Record Order", "cart", "Build and check out a sale"},
+        {"Orders", "orders", "Find saved orders and resume drafts"},
+        {"Inventory", "inventory", "Review stock levels and low-stock items"},
+        {"Products", "products", "Search the product catalog"},
+        {"Categories", "categories", "Organize products into categories"},
+        {"Barcode Scanner", "barcode", "Scan or enter a barcode to find an item"},
+        {"Bills", "bills", "Find bills and print receipts"},
+        {"Reports", "reports", "Review sales and inventory reports"},
+        {"Discounts", "percent", "Manage discount rules"},
+        {"Settings", "settings", "Adjust terminal preferences"}};
 
-    QLabel *chipLabel(const QString &text, const char *objectName)
-    {
-        auto *l = W::label(text, objectName);
-        l->setAlignment(Qt::AlignCenter);
-        return l;
-    }
+    constexpr int sidebarWidth = 232;
+    const QColor navIconColor("#b9c6da");
 }
 
 MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
@@ -161,18 +165,17 @@ QWidget *MainWindow::buildSidebar()
 {
     auto *sb = new QFrame;
     sb->setObjectName("sidebar");
-    sb->setFixedWidth(250);
+    sb->setFixedWidth(sidebarWidth);
     auto *v = new QVBoxLayout(sb);
-    v->setContentsMargins(14, 18, 14, 16);
+    v->setContentsMargins(12, 16, 12, 16);
     v->setSpacing(4);
 
-    // brand: [S] Syntro-Check / (POS V2.4 PRO) (MANAGER)
     auto *brand = new QHBoxLayout;
     brand->setContentsMargins(4, 0, 4, 0);
     brand->setSpacing(11);
     auto *logo = new QFrame;
     logo->setObjectName("logoBox");
-    logo->setFixedSize(44, 44);
+    logo->setFixedSize(40, 40);
     auto *ll = new QVBoxLayout(logo);
     ll->setContentsMargins(0, 0, 0, 0);
     auto *ls = new QLabel("S");
@@ -182,31 +185,46 @@ QWidget *MainWindow::buildSidebar()
     auto *bt = new QVBoxLayout;
     bt->setSpacing(3);
     bt->addWidget(W::label("Syntro-Check", "brand"));
-    auto *tags = new QHBoxLayout;
-    tags->setSpacing(4);
-    tags->addWidget(chipLabel("POS V2.4 PRO", "tagBlue"));
-    tags->addWidget(chipLabel(RolePolicy::name(m_role).toUpper(), "tagGrey"));
-    tags->addStretch();
-    bt->addLayout(tags);
+    auto *brandDetails = new QHBoxLayout;
+    brandDetails->setSpacing(5);
+    brandDetails->addWidget(W::label("Point of sale", "tagBlue"));
+    brandDetails->addWidget(W::label(QStringLiteral("· ") + RolePolicy::name(m_role), "tagGrey"));
+    brandDetails->addStretch();
+    bt->addLayout(brandDetails);
     brand->addLayout(bt, 1);
     v->addLayout(brand);
-    v->addSpacing(16);
 
+    const auto section = [v](const QString &text)
+    {
+        v->addSpacing(10);
+        v->addWidget(W::label(text, "navSection"));
+    };
     for (int i = 0; i < PageCount; ++i)
     {
+        switch (i)
+        {
+        case Dashboard: section("Sales"); break;
+        case Inventory: section("Catalog"); break;
+        case Scanner: section("Operations"); break;
+        default: break;
+        }
+        const auto title = QString::fromLatin1(kNav[i].text);
         auto *b = new QPushButton;
         b->setObjectName("nav");
+        b->setProperty("active", false);
+        b->setAccessibleName(title);
         b->setCursor(Qt::PointingHandCursor);
-        b->setFixedHeight(40);
-        b->setToolTip(QString::fromLatin1(kNav[i].text));
+        b->setFocusPolicy(Qt::StrongFocus);
+        b->setFixedHeight(36);
+        b->setToolTip(title);
         auto *bh = new QHBoxLayout(b);
-        bh->setContentsMargins(14, 0, 14, 0);
-        bh->setSpacing(13);
+        bh->setContentsMargins(12, 0, 12, 0);
+        bh->setSpacing(11);
         auto *ic = new QLabel;
         ic->setObjectName("navIcon");
-        ic->setFixedSize(20, 20);
-        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, QColor("#94a3b8"), 20));
-        auto *tx = new QLabel(QString::fromLatin1(kNav[i].text));
+        ic->setFixedSize(18, 18);
+        ic->setPixmap(Theme::iconPixmap(kNav[i].icon, navIconColor, ic->width()));
+        auto *tx = new QLabel(title);
         for (QWidget *l : {static_cast<QWidget *>(ic), static_cast<QWidget *>(tx)})
             l->setAttribute(Qt::WA_TransparentForMouseEvents);
         bh->addWidget(ic);
@@ -217,7 +235,7 @@ QWidget *MainWindow::buildSidebar()
         connect(b, &QPushButton::clicked, this, [this, i] { goTo(i); });
     }
 
-    v->addStretch(); // user details + log out are in the top-right user menu
+    v->addStretch();
     return sb;
 }
 
@@ -225,38 +243,37 @@ QWidget *MainWindow::buildTopBar()
 {
     auto *bar = new QFrame;
     bar->setObjectName("topbar");
-    bar->setFixedHeight(66);
+    bar->setMinimumHeight(70);
     auto *h = new QHBoxLayout(bar);
-    h->setContentsMargins(24, 0, 20, 0);
+    h->setContentsMargins(20, 10, 16, 10);
     h->setSpacing(12);
     auto *t = new QVBoxLayout;
-    t->setSpacing(0);
+    t->setSpacing(2);
     t->addStretch();
-    t->addWidget(W::label("Syntro Terminal Operations", "pageTitle"));
-    t->addWidget(W::label("Station ST-01  •  Main Floor Cash Register", "pageSub"));
+    m_pageTitle = W::label("", "pageTitle");
+    m_pageSubtitle = W::label("", "pageSub");
+    m_pageSubtitle->setWordWrap(true);
+    t->addWidget(m_pageTitle);
+    t->addWidget(m_pageSubtitle);
     t->addStretch();
-    h->addLayout(t);
+    h->addLayout(t, 1);
 
-    // "● Scanner Ready"
     auto *ready = new QFrame;
     ready->setObjectName("readyPill");
+    ready->setToolTip("Type a barcode to look up an item. The scanning page shows camera status.");
     auto *rh = new QHBoxLayout(ready);
-    rh->setContentsMargins(11, 4, 12, 4);
-    rh->setSpacing(6);
-    rh->addWidget(W::dot(QColor("#059669")));
-    rh->addWidget(W::label("Scanner Ready", "readyText"));
+    rh->setContentsMargins(10, 6, 10, 6);
+    rh->addWidget(W::label("Barcode input available", "readyText"));
     h->addWidget(ready, 0, Qt::AlignVCenter);
-    h->addStretch();
-
 
     auto *chip = new QFrame;
     chip->setObjectName("chip");
     auto *ch = new QHBoxLayout(chip);
-    ch->setContentsMargins(14, 5, 14, 7);
-    ch->setSpacing(8);
-    ch->addWidget(W::iconLabel("clock", Theme::primary, 18));
+    ch->setContentsMargins(12, 5, 12, 5);
     m_clockTime = W::label("", "clockTime");
     m_clockDate = W::label("", "clockDate");
+    m_clockTime->setAlignment(Qt::AlignCenter);
+    m_clockDate->setAlignment(Qt::AlignCenter);
     ch->addWidget(m_clockTime);
     ch->addWidget(m_clockDate);
     h->addWidget(chip, 0, Qt::AlignVCenter);
@@ -271,39 +288,37 @@ QWidget *MainWindow::buildTopBar()
                 AppState::instance().emitChanged(); // rebuild tables so their text colours match the theme
             });
 
-    // User button (top right): shows the initials; click it for name, role and Log out.
     auto *avatar = new QToolButton;
     avatar->setObjectName("topAvatar");
     avatar->setFixedSize(36, 36);
-    avatar->setText(m_userName.left(2).toUpper());
+    const auto names = m_userName.simplified().split(' ', Qt::SkipEmptyParts);
+    const auto initials = names.size() > 1 ? names.first().left(1) + names.last().left(1)
+                                           : m_userName.trimmed().left(2);
+    avatar->setText(initials.toUpper());
+    avatar->setAccessibleName("User menu");
     avatar->setCursor(Qt::PointingHandCursor);
+    avatar->setFocusPolicy(Qt::StrongFocus);
     avatar->setToolTip(m_userName + " (" + RolePolicy::name(m_role) + ")");
     avatar->setPopupMode(QToolButton::InstantPopup);
-    avatar->setStyleSheet("QToolButton{color:white;font-weight:800;border:none;}"
-                          "QToolButton::menu-indicator{image:none;width:0;}");
     auto *menu = new QMenu(avatar);
-    // dark menu; the highlighted option turns blue with white text
-    menu->setStyleSheet("QMenu{background:#0f1b33;color:#8fb2ff;border:1px solid #26324f;border-radius:8px;padding:4px;}"
-                        "QMenu::item{padding:8px 18px 8px 12px;border-radius:6px;}"
-                        "QMenu::item:selected{background:#2554d8;color:#ffffff;}"
-                        "QMenu::separator{height:1px;background:#26324f;margin:4px 8px;}");
+    menu->setObjectName("accountMenu");
+    menu->setMinimumWidth(208);
     auto *who = new QWidget;
     auto *wv = new QVBoxLayout(who);
-    wv->setContentsMargins(14, 10, 14, 8);
+    wv->setContentsMargins(12, 8, 12, 8);
     wv->setSpacing(2);
-    auto *nm = new QLabel(m_userName);
-    nm->setStyleSheet("font-weight:800; font-size:14px; color:#ffffff;");
-    auto *rl = new QLabel(RolePolicy::title(m_role));
-    rl->setStyleSheet("color:#9aa7c7;");
+    auto *nm = W::label("", "h2", who);
+    nm->setTextFormat(Qt::PlainText);
+    nm->setAccessibleName(m_userName);
+    nm->ensurePolished();
+    nm->setText(nm->fontMetrics().elidedText(m_userName.simplified(), Qt::ElideRight, 220));
     wv->addWidget(nm);
-    wv->addWidget(rl);
+    wv->addWidget(W::label(RolePolicy::title(m_role), "muted"));
     auto *header = new QWidgetAction(menu);
     header->setDefaultWidget(who);
     menu->addAction(header);
     menu->addSeparator();
-    QIcon logoutIcon(Theme::iconPixmap("logout", QColor("#8fb2ff"), 16));
-    logoutIcon.addPixmap(Theme::iconPixmap("logout", QColor("#ffffff"), 16), QIcon::Active); // white when highlighted
-    QAction *logout = menu->addAction(logoutIcon, "Log out (change role)");
+    QAction *logout = menu->addAction("Log out");
     connect(logout, &QAction::triggered, this, [this]
             { m_loggedOut = true; if (!close()) m_loggedOut = false; });
     avatar->setMenu(menu);
@@ -314,7 +329,7 @@ QWidget *MainWindow::buildTopBar()
     {
         const auto now = QDateTime::currentDateTime();
         m_clockTime->setText(now.toString("HH:mm:ss"));
-        m_clockDate->setText("• " + now.toString("d MMM yyyy"));
+        m_clockDate->setText(now.toString("d MMM yyyy"));
     };
     connect(timer, &QTimer::timeout, this, tick);
     timer->start(1000);
@@ -332,13 +347,19 @@ bool MainWindow::goTo(int page)
         return false;
     }
     m_stack->setCurrentIndex(page);
+    m_pageTitle->setText(QString::fromLatin1(kNav[page].text));
+    m_pageSubtitle->setText(QString::fromLatin1(kNav[page].subtitle));
     for (int i = 0; i < m_nav.size(); ++i)
     {
-        m_nav[i]->setProperty("active", i == page);
-        if (auto *ic = m_nav[i]->findChild<QLabel *>("navIcon"))
-            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, i == page ? QColor("white") : QColor("#94a3b8"), 20));
-        Theme::repolish(m_nav[i]);
-        for (auto *c : m_nav[i]->findChildren<QLabel *>())
+        auto *button = m_nav[i];
+        const bool active = i == page;
+        if (button->property("active").toBool() == active)
+            continue;
+        button->setProperty("active", active);
+        if (auto *ic = button->findChild<QLabel *>("navIcon"))
+            ic->setPixmap(Theme::iconPixmap(kNav[i].icon, active ? Theme::white : navIconColor, ic->width()));
+        Theme::repolish(button);
+        for (auto *c : button->findChildren<QLabel *>())
             Theme::repolish(c);
     }
     switch (page)
@@ -388,7 +409,7 @@ void MainWindow::positionToast()
     if (!m_toast)
         return;
     const QWidget *root = centralWidget();
-    m_toast->move((root->width() - m_toast->width()) / 2 + 125, root->height() - m_toast->height() - 36);
+    m_toast->move((root->width() + sidebarWidth - m_toast->width()) / 2, root->height() - m_toast->height() - 36);
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e)
