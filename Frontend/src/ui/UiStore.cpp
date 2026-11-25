@@ -9,9 +9,9 @@ QString Season::statusOn(const QDate &d) const
 {
     if (end < d)
         return "expired";
-    if (start > d)
-        return "scheduled";
-    return active ? "active" : "scheduled";
+    if (!active)
+        return "inactive"; // isActive = false: never applied, whatever the dates
+    return start > d ? "scheduled" : "active";
 }
 
 int ParkedOrder::itemCount() const
@@ -167,14 +167,11 @@ bool UiStore::removeCategory(const QString &id, QString *error)
 }
 
 // ---------------------------------------------------------------- seasons
-namespace
+QString UiStore::seasonLabel(const QDate &start, const QDate &end)
 {
-    // Seasons.txt has no name column, so a readable name is made from the dates and percentage.
-    QString autoSeasonName(const Season &s)
-    {
-        return QString("%1% off (%2 - %3)").arg(s.percent, 0, 'g', 4)
-            .arg(s.start.toString("d MMM"), s.end.toString("d MMM yyyy"));
-    }
+    if (start.year() != end.year())
+        return start.toString("d MMM yyyy") + " - " + end.toString("d MMM yyyy");
+    return start.toString("d MMM") + " - " + end.toString("d MMM yyyy");
 }
 
 QString UiStore::seasonsPath() const
@@ -197,7 +194,7 @@ void UiStore::loadSeasons()
         s.percent = r.percent;
         s.active = r.active;
         s.id = QString("SEA-%1-%2").arg(s.start.year()).arg(++n, 2, 10, QLatin1Char('0'));
-        s.name = autoSeasonName(s);
+        s.name = seasonLabel(s.start, s.end);
         m_seasons.push_back(s);
     }
     for (const auto &e : errors)
@@ -219,8 +216,7 @@ void UiStore::saveSeasons()
 void UiStore::addSeason(const Season &s)
 {
     m_seasons.push_back(s);
-    if (m_seasons.last().name.trimmed().isEmpty())
-        m_seasons.last().name = autoSeasonName(m_seasons.last());
+    m_seasons.last().name = seasonLabel(s.start, s.end);
     saveSeasons();
     emit seasonsChanged();
 }
@@ -229,7 +225,11 @@ void UiStore::updateSeason(const QString &id, const Season &s)
 {
     for (auto &x : m_seasons)
         if (x.id == id)
+        {
             x = s;
+            x.id = id;
+            x.name = seasonLabel(s.start, s.end);
+        }
     saveSeasons();
     emit seasonsChanged();
 }
@@ -246,13 +246,22 @@ void UiStore::removeSeason(const QString &id)
     emit seasonsChanged();
 }
 
-void UiStore::setSeasonActive(const QString &id, bool on)
+QString UiStore::setSeasonActive(const QString &id, bool on)
 {
     for (auto &x : m_seasons)
         if (x.id == id)
+        {
+            if (on)
+                if (const QString why = validateSeason(x.start, x.end, x.percent, true, id); !why.isEmpty())
+                {
+                    emit seasonsChanged(); // redraw the toggle as it was
+                    return why;
+                }
             x.active = on;
+        }
     saveSeasons();
     emit seasonsChanged();
+    return QString();
 }
 
 QString UiStore::nextSeasonId() const
@@ -271,15 +280,21 @@ const Season *UiStore::activeSeason(const QDate &d) const
     return nullptr;
 }
 
-QString UiStore::validateSeason(const QString &name, const QDate &start, const QDate &end, double percent) const
+QString UiStore::validateSeason(const QDate &start, const QDate &end, double percent, bool active,
+                                const QString &ignoreId) const
 {
-    Q_UNUSED(name); // optional: Seasons.txt stores only dates, percentage and isActive
     if (!start.isValid() || !end.isValid())
         return "Enter valid start and end dates.";
     if (end < start)
         return "The end date must not be before the start date.";
     if (percent <= 0 || percent > 100)
-        return "Discount must be between 0 and 100 percent.";
+        return "Discount percentage must be more than 0 and at most 100.";
+    if (active)
+        for (const auto &s : m_seasons)
+            if (s.id != ignoreId && s.active && s.start <= end && start <= s.end)
+                return QString("These dates overlap the active season %1 (%2%). Change the dates, save it as "
+                               "inactive, or switch that season off first.")
+                    .arg(s.name).arg(s.percent, 0, 'g', 4);
     return QString();
 }
 

@@ -22,13 +22,14 @@ struct Category
 
 struct Season
 {
-    QString id;   // "SEA-2026-01"
-    QString name;
+    // Seasons.txt (requirement 13) stores exactly: start date, end date, discount percentage, isActive.
     QDate start, end;
     double percent = 0;
     bool active = false;       // isActive in Seasons.txt
-    QStringList categories;    // empty = all categories
-    // "active" | "scheduled" | "expired" for a given day (an inactive season is never "active")
+    // Not stored - derived for the screen only:
+    QString id;   // row handle "SEA-2026-01" (position in Seasons.txt)
+    QString name; // label made from the dates, e.g. "23 Nov - 30 Nov 2026"
+    // "active" | "scheduled" | "inactive" | "expired" for a given day
     QString statusOn(const QDate &d) const;
 };
 
@@ -67,10 +68,15 @@ public:
     void addSeason(const Season &s);
     void updateSeason(const QString &id, const Season &s);
     void removeSeason(const QString &id);
-    void setSeasonActive(const QString &id, bool on);
+    // Empty on success; otherwise why it was refused (an active season may not overlap another active one).
+    QString setSeasonActive(const QString &id, bool on);
     QString nextSeasonId() const;
     const Season *activeSeason(const QDate &d = QDate::currentDate()) const; // first active season covering d
-    QString validateSeason(const QString &name, const QDate &start, const QDate &end, double percent) const;
+    // Requirement 13: a season is only start date, end date, discount percentage and isActive (Seasons.txt).
+    // Two ACTIVE seasons may not share a day, so a bill date always matches at most one discount (requirement 15).
+    QString validateSeason(const QDate &start, const QDate &end, double percent, bool active,
+                           const QString &ignoreId = QString()) const;
+    static QString seasonLabel(const QDate &start, const QDate &end); // "23 Nov - 30 Nov 2026"
 
     // ---- on-hold orders: saved in Order.txt / OrderDetail.txt with status on-hold (see AppState::holdOrder) ----
     QVector<ParkedOrder> parked() const; // newest first

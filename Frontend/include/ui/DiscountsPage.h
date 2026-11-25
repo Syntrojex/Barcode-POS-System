@@ -1,12 +1,12 @@
 #pragma once
-// Seasonal discounts (manager): promotional seasons with start/end dates and activation toggle.
+// Seasonal discounts (manager), requirements 13-15: seasons in Seasons.txt (start date, end date, discount
+// percentage, isActive), added through this page and switched active / inactive.
 #include <QWidget>
 
 class QCheckBox;
 class QDateEdit;
 class QDoubleSpinBox;
 class QLabel;
-class QLineEdit;
 class QPushButton;
 class QTableWidget;
 class QFrame;
@@ -31,7 +31,6 @@ private:
     QTableWidget *m_table = nullptr;
     QString m_filter = "All";
     QVector<QPushButton *> m_tabs;
-    QLineEdit *m_name = nullptr;
     QDateEdit *m_start = nullptr, *m_end = nullptr;
     QDoubleSpinBox *m_percent = nullptr;
     QCheckBox *m_active = nullptr;
