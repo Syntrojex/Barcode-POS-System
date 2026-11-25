@@ -3,35 +3,95 @@
 #include "Theme.h"
 #include "UiKit.h"
 #include "Widgets.h"
-#include <QApplication>
+#include <QAbstractItemView>
 #include <QCheckBox>
-#include <QDoubleSpinBox>
-#include <QFile>
-#include <QFileDialog>
-#include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
-#include <QListWidget>
-#include <QSpinBox>
+#include <QPushButton>
 #include <QTableWidget>
-#include <QTextStream>
 #include <QTime>
 #include <QVBoxLayout>
+#include <algorithm>
 
 using namespace Ui; // makeTable, item, wrapW, pageShell, writeCsv (see UiKit.h)
 
+namespace
+{
+    class ElidedLineLabel final : public QLabel
+    {
+    public:
+        explicit ElidedLineLabel(const QString &text, const char *objectName = nullptr, const QString &style = QString())
+        {
+            setTextFormat(Qt::PlainText);
+            setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+            if (objectName)
+                setObjectName(objectName);
+            if (!style.isEmpty())
+                setStyleSheet(style);
+            m_full = text;
+            setAccessibleName(text);
+            updateElided();
+        }
+
+    protected:
+        void resizeEvent(QResizeEvent *event) override
+        {
+            QLabel::resizeEvent(event);
+            updateElided();
+        }
+
+    private:
+        void updateElided()
+        {
+            const QString elided = fontMetrics().elidedText(m_full, Qt::ElideRight, contentsRect().width());
+            setText(elided);
+            setToolTip(elided == m_full ? QString() : m_full);
+        }
+
+        QString m_full;
+    };
+
+    double unitGrossWithTax(const ProductInfo &p)
+    {
+        return p.price - p.discount + p.tax;
+    }
+
+    QWidget *makeChecklistProductCell(const ScannerPage::ScanEntry &entry)
+    {
+        auto *w = new QWidget;
+        auto *v = new QVBoxLayout(w);
+        v->setContentsMargins(2, 4, 2, 4);
+        v->setSpacing(1);
+
+        auto *top = new ElidedLineLabel(entry.product.name, nullptr, QStringLiteral("font-weight:700; font-size:13px;"));
+        const QString subtitle = entry.product.stock <= 0
+            ? QString("%1  •  %2  •  Out of stock").arg(entry.product.ean, W::money(entry.product.price))
+            : QString("%1  •  %2  •  Line %3")
+                  .arg(entry.product.ean,
+                       W::money(entry.product.price),
+                       W::money(unitGrossWithTax(entry.product) * entry.qty));
+        auto *bottom = new ElidedLineLabel(
+            subtitle,
+            entry.product.stock <= 0 ? "errorText" : "muted",
+            QStringLiteral("font-size:11.5px;"));
+        v->addWidget(top);
+        v->addWidget(bottom);
+        return w;
+    }
+}
 
 // =================================================================== ScannerPage
-ScannerPage::ScannerPage(QWidget* parent) : QWidget(parent)
+ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
 {
-    QVBoxLayout* root;
+    QVBoxLayout *root;
     pageShell(this, root);
-    auto* h = new QHBoxLayout;
+    auto *h = new QHBoxLayout;
     h->setSpacing(12);
 
-    auto* cam = W::card(this);
-    auto* cv = new QVBoxLayout(cam);
+    auto *cam = W::card(this);
+    auto *cv = new QVBoxLayout(cam);
     cv->setContentsMargins(18, 14, 18, 14);
     cv->setSpacing(10);
     W::headerRow(cv, "barcode", "Barcode Scanner");
@@ -39,38 +99,82 @@ ScannerPage::ScannerPage(QWidget* parent) : QWidget(parent)
     m_feed->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_feed->setMinimumHeight(300);
     cv->addWidget(m_feed, 1);
-    auto* btns = new QHBoxLayout;
+    auto *btns = new QHBoxLayout;
     m_toggle = W::button("Start camera", "primary", "play");
     btns->addWidget(m_toggle);
     btns->addStretch();
     cv->addLayout(btns);
-    auto* mr = new QHBoxLayout;
+    auto *mr = new QHBoxLayout;
     m_manual = new QLineEdit;
-    m_manual->setPlaceholderText("Or type an 8-digit EAN and press Enter");
+    m_manual->setObjectName("scannerManualInput");
+    m_manual->setPlaceholderText("Or type/scan an 8-digit EAN and press Enter");
     m_manual->setMaxLength(12);
-    auto* go = W::button("Lookup", "soft", "search");
+    auto *go = W::button("Lookup", "soft", "search");
     mr->addWidget(m_manual, 1);
     mr->addWidget(go);
     cv->addLayout(mr);
-    h->addWidget(cam, 6);
+    h->addWidget(cam, 5);
 
-    auto* side = W::card(this);
-    auto* sv = new QVBoxLayout(side);
+    auto *side = W::card(this);
+    auto *sv = new QVBoxLayout(side);
     sv->setContentsMargins(18, 14, 18, 14);
-    sv->setSpacing(10);
-    W::headerRow(sv, "clock", "Recent Scans");
+    sv->setSpacing(8);
+    m_countBadge = W::badge("0 items", "grey");
+    W::headerRow(sv, "clock", "Scanned Items", m_countBadge);
+
     m_last = W::label("No scans yet", "h2");
     sv->addWidget(m_last);
-    m_history = new QListWidget;
-    m_history->setStyleSheet("QListWidget{border:1px solid #dbe4f7;border-radius:10px;padding:4px;} QListWidget::item{padding:9px;border-bottom:1px solid #e8eefb;}");
-    sv->addWidget(m_history, 1);
+
+    auto *toolbar = new QHBoxLayout;
+    toolbar->setSpacing(6);
+    m_selectAll = W::button("Select all", "mini");
+    m_selectAll->setObjectName("scannerSelectAll");
+    m_deselectAll = W::button("Unselect", "mini");
+    m_deselectAll->setObjectName("scannerDeselectAll");
+    m_clearAll = W::button("Clear", "flat", "trash");
+    m_clearAll->setObjectName("scannerClearAll");
+    toolbar->addWidget(m_selectAll);
+    toolbar->addWidget(m_deselectAll);
+    toolbar->addStretch();
+    toolbar->addWidget(m_clearAll);
+    sv->addLayout(toolbar);
+
+    m_checklist = makeTable({"", "PRODUCT", "QTY", ""});
+    m_checklist->setObjectName("scannerChecklist");
+    m_checklist->setAccessibleName("Scanned items checklist");
+    m_checklist->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_checklist->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_checklist->setWordWrap(false);
+    auto *hh = m_checklist->horizontalHeader();
+    hh->setSectionResizeMode(QHeaderView::Fixed);
+    hh->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_checklist->setColumnWidth(0, 42);
+    m_checklist->setColumnWidth(2, 108);
+    m_checklist->setColumnWidth(3, 38);
+    sv->addWidget(m_checklist, 1);
+
+    auto *summaryBox = new QFrame;
+    summaryBox->setObjectName("field");
+    auto *sbLayout = new QHBoxLayout(summaryBox);
+    sbLayout->setContentsMargins(10, 7, 10, 7);
+    sbLayout->setSpacing(8);
+    m_selectedSummary = W::label("0 selected", "muted");
+    m_selectedTotal = W::label("PKR 0.00", "h2");
+    sbLayout->addWidget(m_selectedSummary, 1);
+    sbLayout->addWidget(m_selectedTotal, 0, Qt::AlignRight);
+    m_selectionBar = summaryBox;
+    sv->addWidget(summaryBox);
+
     m_describe = W::button("Show description", "soft", "search");
     m_describe->setEnabled(false);
     sv->addWidget(m_describe);
-    m_send = W::button("Add last scan to order", "primary", "cart");
+
+    m_send = W::button("Add checked to checkout", "primary", "cart");
+    m_send->setObjectName("scannerAddChecked");
     m_send->setEnabled(false);
     sv->addWidget(m_send);
-    h->addWidget(side, 4);
+
+    h->addWidget(side, 5);
     root->addLayout(h, 1);
 
     connect(m_toggle, &QPushButton::clicked, this, [this]
@@ -79,19 +183,36 @@ ScannerPage::ScannerPage(QWidget* parent) : QWidget(parent)
             m_feed->setRunning(on);
             const bool running = m_feed->running();
             m_toggle->setText(running ? "Stop camera" : "Start camera");
-            m_toggle->setIcon(Theme::icon(running ? "stop" : "play", QColor("white"), 16)); });
-    connect(m_feed, &CameraFeedWidget::scanError, this, &ScannerPage::toast);
-    connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString& code) {
-        const auto product = AppState::instance().findByCode(code);
-        if (product) { m_feed->showResult(code + "  -  " + product->name, true); show(*product); }
-        else { m_feed->showResult(code + "  -  not in Product.txt", false); emit toast("Barcode " + code + " not found in Product.txt"); }
+            m_toggle->setIcon(Theme::icon(running ? "stop" : "play", QColor("white"), 16));
         });
+    connect(m_feed, &CameraFeedWidget::scanError, this, &ScannerPage::toast);
+    connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString &code)
+        {
+            const auto product = AppState::instance().findByCode(code);
+            if (product)
+            {
+                m_feed->showResult(code + "  -  " + product->name, true);
+                show(*product);
+            }
+            else
+            {
+                m_feed->showResult(code + "  -  not in Product.txt", false);
+                emit toast("Barcode " + code + " not found in Product.txt");
+            }
+        });
+
     auto lookup = [this]
         {
-            const auto p = AppState::instance().findByCode(m_manual->text());
+            const QString query = m_manual->text().trimmed();
+            if (query.isEmpty())
+            {
+                emit toast("Enter a barcode first");
+                return;
+            }
+            const auto p = AppState::instance().findByCode(query);
             if (!p)
             {
-                emit toast("No product found for \"" + m_manual->text() + "\"");
+                emit toast("No product found for \"" + query + "\"");
                 return;
             }
             show(*p);
@@ -99,34 +220,331 @@ ScannerPage::ScannerPage(QWidget* parent) : QWidget(parent)
         };
     connect(go, &QPushButton::clicked, this, lookup);
     connect(m_manual, &QLineEdit::returnPressed, this, lookup);
-    connect(m_send, &QPushButton::clicked, this, [this]
-        { emit sendToOrder(m_lastEan); });
+
+    connect(m_selectAll, &QPushButton::clicked, this, &ScannerPage::selectAll);
+    connect(m_deselectAll, &QPushButton::clicked, this, &ScannerPage::deselectAll);
+    connect(m_clearAll, &QPushButton::clicked, this, &ScannerPage::clearHistory);
+    connect(m_send, &QPushButton::clicked, this, &ScannerPage::sendCheckedToOrder);
     connect(m_describe, &QPushButton::clicked, this, [this]
-        { Dialogs::productDescription(this, m_lastId); });
+        {
+            if (m_lastId > 0)
+            {
+                Dialogs::productDescription(this, m_lastId);
+                emit described(m_lastId);
+            }
+        });
+    connect(m_checklist, &QTableWidget::currentCellChanged, this,
+        [this](int currentRow, int, int, int) { setRowSelected(currentRow); });
+    connect(&AppState::instance(), &AppState::changed, this, [this]
+        {
+            for (auto &e : m_entries)
+            {
+                if (const auto latest = AppState::instance().findByCode(e.product.ean))
+                {
+                    e.product = *latest;
+                    if (e.product.stock <= 0)
+                        e.checked = false;
+                    else if (e.qty > e.product.stock)
+                        e.qty = e.product.stock;
+                }
+            }
+            rebuildChecklist();
+        });
+
+    rebuildChecklist();
 }
 
 void ScannerPage::scanNext()
 {
-    if (!m_feed->running()) m_feed->setRunning(true);
-    if (!m_feed->running()) emit toast("Unable to start camera scanning");
-    else {
+    if (!m_feed->running())
+        m_feed->setRunning(true);
+    if (!m_feed->running())
+        emit toast("Unable to start camera scanning");
+    else
+    {
         m_toggle->setText("Stop camera");
         m_toggle->setIcon(Theme::icon("stop", QColor("white"), 16));
     }
 }
 
-void ScannerPage::show(const ProductInfo& p)
+void ScannerPage::recordScan(const ProductInfo &p)
+{
+    show(p);
+}
+
+void ScannerPage::show(const ProductInfo &p)
 {
     m_feed->setCode(p.ean);
     m_lastEan = p.ean;
     m_lastId = p.id;
     m_last->setText(p.name + " • " + W::money(p.price));
-    m_history->insertItem(0, QString("%1   %2   %3").arg(QTime::currentTime().toString("HH:mm:ss"), p.ean, p.name));
-    m_send->setEnabled(true);
-    m_describe->setEnabled(true);
+
+    int existingIndex = -1;
+    for (int i = 0; i < m_entries.size(); ++i)
+    {
+        if (m_entries[i].product.id == p.id && m_entries[i].product.ean == p.ean)
+        {
+            existingIndex = i;
+            break;
+        }
+    }
+
+    if (existingIndex >= 0)
+    {
+        ScanEntry updated = m_entries.takeAt(existingIndex);
+        updated.product = p;
+        updated.lastScanned = QTime::currentTime();
+        if (p.stock > 0)
+        {
+            if (updated.qty < p.stock)
+                ++updated.qty;
+            else
+                emit toast(QString("Maximum stock (%1) reached for %2").arg(p.stock).arg(p.name));
+            updated.checked = true;
+        }
+        else
+        {
+            updated.checked = false;
+        }
+        m_entries.prepend(updated);
+    }
+    else
+    {
+        ScanEntry entry;
+        entry.product = p;
+        entry.qty = 1;
+        entry.checked = (p.stock > 0);
+        entry.lastScanned = QTime::currentTime();
+        m_entries.prepend(entry);
+    }
+
+    rebuildChecklist();
+    if (!m_entries.isEmpty())
+        m_checklist->selectRow(0);
     // Show description only on request; opening a modal on every camera frame is disruptive.
 }
+
+void ScannerPage::rebuildChecklist()
+{
+    m_checklist->setRowCount(0);
+    m_checklist->setRowCount(m_entries.size());
+
+    for (int r = 0; r < m_entries.size(); ++r)
+    {
+        const auto &e = m_entries[r];
+        m_checklist->setRowHeight(r, 52);
+
+        auto *cb = new QCheckBox;
+        cb->setStyleSheet("QCheckBox { spacing: 0px; padding: 0px; }");
+        cb->setFixedSize(20, 20);
+        cb->setAccessibleName("Select " + e.product.name);
+        cb->setChecked(e.checked && e.product.stock > 0);
+        cb->setEnabled(e.product.stock > 0);
+        if (e.product.stock <= 0)
+            cb->setToolTip("Out of stock — cannot be added to checkout");
+        connect(cb, &QCheckBox::toggled, this, [this, r](bool on)
+            {
+                if (r >= 0 && r < m_entries.size())
+                {
+                    m_entries[r].checked = on && (m_entries[r].product.stock > 0);
+                    updateSelectionSummary();
+                }
+            });
+        m_checklist->setCellWidget(r, 0, wrapW(cb, Qt::AlignCenter));
+        m_checklist->setCellWidget(r, 1, makeChecklistProductCell(e));
+
+        auto *stp = new QtyStepper(e.qty);
+        const auto buttons = stp->findChildren<QPushButton *>();
+        for (auto *button : buttons)
+        {
+            const bool isPlus = (button->text() == "+");
+            const QString action = isPlus ? "Increase quantity" : "Decrease quantity";
+            button->setObjectName(action);
+            button->setAccessibleName(action + " for " + e.product.name);
+            if (isPlus)
+                button->setEnabled(e.product.stock > 0 && e.qty < e.product.stock);
+            else
+                button->setEnabled(e.qty > 1);
+        }
+        connect(stp, &QtyStepper::minus, this, [this, r] { changeEntryQty(r, -1); });
+        connect(stp, &QtyStepper::plus, this, [this, r] { changeEntryQty(r, +1); });
+        m_checklist->setCellWidget(r, 2, stp);
+
+        auto *del = W::button("", "flat", "trash");
+        del->setToolTip("Remove from list");
+        del->setAccessibleName("Remove " + e.product.name);
+        connect(del, &QPushButton::clicked, this, [this, r] { removeEntry(r); });
+        m_checklist->setCellWidget(r, 3, wrapW(del, Qt::AlignCenter));
+    }
+
+    if (m_entries.isEmpty())
+    {
+        m_lastEan.clear();
+        m_lastId = 0;
+        m_last->setText("No scans yet");
+        m_describe->setEnabled(false);
+    }
+    else
+    {
+        m_describe->setEnabled(m_lastId > 0);
+    }
+
+    updateSelectionSummary();
+}
+
+void ScannerPage::updateSelectionSummary()
+{
+    int totalItems = m_entries.size();
+    int totalUnits = 0;
+    int checkableItems = 0;
+    int checkedItems = 0;
+    int checkedUnits = 0;
+    double checkedTotal = 0.0;
+
+    for (const auto &e : m_entries)
+    {
+        totalUnits += e.qty;
+        if (e.product.stock > 0)
+            ++checkableItems;
+        if (e.checked && e.product.stock > 0 && e.qty > 0)
+        {
+            ++checkedItems;
+            checkedUnits += e.qty;
+            checkedTotal += unitGrossWithTax(e.product) * e.qty;
+        }
+    }
+
+    if (totalItems == 0)
+        W::setBadge(m_countBadge, "0 items", "grey");
+    else
+        W::setBadge(m_countBadge,
+                    QString("%1 product%2 · %3 unit%4")
+                        .arg(totalItems)
+                        .arg(totalItems == 1 ? "" : "s")
+                        .arg(totalUnits)
+                        .arg(totalUnits == 1 ? "" : "s"),
+                    "blue");
+
+    m_selectAll->setEnabled(checkedItems < checkableItems);
+    m_deselectAll->setEnabled(checkedItems > 0);
+    m_clearAll->setEnabled(!m_entries.isEmpty());
+
+    m_selectedSummary->setText(checkedItems == 0
+        ? QString("No items selected")
+        : QString("Checked: %1 product%2 (%3 unit%4)")
+              .arg(checkedItems)
+              .arg(checkedItems == 1 ? "" : "s")
+              .arg(checkedUnits)
+              .arg(checkedUnits == 1 ? "" : "s"));
+    m_selectedTotal->setText(W::money(checkedTotal));
+
+    m_send->setEnabled(!m_viewOnly && checkedUnits > 0);
+    m_send->setText(checkedUnits > 0
+        ? QString("Add checked to checkout (%1)").arg(checkedUnits)
+        : QString("Add checked to checkout"));
+}
+
+void ScannerPage::changeEntryQty(int row, int delta)
+{
+    if (row < 0 || row >= m_entries.size())
+        return;
+
+    auto &entry = m_entries[row];
+    const int nextQty = entry.qty + delta;
+    if (nextQty < 1)
+        return;
+    if (delta > 0 && entry.product.stock > 0 && nextQty > entry.product.stock)
+    {
+        emit toast(QString("Only %1 in stock for %2").arg(entry.product.stock).arg(entry.product.name));
+        return;
+    }
+
+    entry.qty = nextQty;
+    if (delta > 0 && entry.product.stock > 0)
+        entry.checked = true;
+    rebuildChecklist();
+    m_checklist->selectRow(row);
+}
+
+void ScannerPage::removeEntry(int row)
+{
+    if (row < 0 || row >= m_entries.size())
+        return;
+    m_entries.removeAt(row);
+    rebuildChecklist();
+    if (!m_entries.isEmpty())
+    {
+        const int nextRow = std::min(row, static_cast<int>(m_entries.size()) - 1);
+        m_checklist->selectRow(nextRow);
+        setRowSelected(nextRow);
+    }
+}
+
+void ScannerPage::setRowSelected(int row)
+{
+    if (row < 0 || row >= m_entries.size())
+        return;
+    const auto &p = m_entries[row].product;
+    m_lastEan = p.ean;
+    m_lastId = p.id;
+    m_last->setText(p.name + " • " + W::money(p.price));
+    m_describe->setEnabled(p.id > 0);
+}
+
+void ScannerPage::selectAll()
+{
+    for (auto &e : m_entries)
+        e.checked = (e.product.stock > 0);
+    rebuildChecklist();
+}
+
+void ScannerPage::deselectAll()
+{
+    for (auto &e : m_entries)
+        e.checked = false;
+    rebuildChecklist();
+}
+
+void ScannerPage::clearHistory()
+{
+    m_entries.clear();
+    rebuildChecklist();
+}
+
+void ScannerPage::sendCheckedToOrder()
+{
+    QVector<QPair<QString, int>> batch;
+    QVector<ScanEntry> remaining;
+
+    for (const auto &e : m_entries)
+    {
+        if (e.checked && e.qty > 0 && e.product.stock > 0)
+            batch.push_back({e.product.ean, e.qty});
+        else
+            remaining.push_back(e);
+    }
+
+    if (batch.isEmpty())
+    {
+        emit toast("Select at least one in-stock product to add to checkout");
+        return;
+    }
+
+    m_entries = remaining;
+    rebuildChecklist();
+    if (!m_entries.isEmpty())
+        setRowSelected(0);
+
+    emit sendBatchToOrder(batch);
+}
+
 void ScannerPage::setViewOnly(bool on)
 {
+    m_viewOnly = on;
     m_send->setVisible(!on);
+    m_selectionBar->setVisible(!on);
+    m_selectAll->setVisible(!on);
+    m_deselectAll->setVisible(!on);
+    m_checklist->setColumnHidden(0, on);
+    updateSelectionSummary();
 }

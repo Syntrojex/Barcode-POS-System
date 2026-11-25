@@ -317,19 +317,17 @@ if(NOT CAMERA_MODE STREQUAL "OFF")
     endif()
 endif()
 
-# Optional low-latency confirmation beep for cashier barcode scans:
-# prefers Qt Multimedia (QSoundEffect) when installed, otherwise falls back to standard Windows winmm.
+# Optional scan feedback. On Windows use asynchronous file-based WinMM playback.
 set(SCAN_AUDIO_BACKEND "NONE")
-if(QT_VERSION_MAJOR EQUAL 6)
+if(WIN32)
+    set(SCAN_AUDIO_BACKEND "WINMM")
+elseif(QT_VERSION_MAJOR EQUAL 6)
     if(NOT TARGET Qt6::Multimedia)
         find_package(Qt6 QUIET COMPONENTS Multimedia)
     endif()
     if(TARGET Qt6::Multimedia)
         set(SCAN_AUDIO_BACKEND "QT_MULTIMEDIA")
     endif()
-endif()
-if(SCAN_AUDIO_BACKEND STREQUAL "NONE" AND WIN32)
-    set(SCAN_AUDIO_BACKEND "WINMM")
 endif()
 message(STATUS "Scan audio: ${SCAN_AUDIO_BACKEND}")
 
@@ -498,6 +496,14 @@ if(BUILD_TESTING AND QT_VERSION_MAJOR EQUAL 6)
             Qt6::Test
         )
         add_test(NAME scan_audio COMMAND scan_audio_tests)
+        add_executable(scanner_checklist_tests
+            tests/scanner_checklist_tests.cpp
+        )
+        target_link_libraries(scanner_checklist_tests PRIVATE
+            barcode_ui
+            Qt6::Test
+        )
+        add_test(NAME scanner_checklist COMMAND scanner_checklist_tests)
         if(WIN32)
             get_target_property(_qt_core_loc Qt6::Core IMPORTED_LOCATION_DEBUG)
             if(NOT _qt_core_loc)
@@ -510,17 +516,17 @@ if(BUILD_TESTING AND QT_VERSION_MAJOR EQUAL 6)
                 get_filename_component(_qt_bin_dir "${_qt_core_loc}" DIRECTORY)
                 get_filename_component(_qt_root_dir "${_qt_bin_dir}" DIRECTORY)
                 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.22")
-                    set_tests_properties(scan_audio PROPERTIES
+                    set_tests_properties(scan_audio scanner_checklist PROPERTIES
                         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir};QT_QPA_PLATFORM=set:offscreen;QT_PLUGIN_PATH=set:${_qt_root_dir}/plugins"
                     )
                 else()
-                    set_tests_properties(scan_audio PROPERTIES
+                    set_tests_properties(scan_audio scanner_checklist PROPERTIES
                         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=${_qt_root_dir}/plugins"
                     )
                 endif()
             endif()
         else()
-            set_tests_properties(scan_audio PROPERTIES
+            set_tests_properties(scan_audio scanner_checklist PROPERTIES
                 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
             )
         endif()

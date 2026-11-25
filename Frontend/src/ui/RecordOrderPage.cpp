@@ -425,6 +425,98 @@ void RecordOrderPage::processBarcode(const QString& codeIn, bool fromScanner, bo
         ScanAudio::instance().playSuccess();
 }
 
+void RecordOrderPage::addScannedBatch(const QVector<QPair<QString, int>>& items)
+{
+    if (items.isEmpty())
+        return;
+
+    int addedLines = 0;
+    int addedUnits = 0;
+    int adjustedCount = 0;
+    QString lastError;
+    std::optional<ProductInfo> lastAdded;
+
+    for (const auto& entry : items)
+    {
+        const QString code = entry.first.trimmed();
+        const int requested = entry.second;
+        if (code.isEmpty() || requested <= 0)
+            continue;
+
+        const auto p = AppState::instance().findByCode(code);
+        if (!p)
+        {
+            ++adjustedCount;
+            lastError = QString("No product found for \"%1\"").arg(code);
+            continue;
+        }
+
+        int have = 0;
+        for (const auto& l : m_cart)
+            if (l.p.sku == p->sku)
+                have = l.qty;
+
+        int addQty = requested;
+        const QString problem = stockIssue(p->id, have, addQty);
+        if (!problem.isEmpty())
+        {
+            while (addQty > 0 && !stockIssue(p->id, have, addQty).isEmpty())
+                --addQty;
+            ++adjustedCount;
+            lastError = problem;
+            if (addQty <= 0)
+                continue;
+        }
+
+        bool found = false;
+        for (auto& l : m_cart)
+        {
+            if (l.p.sku == p->sku)
+            {
+                l.qty += addQty;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            m_cart.push_back({ *p, addQty });
+
+        ++addedLines;
+        addedUnits += addQty;
+        lastAdded = *p;
+    }
+
+    if (lastAdded)
+    {
+        m_feed->setCode(lastAdded->ean);
+        setPreview(lastAdded);
+        m_manual->clear();
+        rebuildTable();
+        focusInput();
+    }
+
+    if (addedUnits > 0 && adjustedCount == 0)
+    {
+        emit toast(QString("Added %1 product%2 (%3 unit%4) to checkout")
+                       .arg(addedLines)
+                       .arg(addedLines == 1 ? "" : "s")
+                       .arg(addedUnits)
+                       .arg(addedUnits == 1 ? "" : "s"));
+    }
+    else if (addedUnits > 0)
+    {
+        emit toast(QString("Added %1 unit%2 to checkout (%3 item%4 adjusted for stock)")
+                       .arg(addedUnits)
+                       .arg(addedUnits == 1 ? "" : "s")
+                       .arg(adjustedCount)
+                       .arg(adjustedCount == 1 ? "" : "s"));
+    }
+    else if (!lastError.isEmpty())
+    {
+        emit toast(lastError);
+    }
+}
+
 void RecordOrderPage::setPreview(const std::optional<ProductInfo>& p)
 {
     m_preview = p;

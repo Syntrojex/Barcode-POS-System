@@ -15,6 +15,7 @@
 #include "AppState.h"
 #include "UserRole.h"
 #include <QMap>
+#include <QPair>
 #include <QVector>
 #include <QWidget>
 #include <optional>
@@ -61,6 +62,12 @@ public slots:
      * @param fromScanner True if emitted from camera scanner; false if typed manually.
      */
     void showCode(const QString& code, bool fromScanner);
+
+    /**
+     * @brief Adds a batch of checked barcode-scanned items (EAN, quantity) directly to the cart
+     *        so the cashier can generate a collective bill.
+     */
+    void addScannedBatch(const QVector<QPair<QString, int>>& items);
 
     /** @brief Discards the current cart and resets the interface for a new customer transaction. */
     void newDraft();
