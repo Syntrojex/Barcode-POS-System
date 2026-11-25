@@ -6,8 +6,8 @@
  * @author Ali Abdullah (25L-3022)
  *
  * Implements the core Point of Sale GUI workflow for Increment 2:
- * - Dual-pane layout: Camera scanner & manual barcode entry on the left, shopping cart & totals on the right.
- * - Keyboard shortcuts: F9 (Camera Scan), F4 (Product Description), F10 (Checkout), F2 (Focus Barcode Input).
+ * - Barcode entry, product preview, cart and a fixed checkout summary.
+ * - Keyboard shortcuts: F2 (Hold), F4 (Product Description), F9 (Camera), F10 (Checkout).
  * - Real-time stock validation and dynamic bill subtotal calculation.
  * - Integration with Dialogs::payment() and Dialogs::receipt().
  */
@@ -43,13 +43,13 @@ public:
     explicit RecordOrderPage(QWidget* parent = nullptr);
 
 public slots:
-    /** @brief Shifts keyboard focus to the barcode input field (F2). */
+    /** @brief Shifts keyboard focus to the barcode input field. */
     void focusInput();
 
-    /** @brief Initiates camera barcode scanning or simulates a scan input (F9 shortcut). */
+    /** @brief Starts the camera scanner. */
     void simulateScan();
 
-    /** @brief Opens the Product Description modal for the currently highlighted or entered item (F4 shortcut). */
+    /** @brief Opens the catalog picker. */
     void quickLookup();
 
     /** @brief Triggers order checkout and launches the payment settlement dialog (F10 shortcut). */
@@ -101,12 +101,15 @@ private:
         int qty = 1;    ///< Quantity added to cart.
     };
 
+    QWidget* buildBarcodeStrip();
     QWidget* buildCustomerStrip();
     QWidget* buildEditBanner();  ///< amber "Editing order #..." bar (hidden unless an order is being edited)
     void setEditMode(const QString& orderId, const QString& text); ///< empty id = leave edit mode
     QWidget* buildParkedStrip(); ///< "Parked (n)" chips of the orders on hold
-    QWidget* buildLeft();
-    QWidget* buildRight();
+    QWidget* buildProductPane();
+    QWidget* buildCart();
+    QWidget* buildSummary();
+    void setCameraActive(bool active);
     void setPreview(const std::optional<ProductInfo>& p);
     void addToCart(const ProductInfo& p, int qty = 1);
     void changeQty(int row, int delta);
@@ -132,6 +135,7 @@ private:
     QLabel* m_sessionId;
 
     CameraFeedWidget* m_feed;
+    QWidget* m_cameraPanel;
     QPushButton* m_camToggle;
     QPushButton* m_addBtn;
     QPushButton* m_descBtn;
@@ -139,21 +143,19 @@ private:
     QLabel* m_pPrice;
     QLabel* m_pMeta;
     QLabel* m_pStock;
-    QLabel* m_pThumb;
     QLabel* m_pBadge;
 
     QTableWidget* m_table;
     QLabel* m_itemsBadge;
     QLabel* m_gross;
     QLabel* m_disc;
-    QLabel* m_seasonal = nullptr;    // seasonal discount (active season), shown before payment
-    QLabel* m_seasonalKey = nullptr; // "Seasonal (10%)"
     QLabel* m_tax;
     QLabel* m_total;
     QPushButton* m_checkout;
     QPushButton* m_hold;
     QLabel* m_parkTitle;
     QLabel* m_parkEmpty;
+    QWidget* m_parkedList;
     QHBoxLayout* m_parkChips;
     QFrame* m_editBanner = nullptr;
     QLabel* m_editText = nullptr;

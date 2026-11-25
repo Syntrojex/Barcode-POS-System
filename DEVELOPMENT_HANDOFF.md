@@ -45,6 +45,13 @@ Other integration adjustments include using the payment timestamp for paid sales
 
 ## Promotion and remaining checks
 
-Local `ali` still points to the original commit. Its unfinished Task 03 edits overlap the team's checkout changes, so promotion is pending a review and reconciliation of the saved checkout work. The committed dashboard refresh has no separate Task 04 acceptance record.
+The completed Task 03 commit `2e1faca` was reconciled on the integration branch before promoting the combined history to `ali`. The committed dashboard refresh has no separate Task 04 acceptance record.
 
 Physical barcode capture, external card or wallet devices, and printer hardware were outside the verified workflows. Payment tests covered the application's local settlement paths. Existing category edits are session-scoped. New writes migrate copied legacy bill lines into `Bill.txt` and `BillDetail.txt`. Keep a full data-directory backup before the first production write in the new format.
+
+## Checkout reconciliation
+
+- Merged the completed Task 03 commit into the reviewed candidate at `30a0692`. Resolved conflicts in `RecordOrderPage.cpp` and `UI_REDESIGN_PROGRESS.md`. Preserved the fixed checkout summary, barcode focus and on-demand camera alongside persisted holds, edit approvals, stock credit and bill integration. The discounts total includes the seasonal discount, with the breakdown in its tooltip.
+- Qt MinGW configure and Debug build passed. CTest passed 8/8. Windows checks on copied records verified both role sign-ins, shell navigation, shortcuts, typed and decoded-signal barcode entry, hold/reload/resume, Cash/Card/Wallet payments, paid edit ID and stock behavior, and receipt PDFs. The combined checkout was visually inspected in both themes at 1100×700 and 1440×900.
+- Captures are in `C:/Users/iAT/AppData/Local/Temp/syntro-combined-1795630764231`. Optical capture and external payment/printing hardware remain unverified.
+- Next Task 05 checkpoint is Orders Management.
