@@ -72,3 +72,8 @@ Synced local `ali` with `origin/main` at `faad6bc` in `56eef61`. Main removed th
 - `OrdersPage.h/.cpp` and a table selector in `Theme.cpp` add the page heading, unified search bar, striped table, edit badges, compact actions, empty state, and results footer.
 - Verified phone search, status filters, persisted hold/resume, View Bill, manager edit, and cashier approval cancellation on copied records. Build and CTest passed 8/8. Inspected screenshots in both themes at 1100×700 and 1440×900. At minimum width the table scrolls horizontally for the edit window and actions.
 - Screenshots are in `C:/Users/iAT/AppData/Local/Temp/syntro-task05-1795632134317`. Commit subject `feat(ui): refine orders management screen`.
+
+### Product Catalog
+
+- `ProductsPage.cpp` adds a dedicated heading, registered-product count, separate search and actions row, striped table, and clear stock badges. All catalog columns remain available. At 1100px the table scrolls horizontally to status and actions, and long names have tooltips.
+- Verified barcode and acronym lookup, manager access to Details, Edit and New Product dialogs, and cashier Add to Order routing and edit restrictions. Build and CTest passed 8/8. Inspected both themes at 1100×700 and 1440×900. Commit subject `feat(ui): modernize product catalog`.

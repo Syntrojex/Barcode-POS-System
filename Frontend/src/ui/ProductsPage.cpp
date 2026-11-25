@@ -3,20 +3,10 @@
 #include "Theme.h"
 #include "UiKit.h"
 #include "Widgets.h"
-#include <QApplication>
-#include <QCheckBox>
-#include <QDoubleSpinBox>
-#include <QFile>
-#include <QFileDialog>
-#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
-#include <QListWidget>
-#include <QSpinBox>
 #include <QTableWidget>
-#include <QTextStream>
-#include <QTime>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -28,36 +18,52 @@ ProductsPage::ProductsPage(QWidget* parent) : QWidget(parent)
 {
     QVBoxLayout* root;
     pageShell(this, root);
-    auto* card = W::card(this);
+    root->setSpacing(8);
+    root->addWidget(sectionHeader({}, "Product Catalog", "Find products, inspect barcodes, and manage the catalog."));
+    auto* card = W::card(this, "subCard");
     auto* v = new QVBoxLayout(card);
-    v->setContentsMargins(18, 14, 18, 10);
-    v->setSpacing(10);
+    v->setContentsMargins(16, 16, 16, 12);
+    v->setSpacing(8);
     auto* h = new QHBoxLayout;
-    h->addWidget(W::iconLabel("products", Theme::primary, 20));
-    h->addWidget(W::label("Product Catalog", "h1"));
+    h->addWidget(W::label("Registered products", "h1"));
     m_count = W::badge("", "blue");
     h->addWidget(m_count);
     h->addStretch();
-    m_search = new QLineEdit;
-    m_search->setPlaceholderText("Search products");
-    m_search->setToolTip("Search by name, acronym, product ID, or barcode.");
-    m_search->setMinimumWidth(280);
-    m_search->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
-    h->addWidget(m_search);
     v->addLayout(h);
+    auto* toolbar = new QHBoxLayout;
+    toolbar->setSpacing(8);
+    m_search = new QLineEdit;
+    m_search->setPlaceholderText("Search products by name, ID, acronym, or barcode…");
+    m_search->setToolTip("Search by name, acronym, product ID, or barcode.");
+    m_search->setClearButtonEnabled(true);
+    m_search->setAccessibleName("Search products");
+    m_search->setMinimumHeight(40);
+    m_search->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
+    toolbar->addWidget(m_search, 1);
     m_issues = W::button("", "soft", "warn");
+    m_issues->setMinimumHeight(40);
     connect(m_issues, &QPushButton::clicked, this, [this] { Dialogs::loadIssues(this); });
-    h->insertWidget(3, m_issues);
+    toolbar->addWidget(m_issues);
     m_newBtn = W::button("New Product", "primary", "plus");
+    m_newBtn->setMinimumHeight(40);
     m_newBtn->setVisible(false);
     connect(m_newBtn, &QPushButton::clicked, this, &ProductsPage::addNew);
-    h->addWidget(m_newBtn);
-    m_table = makeTable({ "ID", "ACRONYM", "BARCODE", "PRODUCT", "UNIT", "PRICE", "TAX", "DISC.", "STOCK", "STATUS", "" });
-    m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-    for (int c : {0, 1, 2, 4, 5, 6, 7, 8, 9})
+    toolbar->addWidget(m_newBtn);
+    v->addLayout(toolbar);
+    m_table = makeTable({ "ID", "ACRONYM", "BARCODE", "PRODUCT", "UNIT", "PRICE", "TAX", "DISC.", "STOCK", "STATUS", "ACTIONS" });
+    m_table->setProperty("managementTable", true);
+    m_table->setAlternatingRowColors(true);
+    m_table->setAccessibleName("Registered products");
+    m_table->horizontalHeader()->setMinimumSectionSize(42);
+    m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Interactive);
+    m_table->setColumnWidth(3, 196);
+    for (int c : {0, 1, 2, 4, 5, 6, 7, 8})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    m_table->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Fixed);
+    m_table->setColumnWidth(9, 104);
     m_table->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Fixed);
-    m_table->setColumnWidth(10, 234);
+    m_table->setColumnWidth(10, 202);
+    m_table->setWordWrap(false);
     v->addWidget(m_table, 1);
     root->addWidget(card, 1);
     connect(m_search, &QLineEdit::textChanged, this, [this]
@@ -77,6 +83,7 @@ void ProductsPage::rebuild()
     const int nIssues = st.productIssues().size();
     m_issues->setVisible(nIssues > 0);
     m_issues->setText(QString("Data issues (%1)").arg(nIssues));
+    m_table->setRowCount(0);
     m_table->setRowCount(rows.size());
     for (int r = 0; r < rows.size(); ++r)
     {
@@ -86,15 +93,17 @@ void ProductsPage::rebuild()
         m_table->setItem(r, 0, item(QString::number(p.id)));
         m_table->setItem(r, 1, item(p.sku, Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
         m_table->setItem(r, 2, item(p.ean));
-        m_table->setItem(r, 3, item(p.name, Qt::AlignLeft | Qt::AlignVCenter, "", true));
+        auto* name = item(p.name, Qt::AlignLeft | Qt::AlignVCenter, "", true);
+        name->setToolTip(p.name);
+        m_table->setItem(r, 3, name);
         m_table->setItem(r, 4, item(p.unit));
         m_table->setItem(r, 5, item(W::money(p.price), Qt::AlignRight | Qt::AlignVCenter, "", true));
         m_table->setItem(r, 6, item(W::money(p.tax), Qt::AlignRight | Qt::AlignVCenter));
         m_table->setItem(r, 7, item(W::money(p.discount), Qt::AlignRight | Qt::AlignVCenter));
         const bool low = p.stock <= limit;
         m_table->setItem(r, 8, item(QString::number(p.stock), Qt::AlignRight | Qt::AlignVCenter, low ? "#ba1a1a" : "", low));
-        m_table->setCellWidget(r, 9, wrapW(W::badge(p.stock == 0 ? "Out" : low ? "Low" : "OK", p.stock == 0 ? "red" : low ? "amber" : "green")));
-        auto* d = W::button("Details", "soft");
+        m_table->setCellWidget(r, 9, wrapW(W::badge(p.stock == 0 ? "Out" : low ? "Low stock" : "In stock", p.stock == 0 ? "red" : low ? "amber" : "green")));
+        auto* d = W::button("Details", "mini");
         auto* cell = new QWidget;
         auto* cl = new QHBoxLayout(cell);
         cl->setContentsMargins(0, 0, 4, 0);
@@ -125,6 +134,7 @@ void ProductsPage::rebuild()
             connect(b, &QPushButton::clicked, this, [this, ean]
                 { emit addToOrder(ean); });
         }
+        cl->addStretch();
         m_table->setCellWidget(r, 10, cell);
         connect(d, &QPushButton::clicked, this, [this, pid]
             { Dialogs::productDescription(this, pid); });
