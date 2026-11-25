@@ -54,7 +54,9 @@ Physical barcode capture, external card or wallet devices, and printer hardware 
 - Merged the completed Task 03 commit into the reviewed candidate at `30a0692`. Resolved conflicts in `RecordOrderPage.cpp` and `UI_REDESIGN_PROGRESS.md`. Preserved the fixed checkout summary, barcode focus and on-demand camera alongside persisted holds, edit approvals, stock credit and bill integration. The discounts total includes the seasonal discount, with the breakdown in its tooltip.
 - Qt MinGW configure and Debug build passed. CTest passed 8/8. Windows checks on copied records verified both role sign-ins, shell navigation, shortcuts, typed and decoded-signal barcode entry, hold/reload/resume, Cash/Card/Wallet payments, paid edit ID and stock behavior, and receipt PDFs. The combined checkout was visually inspected in both themes at 1100×700 and 1440×900.
 - Captures are in `C:/Users/iAT/AppData/Local/Temp/syntro-combined-1795630764231`. Optical capture and external payment/printing hardware remain unverified.
-- Next Task 05 checkpoint is Orders Management.## Management screens · Task 05
+- Next Task 05 checkpoint is Orders Management.
+
+## Management screens · Task 05
 
 Local `ali` includes `origin/main` at `09d24ce`. The initial sync `56eef61` kept the three CMake files required by the Qt MinGW preset while accepting the upstream documentation removals. A subsequent merge `51fc643` brought in the upstream project metadata and Windows wrapper script removal.
 
@@ -72,3 +74,14 @@ The active checkout is `Barcode-POS-System` on `ali`. Integrated the scanner aud
 The checklist keeps unchecked rows and any quantities the cart could not accept. It uses the existing pricing quote for the selected total. Verified grouping, quantity controls, stock limits, partial and rejected transfers, hold/resume, and two separate paid orders from the same checklist, with distinct order and bill IDs and correct stock after reload.
 
 Qt MinGW Debug built successfully. CTest passed 10/10. Both Qt suites also passed with the native Windows platform plugin. Windows accepted the audio playback request. Speaker audibility and optical barcode scanning still need an in-person check. Tests used temporary data files.
+
+## Operational screens · Task 06
+
+- Scanner workspace `1751a44` preserves the grouped checklist, beep, manual lookup, product details, and view-only behavior. Camera status follows the existing feed and shows errors when starting fails.
+- Bills ledger `6b68ece` keeps paid records and the existing PDF receipt flow. Date and time show the payment timestamp with the order time as the legacy fallback.
+- Seasonal Discounts `b392e5a` keeps stored date ranges, percentage and activation. The form previews the derived season label. The file format has no custom campaign name.
+- Terminal Settings groups the existing threshold, auto-add and beep preferences, with Apply and the top-bar theme control preserved. Find this commit with `git log -1 --format=%H --grep='^feat(ui): modernize terminal settings$'`.
+
+All four pages were built and run on Windows in light and dark modes at 1100×700 and 1440×900. The default executable was open, so builds used the existing `build/qt-mingw-task05` directory with the Qt MinGW preset. The baseline and all four checkpoints passed CTest 10/10. The four sets of captures are in `C:/Users/iAT/AppData/Local/Temp/syntro-inc6-1795641158885`. Wide tables can scroll at 1100px. Physical optical capture and speaker audibility remain unverified.
+
+Next increment is Manager Reports.

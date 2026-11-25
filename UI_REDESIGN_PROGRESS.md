@@ -111,3 +111,9 @@ Baseline `adabeb0` on `ali` built and passed 10/10 CTest checks with the Qt MinG
 - `DiscountsPage.h/.cpp` and scoped selectors in `Theme.cpp` add a theme-aware current promotion banner, summary tiles, striped seasons table, and compact edit form. The form previews the date-derived campaign label used by the existing file format.
 - Verified filters, invalid date feedback, saving a 22.5% season, activation persistence, editing and deleting on copied data. The distinct special checkout cap remains 8%. Qt MinGW build and CTest 10/10 passed. Inspected both themes at 1100×700 and 1440×900. At minimum width, scroll the table horizontally for all actions.
 - Commit subject `feat(ui): redesign seasonal discounts management`. Next page is Terminal Settings.
+
+### Terminal Settings
+
+- `SettingsPage.cpp` adds a sectioned preferences panel and a separate theme help card. The 0–1000 stock threshold, auto-add and beep options, and Apply notifications retain their existing session semantics.
+- Verified the preference controls stay staged until Apply and then update all three settings and emit the existing notification. Inspected both themes at 1100×700 and 1440×900. Qt MinGW build and CTest passed 10/10.
+- Updated `DEVELOPMENT_HANDOFF.md`. The four local checkpoints are listed by `git log --oneline adabeb0..HEAD`. The next increment is Manager Reports.
