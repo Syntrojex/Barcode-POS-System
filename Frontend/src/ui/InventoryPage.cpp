@@ -55,7 +55,8 @@ InventoryPage::InventoryPage(QWidget *parent) : QWidget(parent)
     auto *tools = new QHBoxLayout;
     tools->setSpacing(10);
     m_search = new QLineEdit;
-    m_search->setPlaceholderText("Search product id, name, acronym or barcode...");
+    m_search->setPlaceholderText("Search inventory");
+    m_search->setToolTip("Search by product ID, name, acronym, or barcode.");
     m_search->setMinimumHeight(40);
     m_search->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
     m_category = new QComboBox;
@@ -76,8 +77,8 @@ InventoryPage::InventoryPage(QWidget *parent) : QWidget(parent)
         hh->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     hh->setSectionResizeMode(3, QHeaderView::Fixed);
     hh->setSectionResizeMode(4, QHeaderView::Fixed);
-    m_table->setColumnWidth(3, 190);
-    m_table->setColumnWidth(4, 150);
+    m_table->setColumnWidth(3, 172);
+    m_table->setColumnWidth(4, 124);
     v->addWidget(m_table, 1);
 
     m_footer = W::label("", "muted");

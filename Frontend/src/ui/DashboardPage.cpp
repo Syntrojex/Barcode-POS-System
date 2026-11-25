@@ -3,6 +3,7 @@
 #include "Dialogs.h"
 #include "Theme.h"
 #include "Widgets.h"
+#include <QDate>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
@@ -14,24 +15,29 @@
 namespace
 {
     // One KPI tile: icon, caption, big number, one supporting line.
-    QFrame *statCard(const QString &caption, const QString &icon, const QString &top, const QString &bottom,
-                     QLabel *&value, QLabel *&sub, bool alert = false)
+    QFrame *statCard(const QString &caption, const QString &icon, const char *tone, const QColor &ink,
+                     QLabel *&value, QLabel *&sub)
     {
-        auto *c = W::card(nullptr, alert ? "cardAlert" : "card");
+        auto *c = W::card(nullptr, "dashboardPanel");
         auto *h = new QHBoxLayout(c);
-        h->setContentsMargins(16, 12, 16, 12);
-        h->setSpacing(14);
-        h->addWidget(W::iconTile(icon, Qt::white, top, bottom, 46));
+        h->setContentsMargins(14, 14, 14, 14);
+        auto *tile = new QLabel;
+        tile->setObjectName("dashboardIcon");
+        tile->setProperty("tone", tone);
+        tile->setFixedSize(32, 32);
+        tile->setAlignment(Qt::AlignCenter);
+        tile->setPixmap(Theme::iconPixmap(icon, ink, 18));
+        h->addWidget(tile, 0, Qt::AlignTop);
         auto *v = new QVBoxLayout;
-        v->setSpacing(0);
+        v->setSpacing(3);
         v->addWidget(W::label(caption, "caption"));
-        value = W::label("", "bigValue");
-        if (alert)
-            value->setStyleSheet("color:#c0271d;");
+        value = W::label("", "dashboardKpi");
+        value->setWordWrap(true);
         v->addWidget(value);
         sub = W::label("", "muted");
-        sub->setStyleSheet("font-size:12px;");
+        sub->setWordWrap(true);
         v->addWidget(sub);
+        v->addStretch();
         h->addLayout(v, 1);
         return c;
     }
@@ -75,55 +81,92 @@ void DashboardPage::build()
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     auto *inner = new QWidget;
-    inner->setMinimumHeight(900);
+    inner->setObjectName("dashboardBody");
+    inner->setAttribute(Qt::WA_StyledBackground);
     scroll->setWidget(inner);
     outer->addWidget(scroll);
-    auto *root = W::pageLayout(inner);
+    auto *root = new QVBoxLayout(inner);
+    root->setContentsMargins(20, 18, 20, 20);
+    root->setSpacing(14);
 
-    // ---- KPI row
-    auto *stats = new QHBoxLayout;
-    stats->setSpacing(0);
-    stats->addWidget(statCard("SALES TODAY", "cash", "#7fb0ff", "#2b5fe8", m_sales, m_salesSub));
-    stats->addWidget(statCard("ORDERS", "orders", "#5be3a0", "#15a362", m_orders, m_ordersSub));
-    stats->addWidget(statCard("PENDING", "clock", "#ffd479", "#f09a1a", m_pending, m_pendingSub));
-    stats->addWidget(statCard("LOW STOCK", "warn", "#ff9a8f", "#d9392b", m_lowCount, m_lowSub, true));
-    root->addLayout(stats);
+    auto *hero = W::card(nullptr, "dashboardHero");
+    auto *heroLayout = new QHBoxLayout(hero);
+    heroLayout->setContentsMargins(24, 20, 24, 20);
+    heroLayout->setSpacing(20);
+    auto *overview = new QVBoxLayout;
+    overview->setSpacing(5);
+    overview->addWidget(W::label("Store activity", "dashboardHeroTitle"));
+    overview->addWidget(W::label(QLocale().toString(QDate::currentDate(), "dddd, d MMMM yyyy"), "dashboardHeroDate"));
+    auto *checkout = W::button("Open checkout", "primary", "cart");
+    checkout->setObjectName("dashboardCheckout");
+    overview->addSpacing(5);
+    overview->addWidget(checkout, 0, Qt::AlignLeft);
+    connect(checkout, &QPushButton::clicked, this, [this] { emit navigate(Pages::RecordOrder); });
+    heroLayout->addLayout(overview, 1);
 
-    // ---- quick actions
-    auto *qa = new QHBoxLayout;
-    qa->setContentsMargins(8, 8, 8, 4);
-    qa->setSpacing(10);
-    // (quick buttons removed: the sidebar already opens these pages)
-    qa->addStretch(1);
+    auto *searchPanel = W::card(nullptr, "dashboardSearch");
+    auto *searchLayout = new QVBoxLayout(searchPanel);
+    searchLayout->setContentsMargins(13, 12, 13, 12);
+    auto *searchTitle = W::label("Find an order or product", "dashboardSearchTitle");
     m_search = new QLineEdit;
-    m_search->setPlaceholderText("Find an order or product…  (Ctrl+K)");
-    m_search->setMinimumWidth(300);
-    m_search->setMinimumHeight(40);
+    m_search->setAccessibleName(searchTitle->text());
+    m_search->setPlaceholderText("Order ID or barcode");
+    m_search->setMinimumWidth(210);
+    m_search->setMinimumHeight(36);
     m_search->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
-    qa->addWidget(m_search);
-    root->addLayout(qa);
+    searchLayout->addWidget(searchTitle);
+    searchLayout->addWidget(m_search);
+    heroLayout->addWidget(searchPanel, 0, Qt::AlignVCenter);
+    root->addWidget(hero);
     connect(m_search, &QLineEdit::returnPressed, this, [this]
             { emit lookup(m_search->text()); m_search->clear(); });
 
-    // ---- chart (full width)
+    // ---- KPI row
+    auto *stats = new QHBoxLayout;
+    stats->setSpacing(12);
+    stats->addWidget(statCard("Sales today", "cash", "blue", "#244fc4", m_sales, m_salesSub), 1);
+    stats->addWidget(statCard("Orders today", "orders", "green", "#116944", m_orders, m_ordersSub), 1);
+    stats->addWidget(statCard("Pending", "clock", "amber", "#865210", m_pending, m_pendingSub), 1);
+    stats->addWidget(statCard("Low stock", "warn", "rose", "#9f344b", m_lowCount, m_lowSub), 1);
+    root->addLayout(stats);
+
     auto *mid = new QHBoxLayout;
-    mid->setSpacing(0);
-    auto *cc = W::card(this);
+    mid->setSpacing(14);
+    auto *cc = W::card(nullptr, "dashboardPanel");
     auto *cv = new QVBoxLayout(cc);
     cv->setContentsMargins(18, 14, 18, 12);
     cv->setSpacing(6);
-    auto *legend = new QLabel("Revenue from paid orders");
+    auto *legend = new QLabel(QStringLiteral("Paid orders · PKR"));
     legend->setObjectName("muted");
     W::headerRow(cv, "", "Hourly revenue", legend);
     m_chart = new RevenueChart;
     m_chart->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_chart->setData({}, {}, {}); // populated from real paid orders in refresh()
     cv->addWidget(m_chart, 1);
-    mid->addWidget(cc, 1);
-    root->addLayout(mid, 5);
+    mid->addWidget(cc, 3);
+
+    auto *quick = W::card(nullptr, "dashboardPanel");
+    auto *actions = new QVBoxLayout(quick);
+    actions->setContentsMargins(16, 14, 16, 14);
+    actions->setSpacing(8);
+    actions->addWidget(W::label("Quick access", "h1"));
+    const auto addAction = [this, actions](const QString &text, Pages::Id page)
+    {
+        auto *button = W::button(text, "soft");
+        button->setObjectName("dashboardAction");
+        button->setMinimumHeight(40);
+        actions->addWidget(button);
+        connect(button, &QPushButton::clicked, this, [this, page] { emit navigate(page); });
+    };
+    addAction("Review orders", Pages::Orders);
+    addAction("Browse products", Pages::Products);
+    addAction("Barcode scanner", Pages::Scanner);
+    actions->addStretch();
+    mid->addWidget(quick, 1);
+    root->addLayout(mid, 2);
 
     // ---- recent orders
-    auto *rc = W::card(this);
+    auto *rc = W::card(nullptr, "dashboardPanel");
     auto *rv = new QVBoxLayout(rc);
     rv->setContentsMargins(18, 14, 18, 8);
     rv->setSpacing(6);
@@ -131,18 +174,19 @@ void DashboardPage::build()
     all->setObjectName("link");
     all->setCursor(Qt::PointingHandCursor);
     connect(all, &QPushButton::clicked, this, [this]
-            { emit navigate(2); });
-    W::headerRow(rv, "orders", "Recent orders", all);
+            { emit navigate(Pages::Orders); });
+    W::headerRow(rv, "", "Recent orders", all);
     m_recent = table({"ORDER", "TIME", "CUSTOMER", "ITEMS", "TOTAL", "STATUS", ""});
     m_recent->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_recent->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_recent->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
     m_recent->setColumnWidth(6, 120);
+    m_recent->setMinimumHeight(154);
     rv->addWidget(m_recent, 1);
     m_showing = W::label("", "muted");
     m_showing->setStyleSheet("font-size:12px;");
     rv->addWidget(m_showing);
-    root->addWidget(rc, 6);
+    root->addWidget(rc, 1);
 }
 
 void DashboardPage::refresh()
@@ -173,7 +217,7 @@ void DashboardPage::refresh()
     m_pendingSub->setText("On hold or in progress");
     const auto low = st.lowStock();
     m_lowCount->setText(QString::number(low.size()));
-    m_lowSub->setText("Items at or below the low-stock limit");
+    m_lowSub->setText("At or below stock limit");
 
     const int m = qMin(5, orders.size());
     m_recent->setRowCount(m);
@@ -209,5 +253,6 @@ void DashboardPage::refresh()
         connect(ab, &QPushButton::clicked, this, [this, copy]
                 { Dialogs::orderDetails(this, copy); });
     }
-    m_showing->setText(QString("Showing the latest %1 of %2 saved orders").arg(m).arg(orders.size()));
+    m_showing->setText(m == 0 ? QStringLiteral("No saved orders yet")
+                             : QString("Showing the latest %1 of %2 saved orders").arg(m).arg(orders.size()));
 }

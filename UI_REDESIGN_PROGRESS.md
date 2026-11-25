@@ -26,3 +26,15 @@ Completed on `ali`. The navy sidebar groups the existing pages into Sales, Catal
 - Run `git log -1 --format=%H --grep='^feat(ui): redesign application shell and navigation$'` for the full Task 02 commit hash.
 
 **Next task** · Checkout UI redesign.
+
+## Increment 2 acceptance
+
+- [x] The Qt MinGW Debug build passed. The final Windows executable opened and closed the sign-in dialog successfully.
+- [x] The sidebar showed seven permitted pages for Cashier and eleven for Manager. The UI check confirmed that direct attempts to open restricted pages were rejected.
+- [x] Each permitted page opened from its sidebar button and showed the matching title and active state.
+- [x] F1, Ctrl+K, Ctrl+N, and every mapped Ctrl+1 through Ctrl+0 shortcut worked. The check also exercised checkout F10, Alt+D, Tab and Space navigation, and logout cancellation.
+- [x] Light and dark themes were checked for both roles at 1100×700 and 1440×900. Theme checks included sign-in, the account menu, date popups, checkout payment, and receipts. The theme preference persisted.
+- [x] At 1100×700, populated checkout controls, category filters, the discounts form, and report date filters fit or could be scrolled fully into view. Wide tables expose their action columns through horizontal scrolling.
+- [x] The local commit `fix(ui): meet increment 2 acceptance checklist` records the acceptance fixes, the preceding dashboard and theme upgrade, and this progress log.
+
+All six CTest checks passed. Cash checkout in both themes used a temporary copy of the catalog. Typed barcode lookup found the product, cash payment created the paid order, order detail, and bill records, and stock decreased by one. Scanner decoding was covered by CTest.

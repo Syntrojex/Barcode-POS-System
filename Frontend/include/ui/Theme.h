@@ -7,8 +7,8 @@
 
 namespace Theme
 {
-    inline const QColor surface("#f5f7fb");
-    inline const QColor surfaceLow("#f8fafc");
+    inline const QColor surface("#f1f2fa");
+    inline const QColor surfaceLow("#f7f8fd");
     inline const QColor surfaceContainer("#edf1f7");
     inline const QColor surfaceHigh("#e3e9f3");
     inline const QColor onSurface("#18243a");
@@ -23,6 +23,11 @@ namespace Theme
     inline const QColor error("#ba1a1a");
     inline const QColor errorContainer("#ffdad6");
     inline const QColor white("#ffffff");
+    inline const QColor darkSurface("#101626");
+    inline const QColor darkPanel("#192337");
+    inline const QColor darkText("#edf1fb");
+    inline const QColor darkMuted("#afbdd5");
+    inline const QColor darkDivider("#374560");
 
     bool isDark();
     void setDark(bool on); // persists with QSettings

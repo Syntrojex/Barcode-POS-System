@@ -18,7 +18,7 @@ using namespace Ui;
 DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
 {
     QVBoxLayout *root;
-    pageShell(this, root);
+    pageShell(this, root, true);
     root->setSpacing(12);
 
     // ---- banner
@@ -34,6 +34,8 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     m_bannerTitle->setStyleSheet("color:white; font-size:17px; font-weight:800;");
     m_bannerSub = W::label("");
     m_bannerSub->setStyleSheet("color:#c9d8fb;");
+    m_bannerTitle->setWordWrap(true);
+    m_bannerSub->setWordWrap(true);
     bv->addWidget(m_bannerTitle);
     bv->addWidget(m_bannerSub);
     bh->addLayout(bv, 1);
@@ -58,12 +60,8 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     auto *lv = new QVBoxLayout(list);
     lv->setContentsMargins(16, 14, 16, 12);
     lv->setSpacing(10);
+    lv->addWidget(W::label("Promotional seasons", "h1"));
     auto *lh = new QHBoxLayout;
-    auto *tv = new QVBoxLayout;
-    tv->setSpacing(0);
-    tv->addWidget(W::label("Configured Promotional Seasons", "h1"));
-    tv->addWidget(W::label("Seasonal discounts are applied automatically at billing when the date is inside an active season.", "muted"));
-    lh->addLayout(tv, 1);
     for (const QString &name : {"All", "Active", "Scheduled", "Expired"})
     {
         auto *btn = W::button(name, "tab");
@@ -77,12 +75,16 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
             for (auto *t : m_tabs) t->setChecked(t->text() == name);
             rebuild(); });
     }
+    lh->addStretch();
     lv->addLayout(lh);
     m_table = makeTable({"SEASON NAME", "START DATE", "END DATE", "DISCOUNT", "ACTIVE", "STATUS", ""});
     auto *hh = m_table->horizontalHeader();
-    hh->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int cidx : {1, 2, 3, 4, 5})
+    hh->setSectionResizeMode(0, QHeaderView::Fixed);
+    m_table->setColumnWidth(0, 178);
+    for (int cidx : {1, 2, 3, 5})
         hh->setSectionResizeMode(cidx, QHeaderView::ResizeToContents);
+    hh->setSectionResizeMode(4, QHeaderView::Fixed);
+    m_table->setColumnWidth(4, 96);
     hh->setSectionResizeMode(6, QHeaderView::Fixed);
     m_table->setColumnWidth(6, 110);
     lv->addWidget(m_table, 1);
@@ -95,7 +97,6 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     fv->setSpacing(8);
     m_formTitle = W::label("Add Promotional Season", "h1");
     fv->addWidget(m_formTitle);
-    fv->addWidget(W::label("Configure automated register discounting rules.", "muted"));
     fv->addWidget(W::label("SEASON / CAMPAIGN NAME", "caption"));
     m_name = new QLineEdit;
     m_name->setMinimumHeight(40);
@@ -104,16 +105,10 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     auto *dates = new QHBoxLayout;
     auto *sv = new QVBoxLayout;
     sv->addWidget(W::label("START DATE", "caption"));
-    m_start = new QDateEdit(QDate::currentDate());
+    m_start = dateEdit(QDate::currentDate(), "dd MMM yyyy", 40);
     auto *ev = new QVBoxLayout;
     ev->addWidget(W::label("END DATE", "caption"));
-    m_end = new QDateEdit(QDate::currentDate().addDays(7));
-    for (auto *de : {m_start, m_end})
-    {
-        de->setCalendarPopup(true);
-        de->setDisplayFormat("dd MMM yyyy");
-        de->setMinimumHeight(40);
-    }
+    m_end = dateEdit(QDate::currentDate().addDays(7), "dd MMM yyyy", 40);
     sv->addWidget(m_start);
     ev->addWidget(m_end);
     dates->addLayout(sv);
@@ -127,22 +122,17 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     m_percent->setValue(10);
     m_percent->setMinimumHeight(40);
     fv->addWidget(m_percent);
-    m_active = new QCheckBox("Active (apply automatically while the dates match)");
+    m_active = new QCheckBox("Apply automatically during this season");
     m_active->setChecked(true);
     fv->addWidget(m_active);
-    m_error = W::label("");
+    m_error = W::label("", "errorText");
     m_error->setWordWrap(true);
-    m_error->setStyleSheet("color:#ba1a1a; font-weight:600;");
     fv->addWidget(m_error);
     fv->addStretch();
-    auto *note = W::card(form, "subCard");
-    auto *nv = new QVBoxLayout(note);
-    nv->setContentsMargins(12, 10, 12, 10);
-    nv->addWidget(W::label("POS policy note", "h2"));
-    auto *nl = W::label("Special manual discounts entered by cashiers at checkout are capped at 8% maximum.", "muted");
+    auto *nl = W::label(QString("Cashiers can apply up to %1% manually at checkout.")
+                            .arg(UiStore::kSpecialDiscountCapPercent), "muted");
     nl->setWordWrap(true);
-    nv->addWidget(nl);
-    fv->addWidget(note);
+    fv->addWidget(nl);
     auto *btns = new QHBoxLayout;
     auto *cancel = W::button("Cancel", "soft");
     m_save = W::button("Save Season", "primary", "check");
@@ -172,7 +162,7 @@ void DiscountsPage::rebuild()
                                    .arg(act->percent, 0, 'f', 0).arg(act->name, act->end.toString("d MMM yyyy")));
         m_bannerSub->setText("Applied automatically to every bill and shown in the bill's seasonal discount field. " +
                              QString::number(today.daysTo(act->end)) + " days remaining.");
-        m_banner->setStyleSheet("#totalBox{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #0b7a36,stop:1 #12a150);}");
+        m_banner->setStyleSheet("#totalBox{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #0b5639,stop:1 #126840);}");
         m_rate->setText(QString("%1%").arg(act->percent, 0, 'f', 0));
         m_rateSub->setText(act->name);
     }
@@ -180,7 +170,7 @@ void DiscountsPage::rebuild()
     {
         m_bannerTitle->setText("No seasonal discount is active right now");
         m_bannerSub->setText("Bills are created without a seasonal discount until a season is active and its dates match today.");
-        m_banner->setStyleSheet("#totalBox{background:#55617c;}");
+        m_banner->setStyleSheet("#totalBox{background:#404c65;}");
         m_rate->setText("0%");
         m_rateSub->setText("No active season");
     }

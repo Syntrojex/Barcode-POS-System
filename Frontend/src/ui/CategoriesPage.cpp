@@ -16,7 +16,7 @@ using namespace Ui;
 CategoriesPage::CategoriesPage(QWidget *parent) : QWidget(parent)
 {
     QVBoxLayout *root;
-    pageShell(this, root);
+    pageShell(this, root, true);
     root->setSpacing(12);
 
     m_summary = W::label("", "muted");
@@ -31,6 +31,7 @@ CategoriesPage::CategoriesPage(QWidget *parent) : QWidget(parent)
     auto *it = new QVBoxLayout;
     it->setSpacing(2);
     auto *t = W::label("The first two digits of every barcode come directly from the category ID.", "h2");
+    t->setWordWrap(true);
     auto *d = W::label("Barcodes are generated as <category id> + 5-digit serial + check digit. Changing the id of a "
                        "category that has products would break their barcodes, so such ids cannot be reused.", "muted");
     d->setWordWrap(true);
@@ -53,14 +54,15 @@ CategoriesPage::CategoriesPage(QWidget *parent) : QWidget(parent)
     lh->addWidget(W::label("Department Index", "h1"));
     lh->addStretch();
     m_filter = new QLineEdit;
-    m_filter->setPlaceholderText("Filter prefix or title...");
-    m_filter->setMinimumWidth(240);
+    m_filter->setPlaceholderText("Filter categories");
+    m_filter->setAccessibleName("Filter categories by prefix or title");
     m_filter->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
-    lh->addWidget(m_filter);
     lv->addLayout(lh);
+    lv->addWidget(m_filter);
     m_table = makeTable({"ID", "CATEGORY NAME", "ACRONYM", "PRODUCTS", "BARCODE RANGE", ""});
     auto *hh = m_table->horizontalHeader();
-    hh->setSectionResizeMode(1, QHeaderView::Stretch);
+    hh->setSectionResizeMode(1, QHeaderView::Fixed);
+    m_table->setColumnWidth(1, 170);
     for (int c : {0, 2, 3, 4})
         hh->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     hh->setSectionResizeMode(5, QHeaderView::Fixed);
@@ -76,7 +78,9 @@ CategoriesPage::CategoriesPage(QWidget *parent) : QWidget(parent)
     fv->addWidget(W::label("NEW DEPARTMENT ENTRY", "eyebrow"));
     m_formTitle = W::label("Create New Category", "h1");
     fv->addWidget(m_formTitle);
-    fv->addWidget(W::label("Assign a 2-digit numeric prefix for automatic barcode binding.", "muted"));
+    auto *description = W::label("Assign a 2-digit prefix for automatic barcode binding.", "muted");
+    description->setWordWrap(true);
+    fv->addWidget(description);
 
     fv->addWidget(W::label("CATEGORY ID (2 DIGITS)", "caption"));
     m_id = new QLineEdit;
@@ -87,13 +91,11 @@ CategoriesPage::CategoriesPage(QWidget *parent) : QWidget(parent)
     fv->addWidget(m_id);
 
     m_errorBox = W::card(form, "notice");
-    m_errorBox->setStyleSheet("#notice{background:#ffefed; border:1px solid #ffc3bd; border-radius:12px;}");
     auto *eh = new QHBoxLayout(m_errorBox);
     eh->setContentsMargins(12, 8, 12, 8);
     eh->addWidget(W::iconLabel("warn", Theme::error, 18), 0, Qt::AlignTop);
     m_error = W::label("");
     m_error->setWordWrap(true);
-    m_error->setStyleSheet("color:#93000a; font-weight:600;");
     eh->addWidget(m_error, 1);
     fv->addWidget(m_errorBox);
     m_suggest = W::label("", "muted");

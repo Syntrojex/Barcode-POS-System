@@ -26,6 +26,7 @@
 #include <cmath>
 #include <thread>
 #include <QApplication>
+#include <QIconEngine>
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
 #define NOMINMAX // keep std::min/std::max usable
@@ -51,8 +52,41 @@ static void scanBeep()
 #include <QPainter>
 #include <QPainterPath>
 #include <QVBoxLayout>
-#include <QtMath>
-#include <QResizeEvent>
+#include <algorithm>
+
+namespace
+{
+    class ThemeButtonIcon final : public QIconEngine
+    {
+    public:
+        ThemeButtonIcon(const QString &name, const QColor &color) : m_name(name), m_color(color) {}
+
+        QIconEngine *clone() const override { return new ThemeButtonIcon(m_name, m_color); }
+
+        QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state) override
+        {
+            QPixmap result(size);
+            result.fill(Qt::transparent);
+            QPainter painter(&result);
+            paint(&painter, result.rect(), mode, state);
+            return result;
+        }
+
+        void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State) override
+        {
+            painter->save();
+            if (mode == QIcon::Disabled)
+                painter->setOpacity(painter->opacity() * 0.5);
+            const int size = qMin(rect.width(), rect.height());
+            painter->drawPixmap(rect, Theme::iconPixmap(m_name, Theme::readable(m_color), size));
+            painter->restore();
+        }
+
+    private:
+        QString m_name;
+        QColor m_color;
+    };
+}
 
 namespace W
 {
@@ -124,7 +158,7 @@ namespace W
             const bool danger = kind == "danger";
             const QColor c = light ? QColor("white") : danger ? Theme::error
                                                               : Theme::primary;
-            b->setIcon(Theme::icon(icon, c, 16));
+            b->setIcon(QIcon(new ThemeButtonIcon(icon, c)));
             b->setIconSize({16, 16});
         }
         b->setCursor(Qt::PointingHandCursor);
@@ -197,48 +231,23 @@ Card::Card(QWidget *parent, bool alert) : QFrame(parent), m_alert(alert)
     setAttribute(Qt::WA_StyledBackground, false);
 }
 
-void Card::resizeEvent(QResizeEvent *e)
-{
-    QFrame::resizeEvent(e);
-    const qreal dpr = devicePixelRatioF();
-    m_shadow = QPixmap(QSize(width(), height()) * dpr);
-    m_shadow.setDevicePixelRatio(dpr);
-    m_shadow.fill(Qt::transparent);
-    QPainter p(&m_shadow);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(Qt::NoPen);
-    const QRectF body = QRectF(rect()).adjusted(8, 4, -8, -10);
-    for (int i = 9; i >= 0; --i)
-    {
-        p.setBrush(QColor(25, 50, 120, 5 + (9 - i) / 3));
-        p.drawRoundedRect(body.translated(0, 4).adjusted(-i, -i + 1, i, i + 1), 14 + i, 14 + i);
-    }
-}
-
 void Card::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    p.drawPixmap(0, 0, m_shadow);
-    const QRectF body = QRectF(rect()).adjusted(8, 4, -8, -10);
-    const bool dark = Theme::isDark(); // card colours follow light / dark mode
-    QLinearGradient g(body.topLeft(), body.bottomLeft());
-    if (dark)
-    {
-        g.setColorAt(0, m_alert ? QColor("#3a2230") : QColor("#1f2a47"));
-        g.setColorAt(1, m_alert ? QColor("#2e1c28") : QColor("#1a233d"));
-    }
-    else
-    {
-        g.setColorAt(0, QColor("#ffffff"));
-        g.setColorAt(1, m_alert ? QColor("#fff2f0") : QColor("#f4f7ff"));
-    }
-    p.setBrush(g);
-    p.setPen(QPen(m_alert ? QColor(255, 140, 130, 190) : (dark ? QColor(90, 120, 200, 70) : QColor(40, 70, 150, 34)), 1));
-    p.drawRoundedRect(body.adjusted(.5, .5, -.5, -.5), 14, 14);
-    // lit top edge for the "raised" look
-    p.setPen(QPen(dark ? QColor(140, 170, 255, 60) : QColor(255, 255, 255, 240), 1.2));
-    p.drawLine(QPointF(body.left() + 14, body.top() + 1.6), QPointF(body.right() - 14, body.top() + 1.6));
+    const QRectF body = QRectF(rect()).adjusted(8.5, 4.5, -8.5, -10.5);
+    const bool dark = Theme::isDark();
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(dark ? QColor(0, 0, 0, 32) : QColor(47, 61, 114, 16));
+    p.drawRoundedRect(body.translated(0, 3).adjusted(-2, 0, 2, 2), 15, 15);
+    const auto fill = m_alert ? (dark ? QColor("#352434") : QColor("#fff5f6"))
+                              : (dark ? Theme::darkPanel : Theme::white);
+    const auto border = m_alert ? (dark ? QColor("#765064") : QColor("#e7b9c1"))
+                                : (dark ? Theme::darkDivider : Theme::outlineVariant);
+    p.setBrush(fill);
+    p.setPen(border);
+    p.drawRoundedRect(body, 14, 14);
 }
 
 // ------------------------------------------------------------------ CameraFeedWidget
@@ -519,7 +528,7 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
     }
 }
 
-// ------------------------------------------------------------------ RevenueChart (3D bars)
+// ------------------------------------------------------------------ RevenueChart
 RevenueChart::RevenueChart(QWidget *parent) : QWidget(parent) {}
 
 void RevenueChart::setData(const QStringList &labels, const QVector<double> &actual, const QVector<double> &target)
@@ -532,105 +541,75 @@ void RevenueChart::setData(const QStringList &labels, const QVector<double> &act
 
 void RevenueChart::paintEvent(QPaintEvent *)
 {
-    const int n = m_actual.size();
-    if (n < 2)
+    const int count = m_actual.size();
+    if (count == 0)
         return;
+
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
+    const bool dark = Theme::isDark();
+    const QColor muted = dark ? Theme::darkMuted : Theme::onSurfaceVariant;
+    const QColor grid = dark ? Theme::darkDivider : Theme::outlineVariant;
+    const QLocale locale;
+    QFont labels = font();
+    labels.setPixelSize(11);
+    p.setFont(labels);
 
-    const qreal depth = 7;
-    const QRectF area(66, 12 + depth, width() - 66 - 10 - depth, height() - 12 - depth - 24);
-    double maxV = 1;
-    for (double v : m_actual)
-        maxV = qMax(maxV, v);
-    for (double v : m_target)
-        maxV = qMax(maxV, v);
-    maxV = qCeil(maxV * 1.1 / 200.0) * 200.0;
+    const double peak = *std::max_element(m_actual.cbegin(), m_actual.cend());
+    const double targetPeak = m_target.isEmpty() ? 0.0 : *std::max_element(m_target.cbegin(), m_target.cend());
+    const double maximum = std::ceil(qMax(1.0, qMax(peak, targetPeak)) * 1.1 / 200.0) * 200.0;
+    const QString maxLabel = locale.toString(maximum, 'f', 0);
+    const int axisWidth = p.fontMetrics().horizontalAdvance(maxLabel) + 12;
+    const QRectF area = QRectF(rect()).adjusted(axisWidth, 12, -8, -26);
+    if (area.isEmpty())
+        return;
 
-    QFont f = font();
-    f.setPixelSize(11);
-    p.setFont(f);
-    // grid + y labels
-    for (int g = 0; g <= 4; ++g)
+    for (int step = 0; step <= 4; ++step)
     {
-        const qreal y = area.bottom() - area.height() * g / 4.0;
-        p.setPen(QPen(QColor("#e1e8f8"), 1, g == 0 ? Qt::SolidLine : Qt::DashLine));
-        p.drawLine(QPointF(area.left(), y), QPointF(area.right() + depth, y));
-        p.setPen(Theme::outline);
-        p.drawText(QRectF(0, y - 8, 60, 16), Qt::AlignRight | Qt::AlignVCenter, QString("PKR %1").arg(int(maxV * g / 4)));
+        const qreal y = area.bottom() - area.height() * step / 4.0;
+        p.setPen(QPen(grid, 1, step == 0 ? Qt::SolidLine : Qt::DashLine));
+        p.drawLine(QPointF(area.left(), y), QPointF(area.right(), y));
+        p.setPen(muted);
+        p.drawText(QRectF(0, y - 8, axisWidth - 8, 16), Qt::AlignRight | Qt::AlignVCenter,
+                   locale.toString(maximum * step / 4.0, 'f', 0));
     }
 
-    const qreal slot = area.width() / n;
-    const qreal bw = slot * 0.54;
-    int peak = 0;
-    for (int i = 1; i < n; ++i)
-        if (m_actual[i] > m_actual[peak])
-            peak = i;
-
-    for (int i = 0; i < n; ++i)
+    const qreal slot = area.width() / count;
+    const qreal barWidth = qMin(32.0, slot * 0.62);
+    for (int i = 0; i < count; ++i)
     {
-        const bool hot = i == peak;
-        const qreal x = area.left() + slot * i + (slot - bw) / 2;
-        const qreal h = qMax<qreal>(3, area.height() * m_actual[i] / maxV);
-        const qreal y = area.bottom() - h;
-        const QColor c1 = hot ? QColor("#7fb0ff") : QColor("#7aa6f7");
-        const QColor c2 = hot ? QColor("#2457e6") : QColor("#3f6fe0");
-        // contact shadow
-        p.setPen(Qt::NoPen);
-        p.setBrush(QColor(20, 40, 110, 40));
-        p.drawEllipse(QRectF(x - 2, area.bottom() - 3, bw + depth + 4, 7));
-        // front
-        QLinearGradient fg(x, y, x, y + h);
-        fg.setColorAt(0, c1);
-        fg.setColorAt(1, c2);
-        p.setBrush(fg);
-        p.drawRect(QRectF(x, y, bw, h));
-        // side
-        p.setBrush(c2.darker(135));
-        p.drawPolygon(QPolygonF({{x + bw, y}, {x + bw + depth, y - depth}, {x + bw + depth, y + h - depth}, {x + bw, y + h}}));
-        // top
-        p.setBrush(c1.lighter(125));
-        p.drawPolygon(QPolygonF({{x, y}, {x + depth, y - depth}, {x + bw + depth, y - depth}, {x + bw, y}}));
-        // gloss strip
-        p.setBrush(QColor(255, 255, 255, 45));
-        p.drawRect(QRectF(x + 2, y + 2, bw * 0.25, h - 4));
-
-        if (hot)
+        const qreal x = area.left() + slot * i;
+        if (m_actual[i] > 0)
         {
-            p.setPen(Theme::primary);
-            QFont bf = f;
-            bf.setBold(true);
-            p.setFont(bf);
-            p.drawText(QRectF(x - 30, y - depth - 18, bw + depth + 60, 16), Qt::AlignCenter, QString("PKR %1").arg(int(m_actual[i])));
-            p.setFont(f);
+            const qreal barHeight = area.height() * m_actual[i] / maximum;
+            const qreal y = area.bottom() - barHeight;
+            QLinearGradient fill(x, y, x, area.bottom());
+            fill.setColorAt(0, dark ? QColor("#9aaaff") : QColor("#426de6"));
+            fill.setColorAt(1, dark ? QColor("#5064cd") : QColor("#9bb2f7"));
+            p.setPen(Qt::NoPen);
+            p.setBrush(fill);
+            p.drawRoundedRect(QRectF(x + (slot - barWidth) / 2, y, barWidth, barHeight), 4, 4);
         }
-        p.setPen(hot ? Theme::primary : Theme::onSurfaceVariant);
         if (i < m_labels.size())
         {
-            QFont lf = f;
-            lf.setBold(hot);
-            p.setFont(lf);
-            p.drawText(QRectF(x - 6, area.bottom() + 6, bw + depth + 12, 16), Qt::AlignCenter, m_labels[i]);
-            p.setFont(f);
+            p.setPen(muted);
+            p.drawText(QRectF(x, area.bottom() + 5, slot, 16), Qt::AlignCenter, m_labels[i]);
         }
     }
 
-    // target line
-    if (m_target.size() == n)
+    if (targetPeak > 0 && m_target.size() == count)
     {
         QPainterPath path;
-        for (int i = 0; i < n; ++i)
-        {
-            const qreal x = area.left() + slot * i + slot / 2 + depth / 2;
-            const qreal y = area.bottom() - area.height() * m_target[i] / maxV - depth / 2;
-            if (i == 0)
-                path.moveTo(x, y);
-            else
-                path.lineTo(x, y);
-        }
-        p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(QColor("#f08a24"), 2, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
-        p.drawPath(path);
+        path.moveTo(area.left() + slot / 2, area.bottom() - area.height() * m_target[0] / maximum);
+        for (int i = 1; i < count; ++i)
+            path.lineTo(area.left() + slot * (i + 0.5), area.bottom() - area.height() * m_target[i] / maximum);
+        p.strokePath(path, QPen(dark ? QColor("#f6bf87") : QColor("#ad5d21"), 2, Qt::DashLine));
+    }
+
+    if (peak <= 0 && targetPeak <= 0)
+    {
+        p.setPen(muted);
+        p.drawText(area, Qt::AlignCenter, "No paid sales today");
     }
 }
 
@@ -642,10 +621,9 @@ QtyStepper::QtyStepper(int value, QWidget *parent) : QWidget(parent)
     h->setSpacing(6);
     auto *m = W::button("−", "step");
     auto *pl = W::button("+", "step");
-    auto *v = W::label(QString::number(value));
+    auto *v = W::label(QString::number(value), "quantityValue");
     v->setAlignment(Qt::AlignCenter);
     v->setMinimumWidth(22);
-    v->setStyleSheet("font-weight:700; color:#004ac6;");
     h->addWidget(m);
     h->addWidget(v);
     h->addWidget(pl);

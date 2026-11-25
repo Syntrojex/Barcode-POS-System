@@ -204,8 +204,10 @@ ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent)
 
     // ---- time period (Cash Sales only): Daily / Weekly / Monthly / Yearly or a custom range
     m_periodCard = W::card(this);
-    auto *ph = new QHBoxLayout(m_periodCard);
-    ph->setContentsMargins(16, 10, 16, 10);
+    auto *periodLayout = new QVBoxLayout(m_periodCard);
+    periodLayout->setContentsMargins(16, 10, 16, 10);
+    periodLayout->setSpacing(8);
+    auto *ph = new QHBoxLayout;
     ph->setSpacing(8);
     ph->addWidget(W::label("TIME PERIOD", "caption"));
     for (const QString &name : {"Daily", "Weekly", "Monthly", "Yearly"})
@@ -216,22 +218,20 @@ ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent)
         m_periods << b;
         connect(b, &QPushButton::clicked, this, [this, name] { selectPeriod(name); });
     }
-    ph->addSpacing(18);
-    ph->addWidget(W::label("CUSTOM RANGE", "caption"));
-    m_from = new QDateEdit(QDate::currentDate());
-    m_to = new QDateEdit(QDate::currentDate());
-    for (QDateEdit *d : {m_from, m_to})
-    {
-        d->setCalendarPopup(true);
-        d->setDisplayFormat("dd-MMM-yyyy");
-        d->setMinimumHeight(34);
-    }
-    ph->addWidget(m_from);
-    ph->addWidget(W::label("to", "muted"));
-    ph->addWidget(m_to);
-    auto *apply = W::button("Filter", "primary", "filter");
-    ph->addWidget(apply);
     ph->addStretch();
+    periodLayout->addLayout(ph);
+    auto *range = new QHBoxLayout;
+    range->setSpacing(8);
+    range->addWidget(W::label("CUSTOM RANGE", "caption"));
+    m_from = dateEdit(QDate::currentDate(), "dd-MMM-yyyy", 34);
+    m_to = dateEdit(QDate::currentDate(), "dd-MMM-yyyy", 34);
+    range->addWidget(m_from);
+    range->addWidget(W::label("to", "muted"));
+    range->addWidget(m_to);
+    auto *apply = W::button("Filter", "primary", "filter");
+    range->addWidget(apply);
+    range->addStretch();
+    periodLayout->addLayout(range);
     connect(apply, &QPushButton::clicked, this, &ReportsPage::applyCustomRange);
     root->addWidget(m_periodCard);
 

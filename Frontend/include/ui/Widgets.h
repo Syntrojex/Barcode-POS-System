@@ -14,8 +14,7 @@
 class QHBoxLayout;
 class QVBoxLayout;
 
-// Raised panel: soft layered shadow, top-lit gradient and a highlight edge (pure painting, cheap).
-// Its contents margins keep children inside the visible body, so layouts need no changes.
+// Rounded, theme-aware panel with an inset surface and a subtle shadow.
 class Card : public QFrame
 {
 public:
@@ -23,10 +22,8 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *) override;
-    void resizeEvent(QResizeEvent *) override;
 
 private:
-    QPixmap m_shadow;
     bool m_alert;
 };
 
@@ -110,7 +107,7 @@ private:
 #endif
 };
 
-// 3D bar chart: hourly revenue as extruded columns against a dashed target line.
+// Hourly revenue columns and an optional target line.
 class RevenueChart : public QWidget
 {
     Q_OBJECT

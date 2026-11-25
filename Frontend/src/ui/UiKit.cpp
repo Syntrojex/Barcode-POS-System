@@ -1,13 +1,17 @@
 #include "UiKit.h"
 #include "Theme.h"
 #include "Widgets.h"
+#include <QCalendarWidget>
+#include <QDateEdit>
 #include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QScrollArea>
 #include <QShowEvent>
 #include <QTableWidget>
+#include <QTextCharFormat>
 #include <QTextStream>
 #include <QVBoxLayout>
 
@@ -26,7 +30,8 @@ namespace Ui
         t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
         t->horizontalHeader()->setHighlightSections(false);
         t->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        t->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        t->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        t->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
         return t;
     }
 
@@ -78,10 +83,36 @@ namespace Ui
         return true;
     }
 
-    QWidget *pageShell(QWidget *page, QVBoxLayout *&body)
+    QWidget *pageShell(QWidget *page, QVBoxLayout *&body, bool scrollable)
     {
-        body = W::pageLayout(page);
-        return page;
+        if (!scrollable)
+        {
+            body = W::pageLayout(page);
+            return page;
+        }
+
+        auto *outer = W::pageLayout(page);
+        outer->setContentsMargins(0, 0, 0, 0);
+        auto *scroll = new QScrollArea;
+        scroll->setWidgetResizable(true);
+        auto *content = new QWidget;
+        body = W::pageLayout(content);
+        body->setSizeConstraint(QLayout::SetMinimumSize);
+        scroll->setWidget(content);
+        outer->addWidget(scroll);
+        return content;
+    }
+
+    QDateEdit *dateEdit(const QDate &date, const QString &displayFormat, int minimumHeight)
+    {
+        auto *edit = new QDateEdit(date);
+        edit->setCalendarPopup(true);
+        edit->setDisplayFormat(displayFormat);
+        edit->setMinimumHeight(minimumHeight);
+        auto *calendar = edit->calendarWidget();
+        calendar->setWeekdayTextFormat(Qt::Saturday, QTextCharFormat());
+        calendar->setWeekdayTextFormat(Qt::Sunday, QTextCharFormat());
+        return edit;
     }
 
     QWidget *sectionHeader(const QString &eyebrow, const QString &title, const QString &subtitle,

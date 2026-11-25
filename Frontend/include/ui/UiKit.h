@@ -12,6 +12,8 @@ class QTableWidget;
 class QTableWidgetItem;
 class QVBoxLayout;
 class QWidget;
+class QDate;
+class QDateEdit;
 
 namespace Ui
 {
@@ -24,7 +26,8 @@ namespace Ui
     QString csvField(const QString &s); // quotes a value when it needs it
 
     // ---- page scaffolding ----
-    QWidget *pageShell(QWidget *page, QVBoxLayout *&body);
+    QWidget *pageShell(QWidget *page, QVBoxLayout *&body, bool scrollable = false);
+    QDateEdit *dateEdit(const QDate &date, const QString &displayFormat, int minimumHeight);
     // EYEBROW caption (blue, optional) / big title / description on the left, action widgets on the right.
     QWidget *sectionHeader(const QString &eyebrow, const QString &title, const QString &subtitle,
                            const QList<QWidget *> &actions = {});

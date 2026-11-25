@@ -509,8 +509,9 @@ QMainWindow, #root, #page { background: @canvas@; }
 QToolTip { background: @navy@; color: @white@; border: 1px solid #415274; padding: 5px 9px; border-radius: 8px; }
 
 /* Sidebar */
-#sidebar { background: @navy@; border: none; }
+#sidebar { background: qlineargradient(x1:0, y1:0, x2:0.85, y2:1, stop:0 @sidebarTop@, stop:1 @sidebarBottom@); border-right: 1px solid #2b3e62; }
 #logoBox, #avatar, #topAvatar { background: @brand@; border-radius: 12px; }
+#logoBox { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4179ee, stop:0.68 #2b54bb, stop:1 #88574f); }
 #logoBox QLabel { color: @white@; font-weight: 700; font-size: 18px; background: transparent; }
 #brand { color: @white@; font-size: 18px; font-weight: 700; }
 #brandSub { color: #b9c6da; font-size: 11px; }
@@ -523,7 +524,7 @@ QToolTip { background: @navy@; color: @white@; border: 1px solid #415274; paddin
 #nav { background: transparent; border: 1px solid transparent; border-radius: 10px; text-align: left; }
 #nav:hover { background: #243456; }
 #nav:pressed { background: #304467; }
-#nav[active="true"] { background: @brand@; }
+#nav[active="true"] { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 @navActive@, stop:1 @navTail@); border: 1px solid #5379bf; }
 #nav[active="true"]:hover { background: @brandHover@; }
 #nav[active="true"]:pressed { background: @brandPressed@; }
 #nav QLabel { background: transparent; font-weight: 600; font-size: 14px; color: #b9c6da; }
@@ -535,7 +536,7 @@ QToolTip { background: @navy@; color: @white@; border: 1px solid #415274; paddin
 #nav:focus, #exitBtn:focus { border-color: #dce6ff; }
 
 /* Top bar and panels */
-#topbar { background: @panel@; border-bottom: 1px solid @divider@; }
+#topbar { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 @panel@, stop:1 @panelLow@); border-bottom: 1px solid @divider@; }
 #pageTitle { font-size: 21px; font-weight: 700; color: @text@; }
 #pageSub { color: @muted@; font-size: 12px; }
 #chip { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
@@ -559,6 +560,29 @@ QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8
 #topbar #darkModeToggle:pressed { background: @pressed@; padding: 5px 12px; }
 #topbar #darkModeToggle:focus { border-color: @focus@; }
 
+/* Dashboard */
+#dashboardBody { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 @dashboardWash@, stop:0.55 @canvas@, stop:1 @panelLow@); }
+#dashboardHero { border-radius: 18px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0.85, stop:0 @heroStart@, stop:0.52 @heroMid@, stop:0.82 @heroViolet@, stop:1 @heroWarm@); }
+#dashboardHeroTitle { color: #ffffff; font-size: 34px; font-weight: 800; }
+#dashboardHeroDate { color: #e1eaff; font-size: 13px; }
+#dashboardSearch { background: rgba(14, 24, 54, 57%); border: 1px solid rgba(255, 255, 255, 28%); border-radius: 13px; }
+#dashboardSearchTitle { color: #ffffff; font-weight: 600; }
+#dashboardCheckout { background: #2554d8; border: 1px solid #94b4ff; color: #ffffff; }
+#dashboardCheckout:hover { background: #2049bd; }
+#dashboardCheckout:pressed { background: #193c9f; }
+#dashboardCheckout:focus { border-color: #ffffff; }
+#dashboardPanel { background: @panel@; border: 1px solid @divider@; border-radius: 15px; }
+#dashboardKpi { color: @text@; font-size: 22px; font-weight: 800; }
+#dashboardIcon { border-radius: 9px; }
+#dashboardIcon[tone="blue"] { background: #dce8ff; }
+#dashboardIcon[tone="green"] { background: #dcefe6; }
+#dashboardIcon[tone="amber"] { background: #fae8cb; }
+#dashboardIcon[tone="rose"] { background: #f8e0e8; }
+#dashboardAction { background: @panelLow@; color: @text@; text-align: left; border: 1px solid @divider@; }
+#dashboardAction:hover { background: @selection@; }
+#dashboardAction:pressed { background: @softPressed@; }
+#dashboardAction:focus { border-color: @focus@; }
+
 #subCard { background: @panel@; border: 1px solid @divider@; border-radius: 12px; }
 #field { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
 #notice { background: @dangerBg@; border: 1px solid @dangerBorder@; border-radius: 10px; }
@@ -575,6 +599,10 @@ QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8
 #caption { font-size: 11px; font-weight: 700; }
 #bigValue { font-size: 28px; font-weight: 700; }
 #bigTotal { font-size: 32px; font-weight: 700; color: @accent@; }
+#checkoutPrice { font-size: 17px; font-weight: 700; color: @accent@; }
+#checkoutStock { font-weight: 700; color: @successText@; }
+#checkoutStock[lowStock="true"], #errorText { font-weight: 700; color: @dangerText@; }
+#quantityValue { font-weight: 700; color: @accent@; }
 #mono { font-family: "Consolas"; }
 #link { color: @accent@; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 8px; text-align: right; padding: 1px 4px; }
 #link:hover { text-decoration: underline; background: transparent; }
@@ -627,6 +655,7 @@ QLineEdit[flat="true"] { background: transparent; border: none; border-bottom: 1
 QLineEdit[flat="true"]:focus { border-bottom-color: @focus@; }
 QComboBox::drop-down, QDateEdit::drop-down { subcontrol-origin: padding; subcontrol-position: center right; width: 22px; height: 18px; margin-right: 5px; }
 QComboBox QAbstractItemView { background: @panel@; border: 1px solid @outline@; selection-background-color: @selection@; selection-color: @text@; }
+QCalendarWidget QAbstractItemView { background: @panel@; color: @text@; selection-background-color: @brand@; selection-color: @white@; }
 QCheckBox { spacing: 9px; border: 1px solid transparent; border-radius: 8px; }
 QCheckBox:focus { border-color: @focus@; }
 QCheckBox::indicator:unchecked { background: @panel@; border: 1px solid @outline@; border-radius: 3px; width: 14px; height: 14px; }
@@ -676,13 +705,22 @@ QDialog, QMessageBox { background: @canvas@; }
         QColor light;
         QColor dark;
     } colors[] = {
-        {"@canvas@", surface, "#111827"},
-        {"@panel@", white, "#1c263a"},
-        {"@panelLow@", surfaceLow, "#202d42"},
-        {"@text@", onSurface, "#e8edf7"},
-        {"@muted@", onSurfaceVariant, "#afbdd2"},
+        {"@canvas@", surface, darkSurface},
+        {"@panel@", white, darkPanel},
+        {"@panelLow@", surfaceLow, "#202b42"},
+        {"@text@", onSurface, darkText},
+        {"@muted@", onSurfaceVariant, darkMuted},
         {"@outline@", outline, "#667895"},
-        {"@divider@", outlineVariant, "#34425b"},
+        {"@divider@", outlineVariant, darkDivider},
+        {"@sidebarTop@", sidebar, "#131e37"},
+        {"@sidebarBottom@", "#0d1b32", "#0c1326"},
+        {"@navActive@", "#2754b5", "#264c9f"},
+        {"@navTail@", "#424263", "#393953"},
+        {"@dashboardWash@", "#e8edfb", "#152139"},
+        {"@heroStart@", "#17254b", "#152047"},
+        {"@heroMid@", "#2554bb", "#244696"},
+        {"@heroViolet@", "#574974", "#46395d"},
+        {"@heroWarm@", "#a95842", "#824437"},
         {"@hover@", surfaceContainer, "#28364e"},
         {"@pressed@", surfaceHigh, "#354662"},
         {"@navy@", sidebar, sidebar},

@@ -75,7 +75,7 @@ namespace Dialogs
         pct->setToolTip("Special discount, at most 8 percent");
         pct->setMinimumWidth(84);
         sh->addWidget(pct);
-        sh->addWidget(W::badge(QString("CAPPED AT %1% MAX").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 0), "grey"));
+        sh->addWidget(W::badge(QString("Max %1%").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 0), "grey"));
         sh->addStretch();
         special = W::label("PKR 0.00");
         special->setStyleSheet("font-weight:800; font-size:14px;");

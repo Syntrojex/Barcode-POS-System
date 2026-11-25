@@ -39,7 +39,8 @@ ProductsPage::ProductsPage(QWidget* parent) : QWidget(parent)
     h->addWidget(m_count);
     h->addStretch();
     m_search = new QLineEdit;
-    m_search->setPlaceholderText("Search name, acronym, id or barcode...");
+    m_search->setPlaceholderText("Search products");
+    m_search->setToolTip("Search by name, acronym, product ID, or barcode.");
     m_search->setMinimumWidth(280);
     m_search->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
     h->addWidget(m_search);
@@ -56,7 +57,7 @@ ProductsPage::ProductsPage(QWidget* parent) : QWidget(parent)
     for (int c : {0, 1, 2, 4, 5, 6, 7, 8, 9})
         m_table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Fixed);
-    m_table->setColumnWidth(10, 250);
+    m_table->setColumnWidth(10, 234);
     v->addWidget(m_table, 1);
     root->addWidget(card, 1);
     connect(m_search, &QLineEdit::textChanged, this, [this]

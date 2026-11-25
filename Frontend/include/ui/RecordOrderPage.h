@@ -20,6 +20,7 @@
 
 class QHBoxLayout;
 class QLabel;
+class ElidedLabel;
 class QLineEdit;
 class QPushButton;
 class QTableWidget;
@@ -127,7 +128,7 @@ private:
     QPushButton* m_camToggle;
     QPushButton* m_addBtn;
     QPushButton* m_descBtn;
-    QLabel* m_pName;
+    ElidedLabel* m_pName;
     QLabel* m_pPrice;
     QLabel* m_pMeta;
     QLabel* m_pStock;

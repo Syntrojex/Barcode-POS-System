@@ -160,8 +160,7 @@ void OrdersPage::rebuild()
             cl->setSpacing(0);
             auto* n = W::label(o.customer + (o.tier == "VIP" ? "  [VIP]" : ""));
             n->setStyleSheet("font-weight:700;");
-            auto* c = W::label(o.contact);
-            c->setStyleSheet("color:#737686; font-size:11.5px;");
+            auto* c = W::label(o.contact, "muted");
             cl->addWidget(n);
             cl->addWidget(c);
             m_table->setCellWidget(r, 2, cw);
