@@ -1,10 +1,10 @@
 {
   "project": {
-    "name": "BarcodeHub",
+    "name": "Barcode-POS-System",
     "title": "Barcode-Based Point of Sale System",
     "course": "Introduction to Software Engineering",
     "language": "C++",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "current_increment": 3,
     "status": "In Development"
   },
