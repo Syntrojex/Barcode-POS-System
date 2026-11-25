@@ -54,4 +54,13 @@ Physical barcode capture, external card or wallet devices, and printer hardware 
 - Merged the completed Task 03 commit into the reviewed candidate at `30a0692`. Resolved conflicts in `RecordOrderPage.cpp` and `UI_REDESIGN_PROGRESS.md`. Preserved the fixed checkout summary, barcode focus and on-demand camera alongside persisted holds, edit approvals, stock credit and bill integration. The discounts total includes the seasonal discount, with the breakdown in its tooltip.
 - Qt MinGW configure and Debug build passed. CTest passed 8/8. Windows checks on copied records verified both role sign-ins, shell navigation, shortcuts, typed and decoded-signal barcode entry, hold/reload/resume, Cash/Card/Wallet payments, paid edit ID and stock behavior, and receipt PDFs. The combined checkout was visually inspected in both themes at 1100×700 and 1440×900.
 - Captures are in `C:/Users/iAT/AppData/Local/Temp/syntro-combined-1795630764231`. Optical capture and external payment/printing hardware remain unverified.
-- Next Task 05 checkpoint is Orders Management.
+- Next Task 05 checkpoint is Orders Management.## Management screens · Task 05
+
+Local `ali` includes `origin/main` at `09d24ce`. The initial sync `56eef61` kept the three CMake files required by the Qt MinGW preset while accepting the upstream documentation removals. A subsequent merge `51fc643` brought in the upstream project metadata and Windows wrapper script removal.
+
+- Orders Management `0fae373` preserved search, status filters, hold/resume, bill viewing and paid-order approval.
+- Product Catalog `acc7e59` kept all real catalog fields and role-specific actions, with readable product names at minimum width.
+- Inventory Management `4adf35a` kept quantity edits staged through filtering, with explicit Save and Discard.
+- Product Categories kept the department index, two-digit prefix validation, linked-product protection and the existing session-scoped CRUD. Fixed the displayed range endpoints. Use `git log -1 --format=%H --grep='^feat(ui): redesign product categories screen$'` to resolve this checkpoint.
+
+Build and CTest passed at each screen checkpoint. Windows screenshots are under `C:/Users/iAT/AppData/Local/Temp/syntro-task05-1795632134317` in both themes at 1100×700 and 1440×900. Wide tables use horizontal scrolling at the minimum width. Testing used copied records. See `UI_REDESIGN_PROGRESS.md` for each verified workflow. Next increment is Barcode Scanner, Bills, Discounts, and Settings.

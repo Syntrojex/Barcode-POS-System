@@ -73,7 +73,7 @@ int UiStore::productCount(const QString &id) const
 
 QString UiStore::rangeText(const QString &id) const
 {
-    return QString("%100000 - %199999").arg(id);
+    return id + "000000 - " + id + "999999";
 }
 
 QStringList UiStore::freeIds(int n) const

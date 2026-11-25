@@ -82,3 +82,10 @@ Synced local `ali` with `origin/main` at `faad6bc` in `56eef61`. Main removed th
 
 - `InventoryPage.cpp` and the scoped theme selectors refine the summary tiles, search and filters, quantity controls, and pending-changes bar. The edited quantity remains highlighted in both themes.
 - Verified on copied data that staging and filtering leave the file intact, Discard restores the original quantity, and Save commits the new value across reload. F1 navigation passed. Build and CTest passed 8/8. Inspected both themes at 1100×700 and 1440×900. Commit subject `feat(ui): refine inventory management screen`.
+
+### Product Categories
+
+- `CategoriesPage.cpp` uses a two-column index and category form with live range, validation, and linked-product counts. The display helper in `UiStore.cpp` now renders both eight-digit range endpoints correctly. Barcode generation, validation rules and existing session-scoped category storage are unchanged.
+- Verified name/prefix filtering, duplicate rejection, add/edit/delete of an unlinked category, linked-category prefix and delete protection, and Cashier access restrictions. Inspected both themes at 1100×700 and 1440×900. Both the isolated Qt MinGW build and the standard `qt-mingw-debug` build passed, with CTest 8/8 in both directories.
+- Local `ali` includes `origin/main` at `09d24ce`. The four local screen checkpoints can be found with `git log --oneline 56eef61..HEAD --grep='^feat(ui):'`. The standard executable is `build/qt-mingw/BarcodeHub.exe`.
+- Next increment is Barcode Scanner, Bills, Discounts, and Settings.
