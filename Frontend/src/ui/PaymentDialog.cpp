@@ -116,7 +116,10 @@ namespace Dialogs
             modes->addButton(b, i);
             modeRow->addWidget(b, 1);
         }
-        modes->button(0)->setChecked(true);
+        using Payment = barcodehub::order::PaymentMode;
+        const auto preferredPayment = AppState::instance().settings().defaultPayment;
+        const int initialMode = preferredPayment == Payment::Card ? 1 : preferredPayment == Payment::Wallet ? 2 : 0;
+        modes->button(initialMode)->setChecked(true);
         right->addLayout(modeRow);
 
         // page 0: cash, page 1: card / wallet gateway
@@ -293,8 +296,13 @@ namespace Dialogs
         tender->setValue(q.payable); // exact amount pre-filled: pressing Enter completes a cash sale at once
         updating = false;
         refresh();
-        tender->setFocus();
-        tender->selectAll();
+        if (initialMode == 0)
+        {
+            tender->setFocus();
+            tender->selectAll();
+        }
+        else
+            gate->setFocus();
         if (d.exec() != QDialog::Accepted)
             return false;
 

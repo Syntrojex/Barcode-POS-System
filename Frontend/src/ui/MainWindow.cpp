@@ -84,7 +84,7 @@ MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
     m_bills = new BillsPage;
     m_reports = new ReportsPage;
     m_discounts = new DiscountsPage;
-    m_settings = new SettingsPage;
+    m_settings = new SettingsPage(nullptr, m_role);
     const QList<QWidget *> pages = {m_dashboard, m_record,  m_orders,  m_inventory, m_products, m_categories,
                                     m_scanner,   m_bills,   m_reports, m_discounts, m_settings};
     Q_ASSERT(pages.size() == PageCount);

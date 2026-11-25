@@ -8,10 +8,10 @@
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QLineEdit>
 #include <QMessageBox>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSizePolicy>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
@@ -21,21 +21,19 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
 {
     QVBoxLayout *root;
     pageShell(this, root, true);
-    root->setSpacing(12);
+    root->setSpacing(8);
+    root->addWidget(sectionHeader({}, "Seasonal Discounts", "Manage campaigns and automatic seasonal price reductions."));
 
     // ---- banner
     m_banner = new QFrame;
-    m_banner->setObjectName("totalBox");
+    m_banner->setObjectName("seasonBanner");
     auto *bh = new QHBoxLayout(m_banner);
-    bh->setContentsMargins(18, 14, 18, 14);
-    bh->setSpacing(14);
-    bh->addWidget(W::iconTile("tag", Qt::white, "#2fbf71", "#0b7a36", 46));
+    bh->setContentsMargins(16, 8, 16, 8);
     auto *bv = new QVBoxLayout;
     bv->setSpacing(2);
-    m_bannerTitle = W::label("");
-    m_bannerTitle->setStyleSheet("color:white; font-size:17px; font-weight:800;");
-    m_bannerSub = W::label("");
-    m_bannerSub->setStyleSheet("color:#c9d8fb;");
+    bv->addWidget(W::label("CURRENT PROMOTION", "caption"));
+    m_bannerTitle = W::label("", "h1");
+    m_bannerSub = W::label("", "muted");
     m_bannerTitle->setWordWrap(true);
     m_bannerSub->setWordWrap(true);
     bv->addWidget(m_bannerTitle);
@@ -44,30 +42,43 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     root->addWidget(m_banner);
 
     auto *tiles = new QHBoxLayout;
-    tiles->setSpacing(12);
-    QLabel *a, *b, *c, *d, *e, *f;
-    tiles->addWidget(statTile("CURRENT ACTIVE RATE", "tag", m_rate, m_rateSub, "green"));
-    tiles->addWidget(statTile("UPCOMING CAMPAIGNS", "clock", m_upcoming, m_upSub, "blue"));
-    tiles->addWidget(statTile("CASHIER SPECIAL LIMIT", "lock", a, b, "red"));
-    a->setText(QString("%1%").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 1));
-    b->setText("Special discount cap at checkout");
-    (void)c; (void)d; (void)e; (void)f;
+    tiles->setSpacing(8);
+    auto tile = [tiles](const QString &title, QLabel *&value, QLabel *&detail)
+    {
+        auto *card = W::card(nullptr, "subCard");
+        auto *layout = new QVBoxLayout(card);
+        layout->setContentsMargins(12, 8, 12, 8);
+        layout->setSpacing(2);
+        layout->addWidget(W::label(title, "caption"));
+        value = W::label("", "bigValue");
+        detail = W::label("", "muted");
+        layout->addWidget(value);
+        layout->addWidget(detail);
+        tiles->addWidget(card, 1);
+    };
+    QLabel *cap, *capDetails;
+    tile("ACTIVE RATE", m_rate, m_rateSub);
+    tile("UPCOMING CAMPAIGNS", m_upcoming, m_upSub);
+    tile("CASHIER SPECIAL CAP", cap, capDetails);
+    cap->setText(QString("%1%").arg(UiStore::kSpecialDiscountCapPercent));
+    capDetails->setText("At checkout");
     root->addLayout(tiles);
 
     auto *row = new QHBoxLayout;
-    row->setSpacing(12);
+    row->setSpacing(8);
 
     // ---- list
-    auto *list = W::card(this);
+    auto *list = W::card(this, "subCard");
     auto *lv = new QVBoxLayout(list);
     lv->setContentsMargins(16, 14, 16, 12);
-    lv->setSpacing(10);
-    lv->addWidget(W::label("Promotional seasons", "h1"));
+    lv->setSpacing(8);
+    lv->addWidget(W::label("Configured Promotional Seasons", "h1"));
     auto *lh = new QHBoxLayout;
     lh->setSpacing(4);
     for (const QString &name : {"All", "Active", "Scheduled", "Inactive", "Expired"})
     {
         auto *btn = W::button(name, "tab");
+        btn->setProperty("compactSeasonTab", true);
         btn->setCheckable(true);
         btn->setChecked(name == "All");
         lh->addWidget(btn);
@@ -81,50 +92,68 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     lh->addStretch();
     lv->addLayout(lh);
     // the four fields of a Seasons.txt line, then today's status and the actions
-    m_table = makeTable({"START DATE", "END DATE", "DISCOUNT %", "IS ACTIVE", "STATUS TODAY", ""});
+    m_table = makeTable({"START DATE", "END DATE", "RATE", "ACTIVE", "STATUS", "ACTIONS"});
+    m_table->setProperty("managementTable", true);
+    m_table->setAlternatingRowColors(true);
+    m_table->setAccessibleName("Configured promotional seasons");
     auto *hh = m_table->horizontalHeader();
     // fixed widths; the last (actions) column takes whatever room is left over
     hh->setSectionResizeMode(QHeaderView::Fixed);
-    const int widths[] = {112, 112, 96, 88, 112, 96};
+    const int widths[] = {100, 100, 70, 72, 108, 88};
     for (int cidx = 0; cidx <= 5; ++cidx)
         m_table->setColumnWidth(cidx, widths[cidx]);
     hh->setStretchLastSection(true);
     hh->setMinimumSectionSize(60);
     m_table->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded); // narrow window: scroll sideways, never clip
     lv->addWidget(m_table, 1);
+    lv->addWidget(W::label("Status reflects dates and activation.", "muted"));
     row->addWidget(list, 62);
 
     // ---- form
-    auto *form = W::card(this);
+    auto *form = W::card(this, "subCard");
     auto *fv = new QVBoxLayout(form);
-    fv->setContentsMargins(18, 16, 18, 16);
+    fv->setContentsMargins(14, 12, 14, 12);
     fv->setSpacing(8);
-    m_formTitle = W::label("Add Seasonal Discount", "h1");
+    m_formTitle = W::label("Add Promotional Season", "h1");
+    m_formTitle->setWordWrap(true);
     fv->addWidget(m_formTitle);
+    m_seasonLabel = W::label("", "muted");
+    m_seasonLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_seasonLabel->setWordWrap(true);
+    fv->addWidget(m_seasonLabel);
     auto *dates = new QHBoxLayout;
     dates->setSpacing(10);
     auto *sv = new QVBoxLayout;
     sv->setSpacing(4);
     sv->addWidget(W::label("START DATE", "caption"));
-    m_start = dateEdit(QDate::currentDate(), "dd MMM yyyy", 40);
+    m_start = dateEdit(QDate::currentDate(), "dd MMM yyyy", 36);
+    m_start->setAccessibleName("Season start date");
     auto *ev = new QVBoxLayout;
     ev->setSpacing(4);
     ev->addWidget(W::label("END DATE", "caption"));
-    m_end = dateEdit(QDate::currentDate().addDays(7), "dd MMM yyyy", 40);
+    m_end = dateEdit(QDate::currentDate().addDays(7), "dd MMM yyyy", 36);
+    m_end->setAccessibleName("Season end date");
     sv->addWidget(m_start);
     ev->addWidget(m_end);
     dates->addLayout(sv, 1);
     dates->addLayout(ev, 1);
     fv->addLayout(dates);
+    const auto updateSeasonLabel = [this] {
+        m_seasonLabel->setText(UiStore::seasonLabel(m_start->date(), m_end->date()));
+    };
+    connect(m_start, &QDateEdit::dateChanged, this, updateSeasonLabel);
+    connect(m_end, &QDateEdit::dateChanged, this, updateSeasonLabel);
+    updateSeasonLabel();
     fv->addSpacing(4);
     fv->addWidget(W::label("DISCOUNT PERCENTAGE", "caption"));
     m_percent = new QDoubleSpinBox;
     m_percent->setRange(0.5, 100);
+    m_percent->setAccessibleName("Seasonal discount percentage");
     m_percent->setDecimals(2);
     m_percent->setSingleStep(0.5);
     m_percent->setSuffix(" %");
     m_percent->setValue(10);
-    m_percent->setMinimumHeight(40);
+    m_percent->setMinimumHeight(36);
     fv->addWidget(m_percent);
     m_active = new QCheckBox("Apply automatically during this season");
     m_active->setMinimumHeight(30);
@@ -132,16 +161,21 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     fv->addWidget(m_active);
     m_error = W::label("", "errorText");
     m_error->setWordWrap(true);
+    m_error->hide();
     fv->addWidget(m_error);
     fv->addStretch();
-    auto *nl = W::label(QString("Cashiers can apply up to %1% manually at checkout.")
+    auto *note = W::card(form, "field");
+    auto *noteLayout = new QVBoxLayout(note);
+    noteLayout->setContentsMargins(8, 6, 8, 6);
+    auto *nl = W::label(QString("The special checkout discount is capped at %1%.")
                             .arg(UiStore::kSpecialDiscountCapPercent), "muted");
     nl->setWordWrap(true);
-    fv->addWidget(nl);
+    noteLayout->addWidget(nl);
+    fv->addWidget(note);
     auto *btns = new QHBoxLayout;
     auto *cancel = W::button("Cancel", "soft");
-    m_save = W::button("Save Discount", "primary", "check");
-    m_save->setMinimumHeight(44);
+    m_save = W::button("Save Season", "primary", "check");
+    m_save->setMinimumHeight(38);
     btns->addWidget(cancel);
     btns->addWidget(m_save, 1);
     fv->addLayout(btns);
@@ -149,7 +183,6 @@ DiscountsPage::DiscountsPage(QWidget *parent) : QWidget(parent)
     formScroll->setWidgetResizable(true);
     formScroll->setFrameShape(QFrame::NoFrame);
     formScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    formScroll->setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }");
     formScroll->setWidget(form);
     // wide enough for the form plus the vertical scroll bar, so the card is never cut off on the right
     formScroll->setMinimumWidth(form->minimumSizeHint().width() + formScroll->verticalScrollBar()->sizeHint().width() + 4);
@@ -169,21 +202,21 @@ void DiscountsPage::rebuild()
     auto &store = UiStore::instance();
     const QDate today = QDate::currentDate();
     const Season *act = store.activeSeason(today);
+    m_banner->setProperty("activeSeason", act != nullptr);
+    Theme::repolish(m_banner);
     if (act)
     {
-        m_bannerTitle->setText(QString("Seasonal discount active today: %1% (%2)")
+        m_bannerTitle->setText(QString("%1% seasonal discount active · %2")
                                    .arg(act->percent, 0, 'g', 4).arg(act->name));
         m_bannerSub->setText("Applied automatically to every bill and shown in the bill's seasonal discount field. " +
                              QString::number(today.daysTo(act->end)) + " days remaining.");
-        m_banner->setStyleSheet("#totalBox{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #0b5639,stop:1 #126840);}");
         m_rate->setText(QString("%1%").arg(act->percent, 0, 'g', 4));
         m_rateSub->setText("Until " + act->end.toString("d MMM yyyy"));
     }
     else
     {
         m_bannerTitle->setText("No seasonal discount is active right now");
-        m_bannerSub->setText("Bills are created without a seasonal discount until a season is active and its dates match today.");
-        m_banner->setStyleSheet("#totalBox{background:#404c65;}");
+        m_bannerSub->setText("An enabled season applies automatically within its date range.");
         m_rate->setText("0%");
         m_rateSub->setText("No active season");
     }
@@ -210,17 +243,21 @@ void DiscountsPage::rebuild()
         const QString st = s.statusOn(today);
         const bool expired = st == "expired";
         const QString dim = expired ? "#8a94ab" : "";
-        m_table->setRowHeight(r, 58);
+        m_table->setRowHeight(r, 48);
         m_table->setItem(r, 0, item(s.start.toString("dd MMM yyyy"), Qt::AlignLeft | Qt::AlignVCenter, dim, true));
         m_table->setItem(r, 1, item(s.end.toString("dd MMM yyyy"), Qt::AlignLeft | Qt::AlignVCenter, dim, true));
-        m_table->setCellWidget(r, 2, wrapW(W::badge(QString("%1%").arg(s.percent, 0, 'g', 4), expired ? "grey" : "blue")));
+        m_table->setItem(r, 2, item(QString("%1%").arg(s.percent, 0, 'g', 4),
+                                    Qt::AlignLeft | Qt::AlignVCenter, dim, true));
         auto *tog = W::button(s.active ? "ON" : "OFF", "tab");
+        tog->setProperty("compactSeasonTab", true);
         tog->setCheckable(true);
         tog->setChecked(s.active);
         tog->setMinimumWidth(54);
         tog->setEnabled(!expired);
         m_table->setCellWidget(r, 3, wrapW(tog));
-        m_table->setCellWidget(r, 4, wrapW(W::badge(st.toUpper(),
+        QString status = st;
+        status[0] = status.at(0).toUpper();
+        m_table->setCellWidget(r, 4, wrapW(W::badge(status,
                                                    st == "active" ? "green" : st == "scheduled" ? "amber" : st == "inactive" ? "red" : "grey")));
         auto *cell = new QWidget;
         auto *h = new QHBoxLayout(cell);
@@ -228,6 +265,8 @@ void DiscountsPage::rebuild()
         h->setSpacing(4);
         auto *e = W::button("", "flat", "edit");
         auto *x = W::button("", "flat", "trash");
+        e->setToolTip("Edit season");
+        x->setToolTip("Delete season");
         h->addWidget(e);
         h->addWidget(x);
         h->addStretch();
@@ -237,7 +276,10 @@ void DiscountsPage::rebuild()
                 {
             const QString why = UiStore::instance().setSeasonActive(id, on);
             if (!why.isEmpty())
+            {
+                rebuild();
                 QMessageBox::warning(this, "Cannot activate", why);
+            }
             else
                 emit toast(on ? "Seasonal discount set active" : "Seasonal discount set inactive"); });
         connect(e, &QPushButton::clicked, this, [this, id] { edit(id); });
@@ -258,8 +300,10 @@ void DiscountsPage::resetForm()
     m_percent->setValue(10);
     m_active->setChecked(true);
     m_error->clear();
-    m_formTitle->setText("Add Seasonal Discount");
-    m_save->setText("Save Discount");
+    m_error->hide();
+    m_formTitle->setText("Add Promotional Season");
+    m_formTitle->setToolTip({});
+    m_save->setText("Save Season");
 }
 
 void DiscountsPage::edit(const QString &id)
@@ -273,8 +317,10 @@ void DiscountsPage::edit(const QString &id)
             m_percent->setValue(s.percent);
             m_active->setChecked(s.active);
             m_error->clear();
-            m_formTitle->setText("Edit Seasonal Discount (" + s.name + ")");
-            m_save->setText("Update Discount");
+            m_error->hide();
+            m_formTitle->setText("Edit Promotional Season");
+            m_formTitle->setToolTip(s.name);
+            m_save->setText("Save Season");
             return;
         }
 }
@@ -284,6 +330,7 @@ void DiscountsPage::submit()
     auto &store = UiStore::instance();
     const QString why = store.validateSeason(m_start->date(), m_end->date(), m_percent->value(), m_active->isChecked(), m_editing);
     m_error->setText(why);
+    m_error->setVisible(!why.isEmpty());
     if (!why.isEmpty())
         return;
     Season s;

@@ -28,6 +28,7 @@ private:
     QFrame *m_banner = nullptr;
     QLabel *m_bannerTitle = nullptr, *m_bannerSub = nullptr, *m_rate = nullptr, *m_rateSub = nullptr,
            *m_upcoming = nullptr, *m_upSub = nullptr, *m_formTitle = nullptr, *m_error = nullptr;
+    QLabel *m_seasonLabel = nullptr;
     QTableWidget *m_table = nullptr;
     QString m_filter = "All";
     QVector<QPushButton *> m_tabs;

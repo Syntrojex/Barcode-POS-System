@@ -4,6 +4,7 @@
 #include <QWidget>
 
 class QLineEdit;
+class QLabel;
 class QTableWidget;
 
 class BillsPage : public QWidget
@@ -20,4 +21,5 @@ private:
     void rebuild();
     QLineEdit *m_search = nullptr;
     QTableWidget *m_table = nullptr;
+    QLabel *m_summary = nullptr;
 };

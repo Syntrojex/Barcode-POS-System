@@ -504,6 +504,9 @@ if(BUILD_TESTING AND QT_VERSION_MAJOR EQUAL 6)
             Qt6::Test
         )
         add_test(NAME scanner_checklist COMMAND scanner_checklist_tests)
+        add_executable(terminal_ui_tests tests/terminal_ui_tests.cpp)
+        target_link_libraries(terminal_ui_tests PRIVATE barcode_ui Qt6::Test)
+        add_test(NAME terminal_ui COMMAND terminal_ui_tests)
         if(WIN32)
             get_target_property(_qt_core_loc Qt6::Core IMPORTED_LOCATION_DEBUG)
             if(NOT _qt_core_loc)
@@ -516,17 +519,17 @@ if(BUILD_TESTING AND QT_VERSION_MAJOR EQUAL 6)
                 get_filename_component(_qt_bin_dir "${_qt_core_loc}" DIRECTORY)
                 get_filename_component(_qt_root_dir "${_qt_bin_dir}" DIRECTORY)
                 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.22")
-                    set_tests_properties(scan_audio scanner_checklist PROPERTIES
+                    set_tests_properties(scan_audio scanner_checklist terminal_ui PROPERTIES
                         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${_qt_bin_dir};QT_QPA_PLATFORM=set:offscreen;QT_PLUGIN_PATH=set:${_qt_root_dir}/plugins"
                     )
                 else()
-                    set_tests_properties(scan_audio scanner_checklist PROPERTIES
+                    set_tests_properties(scan_audio scanner_checklist terminal_ui PROPERTIES
                         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=${_qt_root_dir}/plugins"
                     )
                 endif()
             endif()
         else()
-            set_tests_properties(scan_audio scanner_checklist PROPERTIES
+            set_tests_properties(scan_audio scanner_checklist terminal_ui PROPERTIES
                 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
             )
         endif()

@@ -89,3 +89,51 @@ Synced local `ali` with `origin/main` at `faad6bc` in `56eef61`. Main removed th
 - Verified name/prefix filtering, duplicate rejection, add/edit/delete of an unlinked category, linked-category prefix and delete protection, and Cashier access restrictions. Inspected both themes at 1100×700 and 1440×900. Both the isolated Qt MinGW build and the standard `qt-mingw-debug` build passed, with CTest 8/8 in both directories.
 - Local `ali` includes `origin/main` at `09d24ce`. The four local screen checkpoints can be found with `git log --oneline 56eef61..HEAD --grep='^feat(ui):'`. The standard executable is `build/qt-mingw/BarcodeHub.exe`.
 - Next increment is Barcode Scanner, Bills, Discounts, and Settings.
+
+## Task 06 · Operational screens
+
+Baseline `adabeb0` on `ali` built and passed 10/10 CTest checks with the Qt MinGW preset directed to the existing `build/qt-mingw-task05` directory. The running Windows app locked the default output executable. Captured the four baseline screens and the updated screens under `C:/Users/iAT/AppData/Local/Temp/syntro-inc6-1795641158885`.
+
+### Barcode Scanner
+
+- `ScannerPage.h/.cpp` add the two-column camera and scan workspace, real camera state and failure feedback, and selected product details. Preserves the grouped checklist, beep, description, view-only guard, and existing signals. The checkout action transfers checked rows as before.
+- Qt MinGW build and all 10 CTest checks passed. Inspected both themes at 1100×700 and 1440×900. Windows checks verified manual and unknown barcodes, decoded scan routing, Description, view-only controls, batch checkout, and camera controls and error feedback. Physical optical capture remains unverified.
+- Commit subject `feat(ui): modernize barcode scanner workspace`. Next page is Bills & Invoices.
+
+### Bills & Invoices
+
+- `BillsPage.h/.cpp` add the searchable, striped paid-bill ledger with result counts and payment timestamps. Existing order routing and receipt actions remain available.
+- Verified customer, bill and order lookup, no-results behavior, View Bill, and PDF export through the receipt dialog on copied records. Qt MinGW build and CTest 10/10 passed. Inspected both themes at 1100×700 and 1440×900.
+- Commit subject `feat(ui): refine bills and invoice ledger`. Next page is Seasonal Discounts.
+
+### Seasonal Discounts
+
+- `DiscountsPage.h/.cpp` and scoped selectors in `Theme.cpp` add a theme-aware current promotion banner, summary tiles, striped seasons table, and compact edit form. The form previews the date-derived campaign label used by the existing file format.
+- Verified filters, invalid date feedback, saving a 22.5% season, activation persistence, editing and deleting on copied data. The distinct special checkout cap remains 8%. Qt MinGW build and CTest 10/10 passed. Inspected both themes at 1100×700 and 1440×900. At minimum width, scroll the table horizontally for all actions.
+- Commit subject `feat(ui): redesign seasonal discounts management`. Next page is Terminal Settings.
+
+### Terminal Settings
+
+- `SettingsPage.cpp` adds a sectioned preferences panel and a separate theme help card. The 0–1000 stock threshold, auto-add and beep options, and Apply notifications retain their existing session semantics.
+- Verified the preference controls stay staged until Apply and then update all three settings and emit the existing notification. Inspected both themes at 1100×700 and 1440×900. Qt MinGW build and CTest passed 10/10.
+- Updated `DEVELOPMENT_HANDOFF.md`. The four local checkpoints are listed by `git log --oneline adabeb0..HEAD`. The next increment is Manager Reports.
+
+## Task 07 · Manager Reports
+
+Finalized Incomplete Orders, Completed Orders, Cash Sales, All Sales, Top 10 Sold, and Top 10 Remaining Stock. `ReportsPage.h/.cpp` and scoped selectors in `Theme.cpp` provide consistent tabs, three KPI cards per report, compact tables, totals, empty states, and sales rankings in both themes.
+
+- Incomplete covers all open and held orders. Completed displays the same date it filters on, with payment time preferred and archived rows excluded from paid totals. Reversed custom dates are reordered in both inputs and applied inclusively.
+- Sales use saved settlement totals and show discounts separately. Cash Sales limits both the ledger and product rankings to cash. Saved bill lines keep fractional quantities. Top Sold labels pre-tax line value after item discounts. Top Remaining ranks current stock, with sold quantities scoped to the selected dates and advice based on the stock threshold.
+- Baseline `0c00ddf` and final Qt MinGW Debug builds passed, with 10/10 CTest checks each. The running Windows application held the default executable open, so the preset used the existing `build/qt-mingw-task05` directory. The updated executable is `build/qt-mingw-task05/BarcodeHub.exe`.
+- On isolated fixtures, all six tabs and role access passed. Cash reconciled to PKR 1,000.00 and All Sales to PKR 1,880.00. The run also covered archived exclusions, inclusive dates, empty states, fractional rankings, and unchanged source records. CSV and landscape A4 PDF passed for all six reports and an empty report. Ctrl+P opened PDF export.
+- Compared running Windows screens to all twelve references in light and dark at 1100×700 and 1440×900. At minimum width, the date controls use two rows and wide sales ledgers scroll horizontally. The 24 captures and verified exports are under `C:/Users/iAT/AppData/Local/Temp/syntro-inc7-1795642747357/2cd94bff-d9be-4c7e-a2b9-66e13b52dbf3`.
+- Resolve the local checkpoint with `git log -1 --format=%H --grep='^feat(ui): finalize six manager reports and analytics$'`.
+
+**Next increment** · Project-wide QA, integration, visual consistency, and submission readiness.
+
+## Dashboard and terminal preferences follow-up
+
+- Both roles can view revenue for all 24 hours of Today or the last seven calendar days. Both views use the payment timestamp and saved net amounts. The graph updates after checkout and excludes held and archived orders. The dashboard rolls over at midnight.
+- Terminal Settings has Checkout, Scanner, Inventory, Appearance, and Receipts tabs, plus a manager-only Data tab. Apply saves the payment default, auto-add, beep, low-stock limit, receipt paper size, and export directory. The theme stays synchronized with the header toggle. Data shows and opens the active folder.
+- Qt MinGW Debug passed in `build/qt-mingw-task05`. CTest passed 11/11, including `terminal_ui`. Native Windows tests covered both roles, midnight and late-night sales, live checkout refresh, preference persistence, the payment default, and PDF paper size and folder. The audio backend accepted the test beep request. Speaker audibility needs an in-person check.
+- Captures are in `C:/Users/iAT/AppData/Local/Temp/syntro-terminal-final-1795645122`. The default executable was open during verification. Each build can have its own `data` directory, so use the Settings Data tab to identify the active records before using another build for sales.

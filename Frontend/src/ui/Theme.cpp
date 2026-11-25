@@ -482,14 +482,15 @@ namespace
 bool Theme::isDark()
 {
     if (g_dark < 0)
-        g_dark = QSettings("BarcodeHub", "SmartPOS").value("darkMode", false).toBool() ? 1 : 0;
+        g_dark = QSettings(QSettings::defaultFormat(), QSettings::UserScope, "BarcodeHub", "SmartPOS")
+                     .value("darkMode", false).toBool() ? 1 : 0;
     return g_dark == 1;
 }
 
 void Theme::setDark(bool on)
 {
     g_dark = on ? 1 : 0;
-    QSettings("BarcodeHub", "SmartPOS").setValue("darkMode", on);
+    QSettings(QSettings::defaultFormat(), QSettings::UserScope, "BarcodeHub", "SmartPOS").setValue("darkMode", on);
 }
 
 QColor Theme::readable(const QColor &c)
@@ -584,10 +585,24 @@ QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8
 #dashboardAction:focus { border-color: @focus@; }
 
 #subCard { background: @panel@; border: 1px solid @divider@; border-radius: 12px; }
+#reportMetric { background: @panel@; border: 1px solid @divider@; border-left: 4px solid @brand@; border-radius: 10px; }
+#reportRankingBar { background: @panelLow@; border: none; border-radius: 4px; }
+#reportRankingBar::chunk { background: @brand@; border-radius: 4px; }
+#terminalSettingsTabs::pane { border: none; }
+#terminalSettingsTabs QTabBar { background: transparent; }
+#terminalSettingsTabs QTabBar::tab {
+    background: @panelLow@; color: @text@; border: 1px solid @divider@;
+    border-radius: 8px; margin: 0 6px 8px 0; padding: 8px 14px;
+}
+#terminalSettingsTabs QTabBar::tab:hover { background: @hover@; }
+#terminalSettingsTabs QTabBar::tab:selected { background: @brand@; color: @white@; border-color: @brand@; }
+#terminalSettingsTabs QTabBar::tab:focus { border-color: @focus@; }
 #field { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
 #notice { background: @dangerBg@; border: 1px solid @dangerBorder@; border-radius: 10px; }
 #notice QLabel { color: @dangerText@; background: transparent; }
 #editBanner { background: @warningBg@; border: 1px solid @warningBorder@; border-radius: 12px; }
+#seasonBanner { background: @panel@; border: 1px solid @divider@; border-radius: 12px; }
+#seasonBanner[activeSeason="true"] { background: @successBg@; border-color: @successBorder@; }
 #editBanner QLabel { color: @warningText@; background: transparent; }
 #totalBox { background: @navy@; border-radius: 12px; }
 #totalBox QLabel { color: @white@; background: transparent; }
@@ -639,6 +654,11 @@ QPushButton[kind="flat"]:hover { background: @hover@; }
 QPushButton[kind="flat"]:pressed { background: @pressed@; }
 QPushButton[kind="flat"]:focus { border-color: @focus@; }
 QPushButton[kind="tab"] { padding: 6px 15px; }
+QPushButton[kind="tab"][reportTab="true"] { padding: 7px 10px; }
+QPushButton[reportTab="true"]:!checked { background: @panelLow@; border-color: @divider@; }
+QPushButton[reportTab="true"]:!checked:hover { background: @hover@; }
+QPushButton[reportTab="true"]:!checked:focus { border-color: @focus@; }
+QPushButton[kind="tab"][compactSeasonTab="true"] { padding: 5px 9px; }
 QPushButton[kind="mini"] { padding: 4px 11px; font-size: 12px; border-radius: 8px; color: @accent@; }
 QPushButton[kind="step"] { padding: 0; border-radius: 8px; min-width: 26px; max-width: 26px; min-height: 24px; max-height: 24px; font-size: 15px; font-weight: 700; color: @accent@; }
 QPushButton[kind="icon"] { padding: 0; min-width: 36px; max-width: 36px; min-height: 34px; max-height: 34px; }

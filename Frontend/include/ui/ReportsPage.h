@@ -2,9 +2,10 @@
 // Business Reports (manager): six tabular reports with totals, CSV export and PDF print.
 //   1 incomplete orders (not paid / not archived) + total      4 all sales with total amount and discounts
 //   2 completed orders + total                                 5 top ten most sold items with remaining stock
-//   3 cash sales: daily / weekly / monthly / yearly / period   6 top ten items by remaining stock (do not re-order)
-// Frontend only: everything is computed from AppState::orders() and AppState::products() (the Increment 2 files).
+//   3 cash sales by period                                    6 top ten items by current remaining stock
+// Reports read current orders, catalogue stock, and saved bill quantities without writing records.
 #include <QDate>
+#include <QHash>
 #include <QStringList>
 #include <QVector>
 #include <QWidget>
@@ -29,8 +30,8 @@ private:
     enum Tab { Incomplete, Completed, CashSales, AllSales, TopSold, TopRemaining, TabCount };
     enum Period { All, Daily, Weekly, Monthly, Yearly, Custom };
 
-    struct Tile { QString caption, icon, value, sub, tint; };
-    struct TopItem { QString name, acronym; int units = 0; double revenue = 0; int stock = 0; };
+    struct Tile { QString caption, icon, value, sub; };
+    struct TopItem { QString name, acronym; double units = 0, lineValue = 0; int stock = -1; };
     struct Report
     {
         QString title, subtitle;
@@ -43,8 +44,8 @@ private:
         bool showTopSold = false;   // "Top sold staples" side panel
     };
 
-    Report build(int tab) const;
-    QVector<TopItem> topSold(int limit) const;
+    Report build(int tab, const QHash<QString, double> &paidUnits) const;
+    QVector<TopItem> topSold(int limit, bool cashOnly = false) const;
     QString periodText() const;
     void setPeriod(int period);
     void setTab(int tab);
@@ -60,9 +61,11 @@ private:
     QVector<QPushButton *> m_tabButtons, m_periodButtons;
     QDateEdit *m_fromEdit = nullptr, *m_toEdit = nullptr;
     QWidget *m_periodBar = nullptr;
+    QWidget *m_outstandingNotice = nullptr;
     QHBoxLayout *m_tiles = nullptr;
     QTableWidget *m_table = nullptr;
     QLabel *m_ledgerTitle = nullptr, *m_ledgerSub = nullptr;
+    QLabel *m_empty = nullptr;
     QWidget *m_side = nullptr;
     QVBoxLayout *m_sideList = nullptr;
     QLabel *m_footLabel = nullptr, *m_footValue = nullptr, *m_footNote = nullptr;

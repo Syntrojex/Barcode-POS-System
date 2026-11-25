@@ -3,6 +3,7 @@
 #include "Dialogs.h"
 #include "Theme.h"
 #include "Widgets.h"
+#include <QButtonGroup>
 #include <QDate>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -10,6 +11,7 @@
 #include <QLocale>
 #include <QScrollArea>
 #include <QTableWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace
@@ -63,6 +65,10 @@ DashboardPage::DashboardPage(QWidget *parent) : QWidget(parent)
     build();
     connect(&AppState::instance(), &AppState::changed, this, &DashboardPage::refresh);
     refresh();
+    auto *dateTimer = new QTimer(this);
+    connect(dateTimer, &QTimer::timeout, this, [this]
+            { if (m_dashboardDate != QDate::currentDate()) refresh(); });
+    dateTimer->start(1000);
 }
 
 void DashboardPage::focusLookup()
@@ -96,7 +102,8 @@ void DashboardPage::build()
     auto *overview = new QVBoxLayout;
     overview->setSpacing(5);
     overview->addWidget(W::label("Store activity", "dashboardHeroTitle"));
-    overview->addWidget(W::label(QLocale().toString(QDate::currentDate(), "dddd, d MMMM yyyy"), "dashboardHeroDate"));
+    m_date = W::label({}, "dashboardHeroDate");
+    overview->addWidget(m_date);
     auto *checkout = W::button("Open checkout", "primary", "cart");
     checkout->setObjectName("dashboardCheckout");
     overview->addSpacing(5);
@@ -136,12 +143,29 @@ void DashboardPage::build()
     auto *cv = new QVBoxLayout(cc);
     cv->setContentsMargins(18, 14, 18, 12);
     cv->setSpacing(6);
-    auto *legend = new QLabel(QStringLiteral("Paid orders · PKR"));
-    legend->setObjectName("muted");
-    W::headerRow(cv, "", "Hourly revenue", legend);
+    auto *chartHeader = new QHBoxLayout;
+    m_revenueTitle = W::label("Hourly revenue", "h1");
+    chartHeader->addWidget(m_revenueTitle, 1);
+    auto *periods = new QButtonGroup(this);
+    for (const auto &text : {QString("Today"), QString("Last 7 days")})
+    {
+        auto *period = W::button(text, "tab");
+        period->setCheckable(true);
+        period->setProperty("reportTab", true);
+        periods->addButton(period, periods->buttons().size());
+        chartHeader->addWidget(period);
+    }
+    periods->button(0)->setChecked(true);
+    connect(periods, &QButtonGroup::idClicked, this, [this](int id)
+            {
+                m_showRecentDays = id == 1;
+                refreshRevenue();
+            });
+    cv->addLayout(chartHeader);
+    cv->addWidget(W::label("Paid orders · PKR", "muted"));
     m_chart = new RevenueChart;
+    m_chart->setObjectName("dashboardRevenue");
     m_chart->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_chart->setData({}, {}, {}); // populated from real paid orders in refresh()
     cv->addWidget(m_chart, 1);
     mid->addWidget(cc, 3);
 
@@ -193,29 +217,29 @@ void DashboardPage::refresh()
 {
     auto &st = AppState::instance();
     const auto &orders = st.orders();
+    m_dashboardDate = QDate::currentDate();
+    m_date->setText(QLocale().toString(m_dashboardDate, "dddd, d MMMM yyyy"));
     int pending = 0;
-    for (const auto &o : orders)
-        if (o.status != "Paid")
-            ++pending;
-    m_sales->setText(W::money(st.salesToday()));
-    m_salesSub->setText("Revenue so far today");
-    m_orders->setText(QString::number(st.ordersToday()));
+    int ordersToday = 0;
     int paidToday = 0;
-    for (const auto &o : orders)
-        if (o.status == "Paid" && o.paymentTime().date() == QDate::currentDate()) ++paidToday;
-    m_ordersSub->setText("Average " + W::money(st.salesToday() / qMax(1, paidToday)) + " per paid order");
-
-    QStringList hours;
-    QVector<double> earned(13, 0.0), target(13, 0.0);
-    for (int hour = 8; hour <= 20; ++hour) hours << QString("%1").arg(hour, 2, 10, QChar('0'));
+    double salesToday = 0.0;
     for (const auto &o : orders)
     {
-        const auto paid = o.paymentTime();
-        const int hour = paid.time().hour();
-        if (o.status == "Paid" && paid.date() == QDate::currentDate() && hour >= 8 && hour <= 20)
-            earned[hour - 8] += o.total;
+        if (o.time.date() == m_dashboardDate)
+            ++ordersToday;
+        if (o.status == "On Hold" || o.status == "In Progress")
+            ++pending;
+        if (o.status == "Paid" && o.paymentTime().date() == m_dashboardDate)
+        {
+            ++paidToday;
+            salesToday += o.total;
+        }
     }
-    m_chart->setData(hours, earned, target);
+    m_sales->setText(W::money(salesToday));
+    m_salesSub->setText("Net revenue so far today");
+    m_orders->setText(QString::number(ordersToday));
+    m_ordersSub->setText("Average " + W::money(salesToday / qMax(1, paidToday)) + " per paid order");
+    refreshRevenue();
     m_pending->setText(QString::number(pending));
     m_pendingSub->setText("On hold or in progress");
     const auto low = st.lowStock();
@@ -258,4 +282,31 @@ void DashboardPage::refresh()
     }
     m_showing->setText(m == 0 ? QStringLiteral("No saved orders yet")
                              : QString("Showing the latest %1 of %2 saved orders").arg(m).arg(orders.size()));
+}
+
+void DashboardPage::refreshRevenue()
+{
+    const QDate today = QDate::currentDate();
+    const QDate start = m_showRecentDays ? today.addDays(-6) : today;
+    const int bins = m_showRecentDays ? 7 : 24;
+    QVector<double> totals(bins, 0.0);
+    QStringList labels;
+    for (int i = 0; i < bins; ++i)
+        labels << (m_showRecentDays ? QLocale().toString(start.addDays(i), "dd MMM")
+                                   : QTime(i, 0).toString("HH:mm"));
+
+    bool hasPaidOrders = false;
+    for (const auto &order : AppState::instance().orders())
+    {
+        const auto paid = order.paymentTime();
+        if (order.status != "Paid" || !paid.isValid() || paid.date() < start || paid.date() > today)
+            continue;
+        const auto bin = m_showRecentDays ? start.daysTo(paid.date()) : paid.time().hour();
+        totals[bin] += order.total;
+        hasPaidOrders = true;
+    }
+
+    m_revenueTitle->setText(m_showRecentDays ? "Daily revenue" : "Hourly revenue");
+    m_chart->setAccessibleName(m_revenueTitle->text());
+    m_chart->setData(labels, totals, hasPaidOrders);
 }

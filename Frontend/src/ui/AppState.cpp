@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QSaveFile>
+#include <QSettings>
 #include <QtMath>
 #include <algorithm>
 #include <cmath>
@@ -88,7 +89,38 @@ QString AppState::locateDataDir()
     return QString();
 }
 
-AppState::AppState()
+Settings Settings::load()
+{
+    QSettings store(QSettings::defaultFormat(), QSettings::UserScope, "BarcodeHub", "SmartPOS");
+    store.beginGroup("terminal");
+    Settings settings;
+    settings.lowStockThreshold = qBound(0, store.value("lowStockThreshold", settings.lowStockThreshold).toInt(), 1000);
+    settings.autoAddScans = store.value("autoAddScans", settings.autoAddScans).toBool();
+    settings.beepOnScan = store.value("beepOnScan", settings.beepOnScan).toBool();
+    using Payment = barcodehub::order::PaymentMode;
+    const auto payment = static_cast<Payment>(store.value("defaultPayment", int(Payment::Cash)).toInt());
+    if (payment == Payment::Card || payment == Payment::Wallet)
+        settings.defaultPayment = payment;
+    settings.receiptA4 = store.value("receiptA4", settings.receiptA4).toBool();
+    settings.receiptFolder = store.value("receiptFolder").toString();
+    return settings;
+}
+
+bool Settings::save() const
+{
+    QSettings store(QSettings::defaultFormat(), QSettings::UserScope, "BarcodeHub", "SmartPOS");
+    store.beginGroup("terminal");
+    store.setValue("lowStockThreshold", lowStockThreshold);
+    store.setValue("autoAddScans", autoAddScans);
+    store.setValue("beepOnScan", beepOnScan);
+    store.setValue("defaultPayment", int(defaultPayment));
+    store.setValue("receiptA4", receiptA4);
+    store.setValue("receiptFolder", receiptFolder);
+    store.sync();
+    return store.status() == QSettings::NoError;
+}
+
+AppState::AppState() : m_settings(Settings::load())
 {
     const QString dir = locateDataDir();
     if (!dir.isEmpty())
