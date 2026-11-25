@@ -62,3 +62,13 @@ The local candidate on `integration/ali-team-sync-20261125-2122` integrates the 
 - Optical barcode capture and external payment terminals were outside the verified workflows. The checkout overlap was resolved using completed Task 03 commit `2e1faca`. The combined candidate passed all eight CTest checks plus Windows checkout, payment, paid-edit, and shell verification before the local fast-forward. The committed manager dashboard refresh remains in the combined history.
 
 See [DEVELOPMENT_HANDOFF.md](DEVELOPMENT_HANDOFF.md) for the full integration audit and remaining checks.
+
+## Task 05 · Management screens
+
+Synced local `ali` with `origin/main` at `faad6bc` in `56eef61`. Main removed the CMake support directory. The merge retained the three files still used by the Qt MinGW build and accepted the documentation deletions. An existing running instance held the default executable open, so verification uses the same preset with `build/qt-mingw-task05` as its build directory. The synced build and all eight CTest checks passed.
+
+### Orders Management
+
+- `OrdersPage.h/.cpp` and a table selector in `Theme.cpp` add the page heading, unified search bar, striped table, edit badges, compact actions, empty state, and results footer.
+- Verified phone search, status filters, persisted hold/resume, View Bill, manager edit, and cashier approval cancellation on copied records. Build and CTest passed 8/8. Inspected screenshots in both themes at 1100×700 and 1440×900. At minimum width the table scrolls horizontally for the edit window and actions.
+- Screenshots are in `C:/Users/iAT/AppData/Local/Temp/syntro-task05-1795632134317`. Commit subject `feat(ui): refine orders management screen`.

@@ -30,5 +30,6 @@ private:
     QString m_filter = "All";
     QVector<QPushButton *> m_tabs;
     QLabel *m_showing = nullptr;
+    QLabel *m_empty = nullptr;
     UserRole m_role = UserRole::Cashier;
 };
