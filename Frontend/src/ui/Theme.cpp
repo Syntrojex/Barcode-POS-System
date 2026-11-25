@@ -588,6 +588,8 @@ QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8
 #notice { background: @dangerBg@; border: 1px solid @dangerBorder@; border-radius: 10px; }
 #notice QLabel { color: @dangerText@; background: transparent; }
 #editBanner { background: @warningBg@; border: 1px solid @warningBorder@; border-radius: 12px; }
+#seasonBanner { background: @panel@; border: 1px solid @divider@; border-radius: 12px; }
+#seasonBanner[activeSeason="true"] { background: @successBg@; border-color: @successBorder@; }
 #editBanner QLabel { color: @warningText@; background: transparent; }
 #totalBox { background: @navy@; border-radius: 12px; }
 #totalBox QLabel { color: @white@; background: transparent; }
@@ -639,6 +641,7 @@ QPushButton[kind="flat"]:hover { background: @hover@; }
 QPushButton[kind="flat"]:pressed { background: @pressed@; }
 QPushButton[kind="flat"]:focus { border-color: @focus@; }
 QPushButton[kind="tab"] { padding: 6px 15px; }
+QPushButton[kind="tab"][compactSeasonTab="true"] { padding: 5px 9px; }
 QPushButton[kind="mini"] { padding: 4px 11px; font-size: 12px; border-radius: 8px; color: @accent@; }
 QPushButton[kind="step"] { padding: 0; border-radius: 8px; min-width: 26px; max-width: 26px; min-height: 24px; max-height: 24px; font-size: 15px; font-weight: 700; color: @accent@; }
 QPushButton[kind="icon"] { padding: 0; min-width: 36px; max-width: 36px; min-height: 34px; max-height: 34px; }

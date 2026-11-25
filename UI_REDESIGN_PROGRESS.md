@@ -105,3 +105,9 @@ Baseline `adabeb0` on `ali` built and passed 10/10 CTest checks with the Qt MinG
 - `BillsPage.h/.cpp` add the searchable, striped paid-bill ledger with result counts and payment timestamps. Existing order routing and receipt actions remain available.
 - Verified customer, bill and order lookup, no-results behavior, View Bill, and PDF export through the receipt dialog on copied records. Qt MinGW build and CTest 10/10 passed. Inspected both themes at 1100×700 and 1440×900.
 - Commit subject `feat(ui): refine bills and invoice ledger`. Next page is Seasonal Discounts.
+
+### Seasonal Discounts
+
+- `DiscountsPage.h/.cpp` and scoped selectors in `Theme.cpp` add a theme-aware current promotion banner, summary tiles, striped seasons table, and compact edit form. The form previews the date-derived campaign label used by the existing file format.
+- Verified filters, invalid date feedback, saving a 22.5% season, activation persistence, editing and deleting on copied data. The distinct special checkout cap remains 8%. Qt MinGW build and CTest 10/10 passed. Inspected both themes at 1100×700 and 1440×900. At minimum width, scroll the table horizontally for all actions.
+- Commit subject `feat(ui): redesign seasonal discounts management`. Next page is Terminal Settings.
