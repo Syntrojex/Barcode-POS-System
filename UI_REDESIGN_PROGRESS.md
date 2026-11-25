@@ -77,3 +77,8 @@ Synced local `ali` with `origin/main` at `faad6bc` in `56eef61`. Main removed th
 
 - `ProductsPage.cpp` adds a dedicated heading, registered-product count, separate search and actions row, striped table, and clear stock badges. All catalog columns remain available. At 1100px the table scrolls horizontally to status and actions, and long names have tooltips.
 - Verified barcode and acronym lookup, manager access to Details, Edit and New Product dialogs, and cashier Add to Order routing and edit restrictions. Build and CTest passed 8/8. Inspected both themes at 1100×700 and 1440×900. Commit subject `feat(ui): modernize product catalog`.
+
+### Inventory Management
+
+- `InventoryPage.cpp` and the scoped theme selectors refine the summary tiles, search and filters, quantity controls, and pending-changes bar. The edited quantity remains highlighted in both themes.
+- Verified on copied data that staging and filtering leave the file intact, Discard restores the original quantity, and Save commits the new value across reload. F1 navigation passed. Build and CTest passed 8/8. Inspected both themes at 1100×700 and 1440×900. Commit subject `feat(ui): refine inventory management screen`.

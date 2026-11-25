@@ -670,6 +670,8 @@ QHeaderView { background: transparent; }
 QHeaderView::section { background: transparent; color: @muted@; border: none; border-bottom: 1px solid @divider@; padding: 8px; font-size: 11px; font-weight: 700; }
 QTableWidget[managementTable="true"] { alternate-background-color: @panelLow@; }
 QTableWidget[managementTable="true"] QHeaderView::section { background: @panelLow@; }
+QTableWidget[managementTable="true"] QSpinBox[staged="true"] { border-color: @warningBorder@; background: @warningBg@; }
+QTableWidget[managementTable="true"] QSpinBox[staged="true"]:focus { border-color: @focus@; }
 QTableCornerButton::section { background: transparent; border: none; }
 QListWidget { background: @panelLow@; }
 QListWidget::item:selected { background: @selection@; color: @text@; }

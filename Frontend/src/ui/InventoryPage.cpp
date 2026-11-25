@@ -23,7 +23,7 @@ namespace
     }
     QString stockText(int qty, int limit)
     {
-        return qty <= 0 ? "OUT OF STOCK" : qty <= limit ? "LOW STOCK" : "IN STOCK";
+        return qty <= 0 ? "Out of stock" : qty <= limit ? "Low stock" : "In stock";
     }
 }
 
@@ -31,35 +31,40 @@ InventoryPage::InventoryPage(QWidget *parent) : QWidget(parent)
 {
     QVBoxLayout *root;
     pageShell(this, root);
-    root->setSpacing(12);
+    root->setSpacing(8);
 
     auto *exportBtn = W::button("Export Stock Ledger", "soft", "export");
     auto *newBtn = W::button("New SKU Entry", "primary", "plus");
-    root->addWidget(sectionHeader("INVENTORY CONTROL", "Inventory Management",
-                                  "Real-time stock monitoring and batch quantity adjustment across all products.",
+    root->addWidget(sectionHeader({}, "Inventory Management",
+                                  "Monitor stock and stage quantity adjustments.",
                                   {exportBtn, newBtn}));
     connect(newBtn, &QPushButton::clicked, this, &InventoryPage::newProduct);
 
     auto *tiles = new QHBoxLayout;
-    tiles->setSpacing(12);
+    tiles->setSpacing(8);
     tiles->addWidget(statTile("CATALOGUE DEPTH", "products", m_total, m_totalSub, "blue"));
-    tiles->addWidget(statTile("BUFFER DEPLETION", "warn", m_low, m_lowSub, "amber"));
-    tiles->addWidget(statTile("SHELF STOCKOUTS", "cart", m_out, m_outSub, "red"));
+    tiles->addWidget(statTile("LOW STOCK", "warn", m_low, m_lowSub, "amber"));
+    tiles->addWidget(statTile("OUT OF STOCK", "cart", m_out, m_outSub, "red"));
     root->addLayout(tiles);
 
-    auto *card = W::card(this);
+    auto *card = W::card(this, "subCard");
     auto *v = new QVBoxLayout(card);
     v->setContentsMargins(16, 14, 16, 12);
-    v->setSpacing(10);
+    v->setSpacing(8);
 
     auto *tools = new QHBoxLayout;
-    tools->setSpacing(10);
+    tools->setSpacing(8);
     m_search = new QLineEdit;
     m_search->setPlaceholderText("Search inventory");
     m_search->setToolTip("Search by product ID, name, acronym, or barcode.");
+    m_search->setAccessibleName("Search inventory");
+    m_search->setClearButtonEnabled(true);
     m_search->setMinimumHeight(40);
     m_search->addAction(Theme::icon("search", Theme::outline, 16), QLineEdit::LeadingPosition);
     m_category = new QComboBox;
+    m_category->setAccessibleName("Inventory category");
+    m_category->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    m_category->setMinimumContentsLength(14);
     m_category->setMinimumHeight(40);
     m_lowOnly = new QCheckBox("Low stock only");
     m_saveTop = W::button("Save Changes", "primary", "check");
@@ -71,14 +76,21 @@ InventoryPage::InventoryPage(QWidget *parent) : QWidget(parent)
     v->addLayout(tools);
 
     m_table = makeTable({"PRODUCT ID", "PRODUCT", "CATEGORY / ACRONYM", "AVAILABLE QUANTITY", "STATUS", "UNIT PRICE"});
+    m_table->setProperty("managementTable", true);
+    m_table->setAlternatingRowColors(true);
+    m_table->setAccessibleName("Inventory stock");
     auto *hh = m_table->horizontalHeader();
-    hh->setSectionResizeMode(1, QHeaderView::Stretch);
-    for (int c : {0, 2, 5})
+    hh->setSectionResizeMode(1, QHeaderView::Interactive);
+    m_table->setColumnWidth(1, 224);
+    for (int c : {0, 5})
         hh->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    hh->setSectionResizeMode(2, QHeaderView::Interactive);
+    m_table->setColumnWidth(2, 142);
     hh->setSectionResizeMode(3, QHeaderView::Fixed);
     hh->setSectionResizeMode(4, QHeaderView::Fixed);
-    m_table->setColumnWidth(3, 172);
-    m_table->setColumnWidth(4, 124);
+    m_table->setColumnWidth(3, 155);
+    m_table->setColumnWidth(4, 112);
+    hh->setStretchLastSection(true);
     v->addWidget(m_table, 1);
 
     m_footer = W::label("", "muted");
@@ -115,7 +127,7 @@ InventoryPage::InventoryPage(QWidget *parent) : QWidget(parent)
         for (const auto &p : AppState::instance().products())
         {
             const int q = m_edits.value(p.id, p.stock);
-            rows << QString("%1,%2,%3,%4,%5,%6,%7").arg(p.id).arg(p.ean, p.sku, csvField(p.name), p.ean.left(2)).arg(q).arg(stockText(q, limit));
+            rows << QString("%1,%2,%3,%4,%5,%6,%7").arg(p.id).arg(p.ean, p.sku, csvField(p.name), p.ean.left(2)).arg(q).arg(stockText(q, limit).toUpper());
         }
         if (writeCsv(this, "inventory.csv", rows)) emit toast("Stock ledger exported"); });
     connect(&AppState::instance(), &AppState::changed, this, &InventoryPage::refresh);
@@ -165,8 +177,8 @@ void InventoryPage::rebuild()
     m_totalSub->setText("Stock value: " + W::money(value));
     m_low->setText(QString::number(low) + " items");
     m_lowSub->setText(QString("At or below %1 units").arg(limit));
-    m_out->setText(QString::number(out) + " SKUs");
-    m_outSub->setText("Zero units on the floor");
+    m_out->setText(QString("%1 SKU%2").arg(out).arg(out == 1 ? "" : "s"));
+    m_outSub->setText("Zero units available");
 
     QVector<ProductInfo> rows;
     const QVector<ProductInfo> base = q.isEmpty() ? st.products() : st.searchText(q);
@@ -183,10 +195,12 @@ void InventoryPage::rebuild()
     for (int r = 0; r < rows.size(); ++r)
     {
         const ProductInfo p = rows[r];
-        m_table->setRowHeight(r, 58);
+        m_table->setRowHeight(r, 52);
         const Category *c = UiStore::instance().category(p.ean.left(2));
         m_table->setItem(r, 0, item("PRD-" + QString::number(p.id).rightJustified(4, '0'), Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
-        m_table->setItem(r, 1, item(p.name + "\nEAN: " + p.ean + "  -  " + p.unit, Qt::AlignLeft | Qt::AlignVCenter, "", false));
+        auto *product = item(p.name + "\nEAN: " + p.ean + "  -  " + p.unit);
+        product->setToolTip(product->text());
+        m_table->setItem(r, 1, product);
         m_table->setItem(r, 2, item(p.sku + "\n" + (c ? c->name : QString("Category " + p.ean.left(2)))));
         m_table->setItem(r, 5, item(W::money(p.price), Qt::AlignRight | Qt::AlignVCenter));
 
@@ -197,6 +211,9 @@ void InventoryPage::rebuild()
         auto *minus = W::button("-", "step");
         auto *plus = W::button("+", "step");
         auto *spin = new QSpinBox;
+        spin->setAccessibleName("Quantity for " + p.name);
+        minus->setAccessibleName("Decrease quantity for " + p.name);
+        plus->setAccessibleName("Increase quantity for " + p.name);
         spin->setRange(0, 999999);
         spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
         spin->setAlignment(Qt::AlignCenter);
@@ -210,17 +227,15 @@ void InventoryPage::rebuild()
         m_table->setCellWidget(r, 4, wrapW(badge));
         connect(minus, &QPushButton::clicked, spin, [spin] { spin->setValue(spin->value() - 1); });
         connect(plus, &QPushButton::clicked, spin, [spin] { spin->setValue(spin->value() + 1); });
-        connect(spin, qOverload<int>(&QSpinBox::valueChanged), this, [this, spin, badge, p, r, limit](int v)
+        connect(spin, qOverload<int>(&QSpinBox::valueChanged), this, [this, spin, badge, p, limit](int v)
                 {
             if (v == p.stock) m_edits.remove(p.id); else m_edits[p.id] = v;
             W::setBadge(badge, stockText(v, limit), stockKind(v, limit));
-            const QColor bg = v == p.stock ? QColor(Qt::transparent) : QColor("#fff6dd");
-            for (int cidx : {0, 1, 2, 5})
-                if (auto *it = m_table->item(r, cidx)) it->setBackground(bg);
+            spin->setProperty("staged", v != p.stock);
+            Theme::repolish(spin);
             updateBar(); });
-        if (m_edits.contains(p.id))
-            for (int cidx : {0, 1, 2, 5})
-                m_table->item(r, cidx)->setBackground(QColor("#fff6dd"));
+        spin->setProperty("staged", m_edits.contains(p.id));
+        Theme::repolish(spin);
     }
     m_footer->setText(QString("Displaying %1 of %2 registered items").arg(rows.size()).arg(st.products().size()));
     updateBar();
