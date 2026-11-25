@@ -58,9 +58,17 @@ public:
     // Update payment/status after the cashier completes payment or holds the order.
     bool updateOrder(const Order& order, std::string* error = nullptr);
 
+    // Replaces the product lines (OrderDetail.txt) and customer of an EXISTING order with the
+    // current cart. The order keeps its ID, date, time and status. Used when a held order is
+    // held again / paid, and when a paid order is edited (requirement 3). Archived orders are refused.
+    bool saveCartToOrder(const std::string& orderId,
+                         const std::string& customerName,
+                         const std::string& customerContact,
+                         std::string* error = nullptr);
+
     // The next order ID (preview only; createOrder allocates it at save time).
     std::string nextOrderId(std::string* error = nullptr) const;
-    // Remove a newly created, unpaid order if checkout fails.
+    // Remove an unpaid order (in-progress or on-hold): a failed checkout or a discarded held order.
     bool discardOrder(const std::string& orderId, std::string* error = nullptr);
 
     // Read persisted data for UI/history screens.

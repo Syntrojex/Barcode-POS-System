@@ -34,7 +34,7 @@ struct Season
 
 struct ParkedOrder
 {
-    QString code; // "HLD-108"
+    QString code; // the Order ID of the on-hold order (Order.txt)
     QString customer, contact;
     QDateTime parkedAt;
     QVector<ReceiptLine> lines;
@@ -72,11 +72,13 @@ public:
     const Season *activeSeason(const QDate &d = QDate::currentDate()) const; // first active season covering d
     QString validateSeason(const QString &name, const QDate &start, const QDate &end, double percent) const;
 
-    // ---- on-hold orders ----
-    const QVector<ParkedOrder> &parked() const { return m_parked; }
-    QString park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines);
-    bool takeParked(const QString &code, ParkedOrder &out); // removes it from the list
-    void discardParked(const QString &code);
+    // ---- on-hold orders: saved in Order.txt / OrderDetail.txt with status on-hold (see AppState::holdOrder) ----
+    QVector<ParkedOrder> parked() const; // newest first
+    // Saves the cart as an on-hold order (`existingId` = update that held order). Returns the Order ID, empty on failure.
+    QString park(const QString &customer, const QString &contact, const QVector<ReceiptLine> &lines,
+                 const QString &existingId = QString(), QString *error = nullptr);
+    bool takeParked(const QString &code, ParkedOrder &out); // reads it (it stays on hold until it is paid)
+    bool discardParked(const QString &code, QString *error = nullptr);
 
     // ---- manager sign-off (needed to edit a paid order) ----
     // Demo check only: replace with real staff accounts when the back-end has them.
@@ -103,7 +105,5 @@ private:
     void saveSeasons();
     QVector<Category> m_categories;
     QVector<Season> m_seasons;
-    QVector<ParkedOrder> m_parked;
     QMap<QString, Approval> m_approvals;
-    int m_nextHold = 109;
 };

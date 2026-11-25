@@ -65,6 +65,12 @@ public:
     bool append(const Bill& bill, std::string* error = nullptr);
 
     /**
+     * @brief Replaces an existing bill (matched by Bill ID) and its BillDetail lines.
+     *        Used when a paid order is edited: the order keeps its bill, the bill gets the new amounts.
+     */
+    bool replace(const Bill& bill, std::string* error = nullptr);
+
+    /**
      * @brief Computes the next available 9-digit Bill ID for a given date.
      *
      * Scans existing bills matching the current YYMMDD prefix, identifies the highest
@@ -79,6 +85,8 @@ public:
                                   std::string* error = nullptr);
 
 private:
+    bool writeAll(const std::vector<Bill>& all, std::string* error);
+
     std::filesystem::path file_;       ///< Bill.txt
     std::filesystem::path detailFile_; ///< BillDetail.txt
 };

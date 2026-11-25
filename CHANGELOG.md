@@ -23,6 +23,23 @@ All notable changes to **BarcodeHub** are documented in this file.
 - Add management reports: incomplete orders, completed orders, cash sales, all sales, top ten most sold items, and top ten items by remaining stock.
 - Provide separate cashier and manager features in the user interface.
 
+### Fixed — editing orders (requirements 3 and 10)
+
+- Editing a paid order now changes **that** order: it keeps its Order ID and Bill ID (and its payment date, so the
+  7-day window does not restart). `OrderDetail.txt`, `Bill.txt` and `BillDetail.txt` are rewritten and stock moves by
+  the difference only. Previously a new order was created and the original was archived.
+- While a paid order is edited, the units it already took count as available, so a low-stock line can be kept or
+  restored.
+- On-hold orders are real orders now: saved in `Order.txt` with status `on-hold`, listed on the Orders page
+  ("On Hold" tab, one-click Resume), kept after a restart, and paid under the same Order ID. The two hard-coded demo
+  held orders were removed.
+- Every payment or edit backs up the five record files first and puts them all back if any step fails.
+- The 7-day edit window counts from the bill (payment) date and time.
+- Removed the stray duplicate `Frontend/src/ui/RecordOrderPage .cpp`, which the build compiled alongside
+  `RecordOrderPage.cpp`.
+- New backend calls: `OrderManager::saveCartToOrder`, `BillRepository::replace`, `BillingService::rebill`;
+  `discardOrder` also accepts on-hold orders. Covered by `tests/order_edit_test.cpp`.
+
 ### Development Notes
 
 - Increment 3 builds on the Point of Sale system from Increment 2.

@@ -14,6 +14,7 @@
 
 #include "AppState.h"
 #include "UserRole.h"
+#include <QMap>
 #include <QVector>
 #include <QWidget>
 #include <optional>
@@ -114,6 +115,10 @@ private:
     void loadDemoDraft();
     void rebuildParked();        ///< redraws the on-hold chips (also keeps the "4m ago" texts fresh)
     QVector<ReceiptLine> cartLines() const;
+    // Empty when `add` more units of product `id` fit (the cart already has `have`); otherwise the reason.
+    // While a paid order is edited, the units that order already took from stock count as available.
+    QString stockIssue(int id, int have, int add) const;
+    void startFresh(const QString& message = QString()); ///< empty cart, new order number, ready to scan
 
     UserRole m_role = UserRole::Cashier;
     QVector<CartLine> m_cart;
@@ -151,5 +156,7 @@ private:
     QHBoxLayout* m_parkChips;
     QFrame* m_editBanner = nullptr;
     QLabel* m_editText = nullptr;
-    QString m_editingId; ///< order being edited (empty = a normal new order)
+    QString m_editingId; ///< paid order being edited (empty = a normal new order)
+    QString m_heldId;    ///< on-hold order resumed into the cart (paid / held again under the same Order ID)
+    QMap<int, int> m_stockCredit; ///< productId -> units the edited paid order already took from stock
 };
