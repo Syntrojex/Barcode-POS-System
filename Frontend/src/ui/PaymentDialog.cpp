@@ -226,7 +226,7 @@ namespace Dialogs
             itemDisc->setText(W::money(-q.itemDiscount));
             seasonalName->setText(q.seasonName.isEmpty()
                                       ? QString("Seasonal Discount (none active)")
-                                      : QString("Seasonal (%1% %2)").arg(q.seasonalPercent, 0, 'g', 4).arg(q.seasonName));
+                                      : QString("Seasonal %1% (%2)").arg(q.seasonalPercent, 0, 'g', 4).arg(q.seasonName));
             seasonal->setText(W::money(-q.seasonal));
             special->setText(W::money(-q.special));
             tax->setText(W::money(q.tax));

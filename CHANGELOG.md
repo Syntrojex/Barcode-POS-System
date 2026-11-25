@@ -40,6 +40,17 @@ All notable changes to **BarcodeHub** are documented in this file.
 - New backend calls: `OrderManager::saveCartToOrder`, `BillRepository::replace`, `BillingService::rebill`;
   `discardOrder` also accepts on-hold orders. Covered by `tests/order_edit_test.cpp`.
 
+### Changed — Discounts page follows requirements 13-15
+
+- The Discounts page asks only for what `Seasons.txt` stores: start date, end date, discount percentage and isActive.
+  The season name field and column were removed (the requirements have no name, and the file cannot keep one); a
+  season is shown by its dates, e.g. "23 Nov - 30 Nov 2026".
+- Two active seasons may not share a day, so a bill date always matches at most one seasonal discount (requirement 15).
+  An overlapping season can still be saved as inactive.
+- A season with isActive = false shows as INACTIVE (it used to show as SCHEDULED) and has its own filter tab.
+- The seasonal discount applies to the whole bill; an unused per-category filter was removed (amounts are unchanged).
+- Layout: the form scrolls instead of squashing its labels onto the inputs; table columns no longer clip.
+
 ### Development Notes
 
 - Increment 3 builds on the Point of Sale system from Increment 2.
