@@ -75,6 +75,12 @@ struct Settings
     int lowStockThreshold = 10;
     bool autoAddScans = false;
     bool beepOnScan = true;
+    barcodehub::order::PaymentMode defaultPayment = barcodehub::order::PaymentMode::Cash;
+    bool receiptA4 = false;
+    QString receiptFolder;
+
+    static Settings load();
+    bool save() const;
 };
 
 class AppState : public QObject

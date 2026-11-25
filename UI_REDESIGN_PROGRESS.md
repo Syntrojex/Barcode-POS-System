@@ -130,3 +130,10 @@ Finalized Incomplete Orders, Completed Orders, Cash Sales, All Sales, Top 10 Sol
 - Resolve the local checkpoint with `git log -1 --format=%H --grep='^feat(ui): finalize six manager reports and analytics$'`.
 
 **Next increment** · Project-wide QA, integration, visual consistency, and submission readiness.
+
+## Dashboard and terminal preferences follow-up
+
+- Both roles can view revenue for all 24 hours of Today or the last seven calendar days. Both views use the payment timestamp and saved net amounts. The graph updates after checkout and excludes held and archived orders. The dashboard rolls over at midnight.
+- Terminal Settings has Checkout, Scanner, Inventory, Appearance, and Receipts tabs, plus a manager-only Data tab. Apply saves the payment default, auto-add, beep, low-stock limit, receipt paper size, and export directory. The theme stays synchronized with the header toggle. Data shows and opens the active folder.
+- Qt MinGW Debug passed in `build/qt-mingw-task05`. CTest passed 11/11, including `terminal_ui`. Native Windows tests covered both roles, midnight and late-night sales, live checkout refresh, preference persistence, the payment default, and PDF paper size and folder. The audio backend accepted the test beep request. Speaker audibility needs an in-person check.
+- Captures are in `C:/Users/iAT/AppData/Local/Temp/syntro-terminal-final-1795645122`. The default executable was open during verification. Each build can have its own `data` directory, so use the Settings Data tab to identify the active records before using another build for sales.

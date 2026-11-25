@@ -137,11 +137,11 @@ namespace Dialogs
         return h;
     }
 
-    // Saves the bill as a PDF (A5 page) using Qt's built-in PDF writer.
+    // Saves the bill as a PDF using the terminal's preferred paper size.
     bool saveReceiptPdf(const OrderRecord &o, const QString &path)
     {
         QPdfWriter pdf(path);
-        pdf.setPageSize(QPageSize(QPageSize::A5));
+        pdf.setPageSize(QPageSize(AppState::instance().settings().receiptA4 ? QPageSize::A4 : QPageSize::A5));
         pdf.setPageMargins(QMarginsF(12, 12, 12, 12), QPageLayout::Millimeter);
         pdf.setTitle("Bill " + (o.billId.isEmpty() ? o.id : o.billId));
         pdf.setCreator("Syntro-Check");
@@ -175,8 +175,11 @@ namespace Dialogs
         QObject::connect(pdfBtn, &QPushButton::clicked, &d, [&d, &o]
         {
             const QString name = QString("Bill_%1.pdf").arg(o.billId.isEmpty() ? o.id : o.billId);
+            QString folder = AppState::instance().settings().receiptFolder;
+            if (folder.isEmpty() || !QFileInfo(folder).isDir())
+                folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
             const QString path = QFileDialog::getSaveFileName(&d, "Save bill as PDF",
-                QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + name, "PDF files (*.pdf)");
+                QDir(folder).filePath(name), "PDF files (*.pdf)");
             if (path.isEmpty())
                 return;
             if (saveReceiptPdf(o, path))

@@ -482,14 +482,15 @@ namespace
 bool Theme::isDark()
 {
     if (g_dark < 0)
-        g_dark = QSettings("BarcodeHub", "SmartPOS").value("darkMode", false).toBool() ? 1 : 0;
+        g_dark = QSettings(QSettings::defaultFormat(), QSettings::UserScope, "BarcodeHub", "SmartPOS")
+                     .value("darkMode", false).toBool() ? 1 : 0;
     return g_dark == 1;
 }
 
 void Theme::setDark(bool on)
 {
     g_dark = on ? 1 : 0;
-    QSettings("BarcodeHub", "SmartPOS").setValue("darkMode", on);
+    QSettings(QSettings::defaultFormat(), QSettings::UserScope, "BarcodeHub", "SmartPOS").setValue("darkMode", on);
 }
 
 QColor Theme::readable(const QColor &c)
@@ -587,6 +588,15 @@ QMenu#accountMenu::separator { height: 1px; background: @divider@; margin: 4px 8
 #reportMetric { background: @panel@; border: 1px solid @divider@; border-left: 4px solid @brand@; border-radius: 10px; }
 #reportRankingBar { background: @panelLow@; border: none; border-radius: 4px; }
 #reportRankingBar::chunk { background: @brand@; border-radius: 4px; }
+#terminalSettingsTabs::pane { border: none; }
+#terminalSettingsTabs QTabBar { background: transparent; }
+#terminalSettingsTabs QTabBar::tab {
+    background: @panelLow@; color: @text@; border: 1px solid @divider@;
+    border-radius: 8px; margin: 0 6px 8px 0; padding: 8px 14px;
+}
+#terminalSettingsTabs QTabBar::tab:hover { background: @hover@; }
+#terminalSettingsTabs QTabBar::tab:selected { background: @brand@; color: @white@; border-color: @brand@; }
+#terminalSettingsTabs QTabBar::tab:focus { border-color: @focus@; }
 #field { background: @panelLow@; border: 1px solid @divider@; border-radius: 10px; }
 #notice { background: @dangerBg@; border: 1px solid @dangerBorder@; border-radius: 10px; }
 #notice QLabel { color: @dangerText@; background: transparent; }

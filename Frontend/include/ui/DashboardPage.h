@@ -1,4 +1,5 @@
 #pragma once
+#include <QDate>
 #include <QWidget>
 
 class QLabel;
@@ -24,10 +25,14 @@ signals:
 
 private:
     void build();
+    void refreshRevenue();
 
     QLabel *m_sales, *m_salesSub, *m_orders, *m_ordersSub, *m_pending, *m_pendingSub, *m_lowCount, *m_lowSub;
+    QLabel *m_date, *m_revenueTitle;
     RevenueChart *m_chart;
     QTableWidget *m_recent;
     QLabel *m_showing;
     QLineEdit *m_search;
+    QDate m_dashboardDate;
+    bool m_showRecentDays = false;
 };

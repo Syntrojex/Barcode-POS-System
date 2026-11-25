@@ -107,13 +107,13 @@ private:
 #endif
 };
 
-// Hourly revenue columns and an optional target line.
+// Paid revenue by hour or by day.
 class RevenueChart : public QWidget
 {
     Q_OBJECT
 public:
     explicit RevenueChart(QWidget *parent = nullptr);
-    void setData(const QStringList &labels, const QVector<double> &actual, const QVector<double> &target);
+    void setData(const QStringList &labels, const QVector<double> &actual, bool hasPaidOrders);
     QSize minimumSizeHint() const override { return {300, 190}; }
 
 protected:
@@ -121,7 +121,8 @@ protected:
 
 private:
     QStringList m_labels;
-    QVector<double> m_actual, m_target;
+    QVector<double> m_actual;
+    bool m_hasPaidOrders = false;
 };
 
 // "-  2  +" quantity control.

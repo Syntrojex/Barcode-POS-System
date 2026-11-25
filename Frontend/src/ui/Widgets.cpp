@@ -509,11 +509,20 @@ void CameraFeedWidget::paintEvent(QPaintEvent *)
 // ------------------------------------------------------------------ RevenueChart
 RevenueChart::RevenueChart(QWidget *parent) : QWidget(parent) {}
 
-void RevenueChart::setData(const QStringList &labels, const QVector<double> &actual, const QVector<double> &target)
+void RevenueChart::setData(const QStringList &labels, const QVector<double> &actual, bool hasPaidOrders)
 {
     m_labels = labels;
     m_actual = actual;
-    m_target = target;
+    m_hasPaidOrders = hasPaidOrders;
+    QStringList values;
+    for (qsizetype i = 0; i < qMin(labels.size(), actual.size()); ++i)
+        if (actual[i] > 0)
+            values << labels[i] + "  " + W::money(actual[i]);
+    const QString summary = !hasPaidOrders ? QString("No paid orders in this period.")
+                           : values.isEmpty() ? QString("Paid orders in this period total PKR 0.00.")
+                                              : values.join('\n');
+    setAccessibleDescription(summary);
+    setToolTip(summary);
     update();
 }
 
@@ -534,11 +543,15 @@ void RevenueChart::paintEvent(QPaintEvent *)
     p.setFont(labels);
 
     const double peak = *std::max_element(m_actual.cbegin(), m_actual.cend());
-    const double targetPeak = m_target.isEmpty() ? 0.0 : *std::max_element(m_target.cbegin(), m_target.cend());
-    const double maximum = std::ceil(qMax(1.0, qMax(peak, targetPeak)) * 1.1 / 200.0) * 200.0;
-    const QString maxLabel = locale.toString(maximum, 'f', 0);
+    const double tick = std::pow(10.0, std::floor(std::log10(qMax(0.01, peak) / 4.0)));
+    const double maximum = peak > 0.0 ? 4.0 * tick * std::ceil(peak * 1.1 / (4.0 * tick)) : 4.0;
+    const int precision = peak > 0.0 && tick < 1.0 ? 2 : 0;
+    const QString maxLabel = locale.toString(maximum, 'f', precision);
     const int axisWidth = p.fontMetrics().horizontalAdvance(maxLabel) + 12;
-    const QRectF area = QRectF(rect()).adjusted(axisWidth, 12, -8, -26);
+    int labelWidth = 0;
+    for (const auto &label : m_labels)
+        labelWidth = qMax(labelWidth, p.fontMetrics().horizontalAdvance(label));
+    const QRectF area = QRectF(rect()).adjusted(axisWidth, 12, -qMax(8, labelWidth / 2), -26);
     if (area.isEmpty())
         return;
 
@@ -549,45 +562,35 @@ void RevenueChart::paintEvent(QPaintEvent *)
         p.drawLine(QPointF(area.left(), y), QPointF(area.right(), y));
         p.setPen(muted);
         p.drawText(QRectF(0, y - 8, axisWidth - 8, 16), Qt::AlignRight | Qt::AlignVCenter,
-                   locale.toString(maximum * step / 4.0, 'f', 0));
+                   locale.toString(maximum * step / 4.0, 'f', precision));
     }
 
     const qreal slot = area.width() / count;
     const qreal barWidth = qMin(32.0, slot * 0.62);
+    const int labelStep = qMax(1, qCeil((labelWidth + 8) / slot));
+    const QColor barColor = Theme::readable(Theme::primary);
     for (int i = 0; i < count; ++i)
     {
         const qreal x = area.left() + slot * i;
         if (m_actual[i] > 0)
         {
-            const qreal barHeight = area.height() * m_actual[i] / maximum;
+            const qreal barHeight = qMax(2.0, area.height() * m_actual[i] / maximum);
             const qreal y = area.bottom() - barHeight;
-            QLinearGradient fill(x, y, x, area.bottom());
-            fill.setColorAt(0, dark ? QColor("#9aaaff") : QColor("#426de6"));
-            fill.setColorAt(1, dark ? QColor("#5064cd") : QColor("#9bb2f7"));
             p.setPen(Qt::NoPen);
-            p.setBrush(fill);
+            p.setBrush(barColor);
             p.drawRoundedRect(QRectF(x + (slot - barWidth) / 2, y, barWidth, barHeight), 4, 4);
         }
-        if (i < m_labels.size())
+        if (i < m_labels.size() && i % labelStep == 0)
         {
             p.setPen(muted);
-            p.drawText(QRectF(x, area.bottom() + 5, slot, 16), Qt::AlignCenter, m_labels[i]);
+            p.drawText(QRectF(x + (slot - labelWidth) / 2, area.bottom() + 5, labelWidth, 16), Qt::AlignCenter, m_labels[i]);
         }
     }
 
-    if (targetPeak > 0 && m_target.size() == count)
-    {
-        QPainterPath path;
-        path.moveTo(area.left() + slot / 2, area.bottom() - area.height() * m_target[0] / maximum);
-        for (int i = 1; i < count; ++i)
-            path.lineTo(area.left() + slot * (i + 0.5), area.bottom() - area.height() * m_target[i] / maximum);
-        p.strokePath(path, QPen(dark ? QColor("#f6bf87") : QColor("#ad5d21"), 2, Qt::DashLine));
-    }
-
-    if (peak <= 0 && targetPeak <= 0)
+    if (peak <= 0)
     {
         p.setPen(muted);
-        p.drawText(area, Qt::AlignCenter, "No paid sales in these hours");
+        p.drawText(area, Qt::AlignCenter, accessibleDescription());
     }
 }
 
