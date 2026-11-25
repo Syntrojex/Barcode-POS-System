@@ -13,6 +13,7 @@
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QTableWidget>
 #include <QTime>
 #include <QVBoxLayout>
@@ -90,43 +91,60 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
 {
     QVBoxLayout *root;
     pageShell(this, root);
+    root->setSpacing(8);
+    root->addWidget(sectionHeader({}, "Barcode Scanner", "Scan EAN-8 products using the camera or manual lookup."));
     auto *h = new QHBoxLayout;
-    h->setSpacing(12);
+    h->setSpacing(8);
 
-    auto *cam = W::card(this);
+    auto *cam = W::card(this, "subCard");
     auto *cv = new QVBoxLayout(cam);
-    cv->setContentsMargins(18, 14, 18, 14);
-    cv->setSpacing(10);
-    W::headerRow(cv, "barcode", "Barcode Scanner");
+    cv->setContentsMargins(16, 16, 16, 16);
+    cv->setSpacing(8);
+    m_cameraStatus = W::badge("Camera off", "grey");
+    W::headerRow(cv, "camera", "Barcode Camera", m_cameraStatus);
+    auto *preview = W::card(cam, "field");
+    auto *pv = new QVBoxLayout(preview);
+    pv->setContentsMargins(8, 8, 8, 8);
+    pv->setSpacing(8);
+    m_cameraStack = new QStackedWidget;
+    auto *idle = new QWidget;
+    auto *iv = new QVBoxLayout(idle);
+    iv->setAlignment(Qt::AlignCenter);
+    iv->addWidget(W::iconLabel("barcode", Theme::primary, 64), 0, Qt::AlignHCenter);
+    m_cameraMessage = W::label("Camera off", "h2");
+    m_cameraMessage->setAlignment(Qt::AlignCenter);
+    iv->addWidget(m_cameraMessage);
+    m_cameraStack->addWidget(idle);
     m_feed = new CameraFeedWidget;
     m_feed->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_feed->setMinimumHeight(300);
-    cv->addWidget(m_feed, 1);
-    auto *btns = new QHBoxLayout;
+    m_feed->setMinimumHeight(176);
+    m_cameraStack->addWidget(m_feed);
+    pv->addWidget(m_cameraStack, 1);
     m_toggle = W::button("Start camera", "primary", "play");
-    btns->addWidget(m_toggle);
-    btns->addStretch();
-    cv->addLayout(btns);
+    m_toggle->setMinimumWidth(152);
+    pv->addWidget(m_toggle, 0, Qt::AlignHCenter);
+    cv->addWidget(preview, 1);
+    cv->addWidget(W::label("MANUAL BARCODE ENTRY", "caption"));
     auto *mr = new QHBoxLayout;
     m_manual = new QLineEdit;
     m_manual->setObjectName("scannerManualInput");
-    m_manual->setPlaceholderText("Or type/scan an 8-digit EAN and press Enter");
+    m_manual->setPlaceholderText("Enter an 8-digit EAN");
+    m_manual->setAccessibleName("Manual barcode entry");
+    m_manual->setClearButtonEnabled(true);
     m_manual->setMaxLength(12);
     auto *go = W::button("Lookup", "soft", "search");
     mr->addWidget(m_manual, 1);
     mr->addWidget(go);
     cv->addLayout(mr);
+    cv->addWidget(W::label("Manual lookup is available while the camera is off.", "muted"));
     h->addWidget(cam, 5);
 
-    auto *side = W::card(this);
+    auto *side = W::card(this, "subCard");
     auto *sv = new QVBoxLayout(side);
-    sv->setContentsMargins(18, 14, 18, 14);
+    sv->setContentsMargins(16, 16, 16, 16);
     sv->setSpacing(8);
     m_countBadge = W::badge("0 items", "grey");
-    W::headerRow(sv, "clock", "Scanned Items", m_countBadge);
-
-    m_last = W::label("No scans yet", "h2");
-    sv->addWidget(m_last);
+    W::headerRow(sv, "clock", "Recent scans", m_countBadge);
 
     auto *toolbar = new QHBoxLayout;
     toolbar->setSpacing(6);
@@ -145,6 +163,8 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
     m_checklist = makeTable({"", "PRODUCT", "QTY", ""});
     m_checklist->setObjectName("scannerChecklist");
     m_checklist->setAccessibleName("Scanned items checklist");
+    m_checklist->setProperty("managementTable", true);
+    m_checklist->setAlternatingRowColors(true);
     m_checklist->setSelectionMode(QAbstractItemView::SingleSelection);
     m_checklist->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_checklist->setWordWrap(false);
@@ -152,9 +172,22 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
     hh->setSectionResizeMode(QHeaderView::Fixed);
     hh->setSectionResizeMode(1, QHeaderView::Stretch);
     m_checklist->setColumnWidth(0, 42);
-    m_checklist->setColumnWidth(2, 108);
+    m_checklist->setColumnWidth(2, 116);
     m_checklist->setColumnWidth(3, 38);
     sv->addWidget(m_checklist, 1);
+
+    auto *product = W::card(side, "field");
+    auto *details = new QVBoxLayout(product);
+    details->setContentsMargins(10, 8, 10, 8);
+    details->setSpacing(3);
+    details->addWidget(W::label("SELECTED PRODUCT", "caption"));
+    m_last = W::label("No scans yet", "h2");
+    m_last->setWordWrap(true);
+    details->addWidget(m_last);
+    m_productDetails = W::label("", "muted");
+    m_productDetails->setWordWrap(true);
+    details->addWidget(m_productDetails);
+    sv->addWidget(product);
 
     auto *summaryBox = new QFrame;
     summaryBox->setObjectName("field");
@@ -182,13 +215,16 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
 
     connect(m_toggle, &QPushButton::clicked, this, [this]
         {
-            const bool on = !m_feed->running();
-            m_feed->setRunning(on);
-            const bool running = m_feed->running();
-            m_toggle->setText(running ? "Stop camera" : "Start camera");
-            m_toggle->setIcon(Theme::icon(running ? "stop" : "play", QColor("white"), 16));
+            const bool starting = !m_feed->running();
+            m_feed->setRunning(starting);
+            if (!starting || m_feed->running())
+                updateCameraDisplay();
         });
-    connect(m_feed, &CameraFeedWidget::scanError, this, &ScannerPage::toast);
+    connect(m_feed, &CameraFeedWidget::scanError, this, [this](const QString &message)
+        {
+            updateCameraDisplay(true);
+            emit toast(message);
+        });
     connect(m_feed, &CameraFeedWidget::barcodeDetected, this, [this](const QString &code)
         {
             const auto product = AppState::instance().findByCode(code);
@@ -264,17 +300,15 @@ ScannerPage::ScannerPage(QWidget *parent) : QWidget(parent)
     rebuildChecklist();
 }
 
-void ScannerPage::scanNext()
+void ScannerPage::updateCameraDisplay(bool unavailable)
 {
-    if (!m_feed->running())
-        m_feed->setRunning(true);
-    if (!m_feed->running())
-        emit toast("Unable to start camera scanning");
-    else
-    {
-        m_toggle->setText("Stop camera");
-        m_toggle->setIcon(Theme::icon("stop", QColor("white"), 16));
-    }
+    const bool running = m_feed->running() && !unavailable;
+    const QString state = unavailable ? "Camera unavailable" : running ? "Camera started" : "Camera off";
+    W::setBadge(m_cameraStatus, state, unavailable ? "amber" : running ? "blue" : "grey");
+    m_cameraMessage->setText(state);
+    m_cameraStack->setCurrentIndex(running ? 1 : 0);
+    m_toggle->setText(running ? "Stop camera" : "Start camera");
+    m_toggle->setIcon(Theme::icon(running ? "stop" : "play", Qt::white, 16));
 }
 
 void ScannerPage::recordScan(const ProductInfo &p)
@@ -287,7 +321,6 @@ bool ScannerPage::show(const ProductInfo &p)
     m_feed->setCode(p.ean);
     m_lastEan = p.ean;
     m_lastId = p.id;
-    m_last->setText(p.name + " • " + W::money(p.price));
 
     int existingIndex = -1;
     for (int i = 0; i < m_entries.size(); ++i)
@@ -333,8 +366,8 @@ bool ScannerPage::show(const ProductInfo &p)
     }
 
     rebuildChecklist();
-    if (!m_entries.isEmpty())
-        m_checklist->selectRow(0);
+    m_checklist->selectRow(0);
+    setRowSelected(0);
     // Show description only on request; opening a modal on every camera frame is disruptive.
     return added;
 }
@@ -397,6 +430,7 @@ void ScannerPage::rebuildChecklist()
         m_lastEan.clear();
         m_lastId = 0;
         m_last->setText("No scans yet");
+        m_productDetails->clear();
         m_describe->setEnabled(false);
     }
     else
@@ -503,7 +537,9 @@ void ScannerPage::setRowSelected(int row)
     const auto &p = m_entries[row].product;
     m_lastEan = p.ean;
     m_lastId = p.id;
-    m_last->setText(p.name + " • " + W::money(p.price));
+    m_last->setText(p.name);
+    m_productDetails->setText(QString("%1  ·  %2  ·  %3 in stock")
+                                  .arg(p.ean, W::money(p.price)).arg(p.stock));
     m_describe->setEnabled(p.id > 0);
 }
 

@@ -9,6 +9,7 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QTableWidget;
+class QStackedWidget;
 class CameraFeedWidget;
 
 class ScannerPage : public QWidget
@@ -42,7 +43,7 @@ signals:
     void described(int productId);
 
 private:
-    void scanNext();
+    void updateCameraDisplay(bool unavailable = false);
     bool show(const ProductInfo &p);
     void rebuildChecklist();
     void updateSelectionSummary();
@@ -51,9 +52,13 @@ private:
     void setRowSelected(int row);
 
     CameraFeedWidget *m_feed = nullptr;
+    QStackedWidget *m_cameraStack = nullptr;
+    QLabel *m_cameraStatus = nullptr;
+    QLabel *m_cameraMessage = nullptr;
     QTableWidget *m_checklist = nullptr;
     QLabel *m_countBadge = nullptr;
     QLabel *m_last = nullptr;
+    QLabel *m_productDetails = nullptr;
     QLabel *m_selectedSummary = nullptr;
     QLabel *m_selectedTotal = nullptr;
     QPushButton *m_toggle = nullptr;

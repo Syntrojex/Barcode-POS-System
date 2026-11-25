@@ -89,3 +89,13 @@ Synced local `ali` with `origin/main` at `faad6bc` in `56eef61`. Main removed th
 - Verified name/prefix filtering, duplicate rejection, add/edit/delete of an unlinked category, linked-category prefix and delete protection, and Cashier access restrictions. Inspected both themes at 1100×700 and 1440×900. Both the isolated Qt MinGW build and the standard `qt-mingw-debug` build passed, with CTest 8/8 in both directories.
 - Local `ali` includes `origin/main` at `09d24ce`. The four local screen checkpoints can be found with `git log --oneline 56eef61..HEAD --grep='^feat(ui):'`. The standard executable is `build/qt-mingw/BarcodeHub.exe`.
 - Next increment is Barcode Scanner, Bills, Discounts, and Settings.
+
+## Task 06 · Operational screens
+
+Baseline `adabeb0` on `ali` built and passed 10/10 CTest checks with the Qt MinGW preset directed to the existing `build/qt-mingw-task05` directory. The running Windows app locked the default output executable. Captured the four baseline screens and the updated screens under `C:/Users/iAT/AppData/Local/Temp/syntro-inc6-1795641158885`.
+
+### Barcode Scanner
+
+- `ScannerPage.h/.cpp` add the two-column camera and scan workspace, real camera state and failure feedback, and selected product details. Preserves the grouped checklist, beep, description, view-only guard, and existing signals. The checkout action transfers checked rows as before.
+- Qt MinGW build and all 10 CTest checks passed. Inspected both themes at 1100×700 and 1440×900. Windows checks verified manual and unknown barcodes, decoded scan routing, Description, view-only controls, batch checkout, and camera controls and error feedback. Physical optical capture remains unverified.
+- Commit subject `feat(ui): modernize barcode scanner workspace`. Next page is Bills & Invoices.
