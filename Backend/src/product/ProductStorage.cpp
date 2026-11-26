@@ -87,6 +87,14 @@ ParsedProduct ProductParser::parseLine(const std::string &rawLine) const
         return out;
     }
 
+    // Increment 3 lines end with the 2-digit Category Id after the barcode file path; older lines do not.
+    std::string categoryId;
+    if (t.size() >= kMinFields + 1 && t.back().size() == 2 &&
+        std::isdigit(static_cast<unsigned char>(t.back()[0])) && std::isdigit(static_cast<unsigned char>(t.back()[1])))
+    {
+        categoryId = t.back();
+        t.pop_back();
+    }
     const std::size_t n = t.size();
     int id = 0, quantity = 0;
     double price = 0, tax = 0, discount = 0;
@@ -111,7 +119,7 @@ ParsedProduct ProductParser::parseLine(const std::string &rawLine) const
     for (std::size_t i = 3; i < n - 6; ++i)
         name += (name.empty() ? "" : " ") + t[i];
 
-    out.product = Product(id, t[1], t[2], name, unit, price, tax, discount, quantity, t[n - 1]);
+    out.product = Product(id, t[1], t[2], name, unit, price, tax, discount, quantity, t[n - 1], categoryId);
     return out;
 }
 
@@ -133,9 +141,15 @@ ProductRecordCodec::ParseResult ProductRecordCodec::parse(const std::string &raw
     for (std::string tok; in >> tok;)
         t.push_back(tok);
 
+    std::string categoryId;
+    if (t.size() == 11)
+    {
+        categoryId = t[10];
+        t.pop_back();
+    }
     if (t.size() != 10)
     {
-        r.error = "expected 10 fields but found " + std::to_string(t.size());
+        r.error = "expected 11 fields (or 10 without Category Id) but found " + std::to_string(t.size());
         return r;
     }
 
@@ -157,7 +171,7 @@ ProductRecordCodec::ParseResult ProductRecordCodec::parse(const std::string &raw
     if (!r.error.empty())
         return r;
 
-    r.product = Product(id, t[1], t[2], t[3], unit, price, tax, discount, quantity, t[9]);
+    r.product = Product(id, t[1], t[2], t[3], unit, price, tax, discount, quantity, t[9], categoryId);
     r.ok = true;
     return r;
 }
@@ -170,7 +184,7 @@ std::string ProductRecordCodec::format(const Product &p)
     out << p.getProductID() << ' ' << p.getBarcode() << ' ' << p.getAcronym() << ' '
         << p.getProductName() << ' ' << p.getMeasurementUnitName() << ' '
         << p.getUnitPrice() << ' ' << p.getTax() << ' ' << p.getDiscount() << ' '
-        << p.getAvailableQuantity() << ' ' << p.getBarcodeFilePath() << '#';
+        << p.getAvailableQuantity() << ' ' << p.getBarcodeFilePath() << ' ' << p.getCategoryId() << '#';
     return out.str();
 }
 
@@ -181,7 +195,7 @@ std::string ProductFileWriter::serialize(const Product &p) const
     std::snprintf(nums, sizeof nums, "%.2f %.2f %.2f", p.getUnitPrice(), p.getTax(), p.getDiscount());
     return std::to_string(p.getProductID()) + " " + p.getBarcode() + " " + p.getAcronym() + " " +
            p.getProductName() + " " + p.getMeasurementUnitName() + " " + nums + " " +
-           std::to_string(p.getAvailableQuantity()) + " " + p.getBarcodeFilePath() + "#";
+           std::to_string(p.getAvailableQuantity()) + " " + p.getBarcodeFilePath() + " " + p.getCategoryId() + "#";
 }
 
 bool ProductFileWriter::save(const std::string &path, const std::vector<Product> &products, std::string *error) const

@@ -1,8 +1,6 @@
 #pragma once
-// Front-end only state for the Increment 3 screens whose back-end is not built yet:
-// product categories, promotional seasons, parked (on-hold) orders and the manager sign-off check.
-// Nothing here touches the data files - when the back-end arrives (PCategory.txt, Seasons.txt, ...), replace the
-// bodies of this class and keep its interface, so the pages do not change.
+// State for the Increment 3 manager screens: product categories (PCategory.txt), promotional seasons
+// (Seasons.txt), on-hold orders (Order.txt through AppState) and the manager sign-off check.
 #include "AppState.h"
 #include <QDate>
 #include <QDateTime>
@@ -106,6 +104,9 @@ signals:
 private:
     UiStore();
     // Seasons.txt (start end percent isActive#) via the backend SeasonRepository.
+    QString categoriesPath() const; // PCategory.txt
+    void loadCategories();
+    bool saveCategories(const QVector<Category> &categories, QString *error);
     QString seasonsPath() const;
     void loadSeasons();
     void saveSeasons();

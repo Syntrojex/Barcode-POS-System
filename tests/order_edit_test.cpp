@@ -87,6 +87,17 @@ int main() {
     CHECK(!orders.findOrder(second.id, reread, &error));
     CHECK(!orders.discardOrder(held.id, &error));
 
+    // ---- requirement 8: the special discount is not more than 8 percent
+    CHECK(orders.addToCart(bh::integration::toSnapshot(bread), 2, &error));            // 2 x 100, no discount
+    bh::order::Order capped;
+    CHECK(orders.createOrder("Cap", "", capped, &error));
+    bh::billing::BillAdjustments tooMuch; tooMuch.specialDiscount = 17.0;                  // 8.5 %
+    CHECK(!service.checkout(capped.id, cash, bill, nullptr, &error, tooMuch));
+    CHECK(error.find("8 percent") != std::string::npos);
+    bh::billing::BillAdjustments eight; eight.specialDiscount = 16.0;                      // exactly 8 %
+    CHECK(service.checkout(capped.id, cash, bill, nullptr, &error, eight));
+    CHECK(std::abs(bill.specialDiscount - 16.0) < 0.001);
+
     fs::remove_all(dir);
     std::cout << "order edit OK\n";
 }

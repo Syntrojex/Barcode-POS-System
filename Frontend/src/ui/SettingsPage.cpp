@@ -78,7 +78,7 @@ SettingsPage::SettingsPage(QWidget *parent, UserRole role) : QWidget(parent)
 
     auto *scanner = addTab("Scanner", "Set camera scan behavior and check confirmation audio.");
     auto *autoAdd = new QCheckBox("Enabled");
-    addSetting(scanner, "Add scans directly to the cart", "Matching camera scans on Record Order add the item automatically.", autoAdd);
+    addSetting(scanner, "Add scans directly to the cart", "A camera scan, or a full barcode from a USB scanner / typed with Enter, adds the item to the cart at once.", autoAdd);
     auto *beep = new QCheckBox("Enabled");
     addSetting(scanner, "Beep on successful scan", "Play confirmation audio when a scan is accepted.", beep);
     auto *testBeep = W::button("Play test sound", "soft");

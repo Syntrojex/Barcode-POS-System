@@ -28,8 +28,11 @@ namespace barcodehub::billing {
  */
 using ProductLookup = std::function<bool(const std::string& productId, order::ProductSnapshot& out)>;
 
+// Requirement 8: the special discount is not more than 8 percent (of the bill after product and seasonal discounts,
+// before tax - the same base the checkout screen uses).
+inline constexpr double kMaxSpecialDiscountPercent = 8.0;
+
 /**
- * @class BillingService
  * @brief High-level workflow coordinator managing checkout, payment settlement, and transaction atomicity.
  *
  * Responsibilities:

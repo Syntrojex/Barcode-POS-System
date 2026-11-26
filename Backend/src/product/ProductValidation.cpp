@@ -20,11 +20,9 @@ void BarcodeRule::check(const Product &p, ValidationReport &r) const
         r.errors.push_back("barcode '" + b + "' must be exactly 8 digits (EAN-8)");
         return;
     }
-    // Store rule: a product barcode starts with 0, and the digit after it is 1-9 (never 00xxxxxx).
-    if (b[0] != '0')
-        r.errors.push_back("barcode '" + b + "' must start with 0");
-    else if (b[1] == '0')
-        r.errors.push_back("barcode '" + b + "' cannot start with 00 (the digit after the leading 0 must be 1-9)");
+    // Increment 3, requirement 1: the first two digits are the product's Category Id (01-99; 00 is not a category).
+    if (b.compare(0, 2, "00") == 0)
+        r.errors.push_back("barcode '" + b + "' cannot start with 00 (the first two digits are the Category Id, 01-99)");
     if (!ean8::hasValidCheckDigit(b))
         r.warnings.push_back("barcode '" + b + "' has an invalid EAN-8 check digit");
 }
@@ -62,6 +60,18 @@ void QuantityRule::check(const Product &p, ValidationReport &r) const
         r.errors.push_back("available quantity cannot be negative");
 }
 
+void CategoryIdRule::check(const Product &p, ValidationReport &r) const
+{
+    const std::string &c = p.getCategoryId();
+    if (c.size() != 2 || c[0] < '0' || c[0] > '9' || c[1] < '0' || c[1] > '9' || c == "00")
+    {
+        r.errors.push_back("category id '" + c + "' must be 2 digits from 01 to 99");
+        return;
+    }
+    if (p.getBarcode().compare(0, 2, c) != 0)
+        r.errors.push_back("barcode '" + p.getBarcode() + "' must start with its category id " + c);
+}
+
 void BarcodePathRule::check(const Product &p, ValidationReport &r) const
 {
     if (p.getBarcodeFilePath().empty())
@@ -78,7 +88,8 @@ ProductValidator ProductValidator::standard()
         .addRule(std::make_unique<ProductNameRule>())
         .addRule(std::make_unique<PriceRule>())
         .addRule(std::make_unique<QuantityRule>())
-        .addRule(std::make_unique<BarcodePathRule>());
+        .addRule(std::make_unique<BarcodePathRule>())
+        .addRule(std::make_unique<CategoryIdRule>());
     return v;
 }
 

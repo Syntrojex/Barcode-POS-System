@@ -1,4 +1,5 @@
 #include "AppState.h"
+#include "UiStore.h"
 #include "BarcodeArt.h"
 #include "integration/ProductAdapter.h"
 #include "billing/BillingService.h"
@@ -29,6 +30,7 @@ ProductInfo ProductInfo::from(const Product& p, const QString& rootDir)
     i.tax = p.getTax();
     i.discount = p.getDiscount();
     i.stock = p.getAvailableQuantity();
+    i.categoryId = QString::fromStdString(p.getCategoryId());
     const QString path = QString::fromStdString(p.getBarcodeFilePath());
     i.imagePath = QFileInfo(path).isAbsolute() ? path : QDir(rootDir).filePath(path);
     return i;
@@ -95,7 +97,7 @@ Settings Settings::load()
     store.beginGroup("terminal");
     Settings settings;
     settings.lowStockThreshold = qBound(0, store.value("lowStockThreshold", settings.lowStockThreshold).toInt(), 1000);
-    settings.autoAddScans = store.value("autoAddScans", settings.autoAddScans).toBool();
+    settings.autoAddScans = store.value("addScansToCart", settings.autoAddScans).toBool();
     settings.beepOnScan = store.value("beepOnScan", settings.beepOnScan).toBool();
     using Payment = barcodehub::order::PaymentMode;
     const auto payment = static_cast<Payment>(store.value("defaultPayment", int(Payment::Cash)).toInt());
@@ -111,7 +113,7 @@ bool Settings::save() const
     QSettings store(QSettings::defaultFormat(), QSettings::UserScope, "BarcodeHub", "SmartPOS");
     store.beginGroup("terminal");
     store.setValue("lowStockThreshold", lowStockThreshold);
-    store.setValue("autoAddScans", autoAddScans);
+    store.setValue("addScansToCart", autoAddScans);
     store.setValue("beepOnScan", beepOnScan);
     store.setValue("defaultPayment", int(defaultPayment));
     store.setValue("receiptA4", receiptA4);
@@ -726,8 +728,9 @@ namespace
     {
         MeasurementUnit unit = MeasurementUnit::Count;
         parseMeasurementUnit(p.unit.toStdString(), unit);
+        const QString category = p.categoryId.isEmpty() ? p.ean.left(2) : p.categoryId;
         return Product(p.id, p.ean.toStdString(), p.sku.toStdString(), p.name.toStdString(), unit, p.price, p.tax,
-                       p.discount, p.stock, barcodeFile.toStdString());
+                       p.discount, p.stock, barcodeFile.toStdString(), category.toStdString());
     }
 }
 
@@ -783,6 +786,9 @@ QString AppState::validateProduct(const ProductInfo& p, bool isNew) const
         return "Acronym is required.";
     if (p.ean.isEmpty())
         return "Generate a barcode first.";
+    const QString category = p.categoryId.isEmpty() ? p.ean.left(2) : p.categoryId;
+    if (!UiStore::instance().category(category))
+        return QString("Category %1 is not in PCategory.txt. Add it on the Categories page first.").arg(category);
     const Product candidate = toProduct(p, "data/barcodes/" + p.ean + ".png");
     const ValidationReport report = ProductValidator::standard().validate(candidate);
     if (!report.ok())

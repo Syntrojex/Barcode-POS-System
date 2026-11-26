@@ -27,6 +27,7 @@ struct ProductInfo
     double tax = 0;      // tax per unit (PKR)
     double discount = 0; // discount per unit (PKR)
     int stock = 0;
+    QString categoryId;  // 2-digit Category Id stored in Product.txt (= first two barcode digits)
     QString imagePath;   // resolved barcode image (may not exist)
     static ProductInfo from(const Product &p, const QString &rootDir);
 };
@@ -73,7 +74,7 @@ struct OrderRecord
 struct Settings
 {
     int lowStockThreshold = 10;
-    bool autoAddScans = false;
+    bool autoAddScans = true; // requirement 10: a scan adds the item with no extra click
     bool beepOnScan = true;
     barcodehub::order::PaymentMode defaultPayment = barcodehub::order::PaymentMode::Cash;
     bool receiptA4 = false;
@@ -113,8 +114,7 @@ public:
     // 8-digit barcode "cc" + 5-digit serial + EAN-8 check digit for category `categoryId`; empty if that category is full.
     QString nextBarcode(const QString &categoryId) const;
     int nextSerial(const QString &categoryId) const; // the serial nextBarcode() will use
-    // True when the Increment 2 backend would accept a barcode with this 2-digit prefix (it only allows 01-09 today:
-    // "a product barcode starts with 0 and never with 00"). Used by the Categories page to refuse unusable ids.
+    // True when the back end accepts barcodes with this 2-digit Category Id as prefix (any of 01-99).
     bool backendAcceptsPrefix(const QString &categoryId) const;
     // Empty when `p` may be saved; otherwise the first problem (backend ProductValidator + duplicate barcode/acronym).
     QString validateProduct(const ProductInfo &p, bool isNew) const;

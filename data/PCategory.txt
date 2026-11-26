@@ -1,0 +1,8 @@
+01 General Store GEN#
+10 Dairy & Milk Products DAI#
+20 Bakery & Fresh Bread BAK#
+30 Beverages & Tea BEV#
+40 Snacks & Confectionery SNK#
+50 Grocery & Staples GRC#
+60 Personal Care & Hygiene PER#
+70 Household & Cleaning HSD#
