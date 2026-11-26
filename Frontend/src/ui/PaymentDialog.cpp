@@ -1,5 +1,5 @@
-// "Complete Order Payment" (redesigned): billing breakdown with item / seasonal / special discount and tax on the
-// left; tender mode, cash numpad shortcuts and balance to return on the right.
+// "Payment" dialog: the bill on the left (only the discounts that apply are shown), how the customer pays on the
+// right (cash with quick amounts, or card / wallet), and the change to return.
 // Frontend only: the numbers come from Pricing::quote (the same function the order is saved with), so what the
 // cashier sees here is exactly what lands in Order.txt / Bill.txt.
 #include "Dialogs.h"
@@ -22,97 +22,92 @@ namespace Dialogs
 {
     bool payment(QWidget *parent, const PaymentRequest &req, PaymentResult &res)
     {
-        const QString who = req.customer.trimmed().isEmpty() ? QString("Walk-in Customer") : req.customer.trimmed();
-        QString sub = QString("Order #%1  •  %2").arg(req.orderId, who);
-        const QString phone = req.contact.trimmed();
-        if (!phone.isEmpty() && phone != "-")
-            sub += QString("  (%1)").arg(phone);
-        Ui::Modal d(parent, "cash", "Complete Order Payment", sub, "POS DESK", 880);
-
         Pricing::Quote q = Pricing::quote(req.lines, 0);
+        const QString who = req.customer.trimmed().isEmpty() ? QString("Walk-in Customer") : req.customer.trimmed();
+        Ui::Modal d(parent, "cash", "Payment",
+                    QString("Order #%1  ·  %2  ·  %3 item%4").arg(req.orderId, who).arg(q.units).arg(q.units == 1 ? "" : "s"),
+                    QString(), 820);
 
         auto *cols = new QHBoxLayout;
-        cols->setSpacing(14);
+        cols->setSpacing(18);
 
-        // ============================================================ left: billing breakdown
+        // ============================================================ left: the bill
         auto *bill = W::card(nullptr, "subCard");
         auto *bv = new QVBoxLayout(bill);
-        bv->setContentsMargins(16, 14, 16, 14);
-        bv->setSpacing(8);
-        auto *itemsBadge = W::badge("", "blue");
-        W::headerRow(bv, "bills", "Billing Breakdown", itemsBadge);
+        bv->setContentsMargins(18, 16, 18, 16);
+        bv->setSpacing(10);
+        bv->addWidget(W::label("Bill", "caption"));
 
-        QLabel *gross = nullptr, *itemDisc = nullptr, *seasonal = nullptr, *special = nullptr, *tax = nullptr;
-        QLabel *seasonalName = nullptr;
-        auto row = [&](const QString &k, QLabel *&val, QLabel **keyOut = nullptr)
+        // one "label ......... amount" line; returns the row so it can be hidden when it is zero
+        auto line = [&](const QString &k, QLabel *&key, QLabel *&val)
         {
-            auto *r = new QHBoxLayout;
-            auto *kl = W::label(k, "muted");
-            kl->setWordWrap(true);
-            r->addWidget(kl, 1);
+            auto *row = new QWidget;
+            auto *h = new QHBoxLayout(row);
+            h->setContentsMargins(0, 0, 0, 0);
+            key = W::label(k, "muted");
             val = W::label("PKR 0.00");
-            val->setStyleSheet("font-weight:800; font-size:14px;");
-            r->addWidget(val);
-            bv->addLayout(r);
-            if (keyOut)
-                *keyOut = kl;
+            val->setStyleSheet("font-weight:700;");
+            h->addWidget(key, 1);
+            h->addWidget(val);
+            bv->addWidget(row);
+            return row;
         };
-        row("Gross Subtotal", gross);
-        row("Item Discount", itemDisc);
-        row("Seasonal Discount", seasonal, &seasonalName);
+        QLabel *grossK, *gross, *itemK, *itemDisc, *seasonK, *seasonal, *taxK, *tax;
+        line("Subtotal", grossK, gross);
+        auto *itemRow = line("Item discount", itemK, itemDisc);
+        auto *seasonRow = line("Seasonal discount", seasonK, seasonal);
 
         // special discount: typed percent, at most 8 percent (requirement 8)
-        auto *spBox = W::card(nullptr, "field");
-        auto *sh = new QHBoxLayout(spBox);
-        sh->setContentsMargins(8, 8, 8, 8);
-        sh->setSpacing(6);
-        auto *discountLabel = W::label("Special Discount", "muted");
-        discountLabel->setWordWrap(true);
-        sh->addWidget(discountLabel, 1);
+        auto *spRow = new QHBoxLayout;
+        spRow->setSpacing(8);
+        spRow->addWidget(W::label("Special discount", "muted"));
         auto *pct = new QDoubleSpinBox;
         pct->setRange(0, UiStore::kSpecialDiscountCapPercent);
         pct->setDecimals(1);
         pct->setSingleStep(0.5);
         pct->setSuffix(" %");
-        pct->setToolTip("Special discount, at most 8 percent");
-        pct->setMinimumWidth(84);
-        sh->addWidget(pct);
-        sh->addWidget(W::badge(QString("Max %1%").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 0), "grey"));
-        special = W::label("PKR 0.00");
-        special->setStyleSheet("font-weight:800; font-size:14px;");
-        special->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        sh->addWidget(special);
-        bv->addWidget(spBox);
+        pct->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        pct->setAlignment(Qt::AlignRight);
+        pct->setFixedWidth(70);
+        pct->setMinimumHeight(32);
+        pct->setToolTip(QString("At most %1%").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 0));
+        spRow->addWidget(pct);
+        spRow->addWidget(W::label(QString("max %1%").arg(UiStore::kSpecialDiscountCapPercent, 0, 'f', 0), "muted"));
+        spRow->addStretch();
+        auto *special = W::label("PKR 0.00");
+        special->setStyleSheet("font-weight:700;");
+        spRow->addWidget(special);
+        bv->addLayout(spRow);
 
-        row("Sales Tax", tax);
+        line("Tax", taxK, tax);
         bv->addStretch();
 
         auto *totalBox = W::card(nullptr, "totalBox");
-        auto *tv = new QVBoxLayout(totalBox);
-        tv->setContentsMargins(16, 12, 16, 14);
-        tv->setSpacing(2);
-        tv->addWidget(W::label("NET PAYABLE AMOUNT", "caption"));
+        auto *th = new QHBoxLayout(totalBox);
+        th->setContentsMargins(16, 12, 16, 12);
+        auto *totalK = W::label("Total");
+        totalK->setStyleSheet("font-size:15px; font-weight:700; color:white; background:transparent;");
         auto *payable = W::label("PKR 0.00");
-        payable->setStyleSheet("font-size:32px; font-weight:800; color:white;");
-        tv->addWidget(payable);
+        payable->setStyleSheet("font-size:28px; font-weight:800; color:white; background:transparent;");
+        th->addWidget(totalK);
+        th->addStretch();
+        th->addWidget(payable);
         bv->addWidget(totalBox);
-        cols->addWidget(bill, 5);
+        cols->addWidget(bill, 1);
 
-        // ============================================================ right: tender
+        // ============================================================ right: how the customer pays
         auto *right = new QVBoxLayout;
-        right->setSpacing(8);
-        right->addWidget(W::label("SELECT TENDER MODE", "caption"));
+        right->setSpacing(10);
+        right->addWidget(W::label("Pay with", "caption"));
         auto *modeRow = new QHBoxLayout;
-        modeRow->setSpacing(8);
+        modeRow->setSpacing(6);
         auto *modes = new QButtonGroup(&d);
         const QStringList modeNames = {"Cash", "Card", "Wallet"};
-        const QStringList modeSub = {"CASH IN HAND", "SWIPE / TAP", "QR CODE"};
-        const QStringList modeIcons = {"cash", "card", "wallet"};
         for (int i = 0; i < 3; ++i)
         {
-            auto *b = W::button(modeNames[i] + "\n" + modeSub[i], "tab", modeIcons[i]);
+            auto *b = W::button(modeNames[i], "tab"); // text only: an icon would vanish on the selected (blue) button
             b->setCheckable(true);
-            b->setMinimumHeight(58);
+            b->setMinimumHeight(42);
             modes->addButton(b, i);
             modeRow->addWidget(b, 1);
         }
@@ -121,35 +116,37 @@ namespace Dialogs
         const int initialMode = preferredPayment == Payment::Card ? 1 : preferredPayment == Payment::Wallet ? 2 : 0;
         modes->button(initialMode)->setChecked(true);
         right->addLayout(modeRow);
+        right->addSpacing(4);
 
-        // page 0: cash, page 1: card / wallet gateway
+        // page 0: cash received, page 1: bank / wallet
         auto *pages = new QStackedWidget;
         auto *cashPage = new QWidget;
         auto *cv = new QVBoxLayout(cashPage);
         cv->setContentsMargins(0, 0, 0, 0);
         cv->setSpacing(8);
-        cv->addWidget(W::label("TENDER AMOUNT RECEIVED", "caption"));
+        cv->addWidget(W::label("Amount received", "caption"));
         auto *tender = new QDoubleSpinBox;
-        tender->setPrefix("PKR  ");
+        tender->setPrefix("PKR ");
         tender->setDecimals(2);
         tender->setRange(0, 100000000);
         tender->setGroupSeparatorShown(true);
         tender->setAlignment(Qt::AlignRight);
-        tender->setMinimumHeight(54);
-        tender->setStyleSheet("font-size:24px; font-weight:800;");
+        tender->setMinimumHeight(52);
+        tender->setStyleSheet("font-size:22px; font-weight:800;");
         tender->setButtonSymbols(QAbstractSpinBox::NoButtons);
         cv->addWidget(tender);
-        cv->addWidget(W::label("FAST CASH TENDER SHORTCUTS", "caption"));
         auto *quick = new QHBoxLayout;
-        quick->setSpacing(8);
-        QPushButton *exact = nullptr;
+        quick->setSpacing(6);
         bool replaceOnFirstKey = true; // the pre-filled exact amount is replaced by the first note the cashier adds
         bool updating = false;
+        auto *exact = W::button("Exact", "soft");
+        exact->setMinimumHeight(36);
+        quick->addWidget(exact, 1);
         for (int add : {500, 1000, 5000})
         {
             auto *b = W::button(QString("+%L1").arg(add), "soft");
-            b->setMinimumHeight(40);
-            b->setToolTip("Adds to the amount received (the first key replaces the pre-filled exact amount)");
+            b->setMinimumHeight(36);
+            b->setToolTip("Adds to the amount received");
             QObject::connect(b, &QPushButton::clicked, &d, [&, add]
                              {
                 const double base = replaceOnFirstKey ? 0.0 : tender->value();
@@ -157,50 +154,43 @@ namespace Dialogs
                 tender->setValue(base + add); });
             quick->addWidget(b, 1);
         }
-        exact = W::button("Exact", "primary");
-        exact->setMinimumHeight(40);
-        quick->addWidget(exact, 1);
         cv->addLayout(quick);
+        cv->addStretch();
         pages->addWidget(cashPage);
 
         auto *gatePage = new QWidget;
         auto *gv = new QVBoxLayout(gatePage);
         gv->setContentsMargins(0, 0, 0, 0);
         gv->setSpacing(8);
-        auto *gateCap = W::label("CARD / DIGITAL GATEWAY ROUTE", "caption");
+        auto *gateCap = W::label("Bank / terminal", "caption");
         gv->addWidget(gateCap);
         auto *gate = new QComboBox;
         gate->setEditable(true);
-        gate->setMinimumHeight(40);
+        gate->setMinimumHeight(42);
         gv->addWidget(gate);
-        auto *gateHint = W::label("Pick the bank or wallet, or type another name.", "muted");
-        gv->addWidget(gateHint);
         gv->addStretch();
         pages->addWidget(gatePage);
-        right->addWidget(pages);
+        right->addWidget(pages, 1);
 
-        // balance to return (green) / short by (red)
+        // change to return (green) / still short (red) / charged to card or wallet (blue)
         auto *balBox = new QFrame;
         auto *bh = new QHBoxLayout(balBox);
-        bh->setContentsMargins(16, 10, 16, 10);
-        auto *balCap = W::label("BALANCE CHANGE RETURN", "caption");
+        bh->setContentsMargins(16, 12, 16, 12);
+        auto *balCap = W::label("Change");
         auto *balVal = W::label("PKR 0.00");
-        auto *balCol = new QVBoxLayout;
-        balCol->setSpacing(0);
-        balCol->addWidget(balCap);
-        balCol->addWidget(balVal);
-        bh->addLayout(balCol, 1);
-        right->addStretch();
+        bh->addWidget(balCap);
+        bh->addStretch();
+        bh->addWidget(balVal);
         right->addWidget(balBox);
-        cols->addLayout(right, 6);
+        cols->addLayout(right, 1);
         d.body()->addLayout(cols);
 
         // ============================================================ footer
-        auto *cancel = W::button("Cancel  [Esc]", "", "close");
-        auto *ok = W::button("Confirm Payment && Print  [Enter]", "primary", "check");
+        auto *cancel = W::button("Cancel", "flat");
+        auto *ok = W::button("Pay", "primary", "check");
         ok->setMinimumHeight(42);
-        ok->setDefault(true);
-        d.footer()->addWidget(W::label("Bill is saved as PDF from the receipt screen", "muted"));
+        ok->setMinimumWidth(190);
+        ok->setDefault(true); // Enter pays
         d.footer()->addStretch();
         d.footer()->addWidget(cancel);
         d.footer()->addWidget(ok);
@@ -213,12 +203,12 @@ namespace Dialogs
             if (modes->checkedId() == 2)
             {
                 gate->addItems({"JazzCash", "Easypaisa", "SadaPay", "NayaPay"});
-                gateCap->setText("WALLET");
+                gateCap->setText("Wallet");
             }
             else
             {
                 gate->addItems({"HBL - POS Terminal 04", "Meezan Bank - POS", "UBL - POS Terminal", "Allied Bank - POS"});
-                gateCap->setText("CARD / DIGITAL GATEWAY ROUTE");
+                gateCap->setText("Bank / terminal");
             }
             gate->setCurrentIndex(0);
         };
@@ -226,43 +216,50 @@ namespace Dialogs
         auto refresh = [&]
         {
             q = Pricing::quote(req.lines, pct->value());
-            W::setBadge(itemsBadge, QString("%1 ITEM%2").arg(q.units).arg(q.units == 1 ? "" : "S"), "blue");
             gross->setText(W::money(q.gross));
             itemDisc->setText(W::money(-q.itemDiscount));
-            seasonalName->setText(q.seasonName.isEmpty()
-                                      ? QString("Seasonal Discount (none active)")
-                                      : QString("Seasonal %1% (%2)").arg(q.seasonalPercent, 0, 'g', 4).arg(q.seasonName));
+            itemRow->setVisible(q.itemDiscount > 0.005);   // only lines that apply are shown
+            seasonK->setText(QString("Seasonal discount (%1%)").arg(q.seasonalPercent, 0, 'g', 4));
             seasonal->setText(W::money(-q.seasonal));
+            seasonRow->setVisible(!q.seasonName.isEmpty());
+            seasonRow->setToolTip(q.seasonName);
             special->setText(W::money(-q.special));
             tax->setText(W::money(q.tax));
             payable->setText(W::money(q.payable));
-            exact->setText(QString("Exact (%1)").arg(W::money(q.payable)));
 
-            const bool cash = modes->checkedId() == 0;
-            pages->setCurrentIndex(cash ? 0 : 1);
+            const int mode = modes->checkedId();
+            pages->setCurrentIndex(mode == 0 ? 0 : 1);
+            QString bg = "#e3f6ec", fg = "#0b6b3f";
             bool enough = true;
-            if (cash)
+            if (mode == 0)
             {
                 const double diff = tender->value() - q.payable;
                 enough = diff >= -0.005;
-                balCap->setText(enough ? "BALANCE CHANGE RETURN" : "SHORT BY");
+                balCap->setText(enough ? "Change to return" : "Still short");
                 balVal->setText(W::money(enough ? qMax(0.0, diff) : -diff));
+                if (!enough)
+                {
+                    bg = "#fde7e6";
+                    fg = "#ba1a1a";
+                }
             }
             else
             {
-                balCap->setText(modes->checkedId() == 1 ? "CHARGE TO CARD" : "CHARGE TO WALLET");
+                balCap->setText(mode == 1 ? "Charge to card" : "Charge to wallet");
                 balVal->setText(W::money(q.payable));
+                bg = "#e6edff";
+                fg = "#1d46b4";
             }
-            const QString bg = enough ? "#0b7a4a" : "#ba1a1a";
-            balBox->setStyleSheet(QString("QFrame{background:%1; border-radius:12px;} QLabel{background:transparent; color:white;}").arg(bg));
-            balVal->setStyleSheet("font-size:26px; font-weight:800; color:white; background:transparent;");
-            balCap->setStyleSheet("font-size:10.5px; font-weight:800; letter-spacing:1px; color:#d7f8e2; background:transparent;");
-            ok->setEnabled(cash ? enough : !gate->currentText().trimmed().isEmpty());
+            balBox->setStyleSheet(QString("QFrame{background:%1; border-radius:10px;} QLabel{background:transparent; color:%2;}").arg(bg, fg));
+            balCap->setStyleSheet(QString("font-size:14px; font-weight:700; color:%1;").arg(fg));
+            balVal->setStyleSheet(QString("font-size:22px; font-weight:800; color:%1;").arg(fg));
+            ok->setText("Pay " + W::money(q.payable));
+            ok->setEnabled(mode == 0 ? enough : !gate->currentText().trimmed().isEmpty());
         };
 
         QObject::connect(pct, qOverload<double>(&QDoubleSpinBox::valueChanged), &d, [&](double)
                          {
-            // while the amount is still the pre-filled exact amount it follows the new payable
+            // while the amount is still the pre-filled exact amount it follows the new total
             const double before = q.payable;
             const Pricing::Quote nq = Pricing::quote(req.lines, pct->value());
             if (replaceOnFirstKey && qAbs(tender->value() - before) < 0.005)

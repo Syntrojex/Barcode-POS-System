@@ -320,7 +320,7 @@ void ScannerChecklistTests::twoOrdersFromOneChecklist()
                 return;
             }
             for (auto *button : dialog->findChildren<QPushButton *>())
-                if (button->isEnabled() && button->text().startsWith("Confirm Payment"))
+                if (button->isEnabled() && button->text().startsWith("Pay "))
                 {
                     button->click();
                     return;
