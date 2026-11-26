@@ -51,6 +51,18 @@ All notable changes to **BarcodeHub** are documented in this file.
 - The seasonal discount applies to the whole bill; an unused per-category filter was removed (amounts are unchanged).
 - Layout: the form scrolls instead of squashing its labels onto the inputs; table columns no longer clip.
 
+### Changed — manager approval is a request the manager accepts (requirement 3)
+
+- A cashier no longer types a manager PIN on the cashier screen. On Orders, "Request edit" on a paid order sends
+  the request with a reason; the button shows "Waiting" until a manager decides.
+- The manager sees "Waiting for your approval" on Orders (and a count on the Orders menu item, plus a notice at
+  sign-in) and clicks Approve or Reject. After approval the cashier's button becomes "Open".
+- One approval allows one edit: it is used up when the edit is saved or cancelled. A rejected request can be sent again.
+- Requests are saved in `data/EditRequests.txt` (`orderId status requestedAt cashier reason decidedAt manager#`),
+  so they survive a restart and are seen by every terminal using the same data folder.
+- A manager editing an order still opens it directly; his approval is recorded the same way.
+- Removed the demo manager ID/PIN check.
+
 ### Development Notes
 
 - Increment 3 builds on the Point of Sale system from Increment 2.

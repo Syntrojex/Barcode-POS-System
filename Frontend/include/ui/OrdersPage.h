@@ -1,5 +1,6 @@
 #pragma once
-// Orders Management: search/filter every order, open one for editing, manager approval for paid orders.
+// Orders Management: search/filter every order, open one for editing.
+// Paid orders (requirement 3): a cashier sends an edit request; a manager approves or rejects it here.
 #include "AppState.h"
 #include "UserRole.h"
 #include <QWidget>
@@ -15,7 +16,8 @@ class OrdersPage : public QWidget
 public:
     explicit OrdersPage(QWidget *parent = nullptr);
     void setSearch(const QString &text);
-    void setRole(UserRole role); // Manager approves paid-order edits itself; Cashier must ask for approval
+    void setRole(UserRole role); // Manager approves requests and edits directly; Cashier sends a request first
+    void setUser(const QString &name) { m_user = name; }
 signals:
     void toast(const QString &message);
     void resumeOrder(const QString &orderId); // open an on-hold / in-progress order in Record Order
@@ -24,7 +26,9 @@ signals:
 
 private:
     void rebuild();
-    void openPaid(const OrderRecord &order); // approval (cashier) then edit in Record Order
+    void openPaid(const OrderRecord &order); // manager: edit now; cashier: open if approved, else send a request
+    void rebuildRequests();                  // manager's "waiting for approval" panel
+    void showEvent(QShowEvent *e) override;
     QLineEdit *m_orderSearch = nullptr, *m_custSearch = nullptr;
     QTableWidget *m_table = nullptr;
     QString m_filter = "All";
@@ -32,4 +36,8 @@ private:
     QLabel *m_showing = nullptr;
     QLabel *m_empty = nullptr;
     UserRole m_role = UserRole::Cashier;
+    QString m_user;
+    QWidget *m_requestsCard = nullptr;
+    QLabel *m_requestsTitle = nullptr;
+    class QVBoxLayout *m_requestsList = nullptr;
 };

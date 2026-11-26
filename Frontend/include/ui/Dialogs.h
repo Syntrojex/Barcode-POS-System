@@ -45,10 +45,10 @@ namespace Dialogs
     bool payment(QWidget *parent, const PaymentRequest &req, PaymentResult &res);
 
     /**
-     * @brief "Manager Approval Required": a paid order may only be edited (within 7 days of payment) after a manager
-     *        signs it off. Returns true when approved; fills the manager's name and the audit reason.
+     * @brief "Request edit" (cashier): asks for the reason to send to a manager, who approves or rejects the
+     *        request on the Orders page. Returns false when the cashier cancels.
      */
-    bool managerApproval(QWidget *parent, const OrderRecord &order, QString *managerName, QString *reason);
+    bool requestEditReason(QWidget *parent, const OrderRecord &order, QString *reason);
 
     /**
      * @brief "Add New Product to Catalog" (existing == nullptr) or edit an existing product: category, specifications,

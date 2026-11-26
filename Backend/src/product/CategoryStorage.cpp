@@ -1,111 +1,156 @@
 #include "CategoryStorage.h"
 
-#include <cctype>
-#include <cstdio>
-#include <filesystem>
 #include <fstream>
-#include <set>
 #include <sstream>
 
-namespace
+using namespace std;
+
+// ---------------------------------------------------------------- small helper functions
+
+// Removes spaces, tabs and line-end characters from both ends of a string.
+static string trim(const string &s)
 {
-    std::string trim(const std::string &s)
-    {
-        const auto a = s.find_first_not_of(" \t\r\n");
-        if (a == std::string::npos)
-            return {};
-        return s.substr(a, s.find_last_not_of(" \t\r\n") - a + 1);
-    }
+    int start = 0;
+    int end = (int)s.size() - 1;
+    while (start <= end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n'))
+        start++;
+    while (end >= start && (s[end] == ' ' || s[end] == '\t' || s[end] == '\r' || s[end] == '\n'))
+        end--;
+    return s.substr(start, end - start + 1);
+}
 
-    bool twoDigits(const std::string &s)
-    {
-        return s.size() == 2 && std::isdigit(static_cast<unsigned char>(s[0])) &&
-               std::isdigit(static_cast<unsigned char>(s[1]));
-    }
-} // namespace
-
-CategoryRepository::CategoryRepository(std::string filePath) : m_path(std::move(filePath)) {}
-
-std::string CategoryRepository::validate(const ProductCategory &c)
+// True if s is exactly two digits, e.g. "10".
+static bool isTwoDigits(const string &s)
 {
-    if (!twoDigits(c.id) || c.id == "00")
+    return s.size() == 2 && s[0] >= '0' && s[0] <= '9' && s[1] >= '0' && s[1] <= '9';
+}
+
+// True if s contains the character c.
+static bool contains(const string &s, char c)
+{
+    return s.find(c) != string::npos;
+}
+
+// Splits a line into words (separated by one or more spaces).
+static vector<string> splitWords(const string &line)
+{
+    vector<string> words;
+    stringstream in(line);
+    string word;
+    while (in >> word)
+        words.push_back(word);
+    return words;
+}
+
+// ---------------------------------------------------------------- CategoryRepository
+
+CategoryRepository::CategoryRepository(string filePath)
+{
+    m_path = filePath;
+}
+
+string CategoryRepository::validate(const ProductCategory &c)
+{
+    if (!isTwoDigits(c.id) || c.id == "00")
         return "Category ID must be 2 digits from 01 to 99.";
-    if (trim(c.name).empty())
+    if (trim(c.name) == "")
         return "Category name is required.";
-    if (c.name.find('#') != std::string::npos)
+    if (contains(c.name, '#'))
         return "Category name cannot contain '#'.";
-    if (c.acronym.empty() || c.acronym.find_first_of(" \t#") != std::string::npos)
+    if (c.acronym == "" || contains(c.acronym, ' ') || contains(c.acronym, '#'))
         return "Category acronym must be one word without spaces or '#'.";
-    return {};
+    return ""; // valid
 }
 
-std::string CategoryRepository::encode(const ProductCategory &c)
+string CategoryRepository::encode(const ProductCategory &c)
 {
-    return c.id + ' ' + trim(c.name) + ' ' + c.acronym + '#';
+    return c.id + " " + trim(c.name) + " " + c.acronym + "#";
 }
 
-bool CategoryRepository::decode(const std::string &rawLine, ProductCategory &out, std::string *error)
+bool CategoryRepository::decode(const string &rawLine, ProductCategory &out, string *error)
 {
-    auto fail = [error](const std::string &message) {
+    string line = trim(rawLine);
+
+    // 1. the line must end with '#'
+    if (line == "" || line[line.size() - 1] != '#')
+    {
         if (error)
-            *error = message;
+            *error = "line must end with '#'";
         return false;
-    };
-    std::string line = trim(rawLine);
-    if (line.empty() || line.back() != '#')
-        return fail("line must end with '#'");
-    line.pop_back();
-    std::istringstream in(line);
-    std::vector<std::string> t;
-    for (std::string tok; in >> tok;)
-        t.push_back(tok);
-    if (t.size() < 3)
-        return fail("expected 3 fields: categoryId categoryName categoryAcronym");
+    }
+    line = line.substr(0, line.size() - 1); // remove the '#'
+
+    // 2. we need at least 3 words: id, name (one or more words), acronym
+    vector<string> words = splitWords(line);
+    if (words.size() < 3)
+    {
+        if (error)
+            *error = "expected 3 fields: categoryId categoryName categoryAcronym";
+        return false;
+    }
+
+    // 3. first word = id, last word = acronym, everything in between = name
     ProductCategory c;
-    c.id = t.front();
-    c.acronym = t.back();
-    for (std::size_t i = 1; i + 1 < t.size(); ++i)
-        c.name += (c.name.empty() ? "" : " ") + t[i];
-    if (const std::string why = validate(c); !why.empty())
-        return fail(why);
+    c.id = words[0];
+    c.acronym = words[words.size() - 1];
+    for (int i = 1; i < (int)words.size() - 1; i++)
+    {
+        if (c.name != "")
+            c.name += " ";
+        c.name += words[i];
+    }
+
+    // 4. check the values
+    string problem = validate(c);
+    if (problem != "")
+    {
+        if (error)
+            *error = problem;
+        return false;
+    }
     out = c;
     return true;
 }
 
 bool CategoryRepository::exists() const
 {
-    std::error_code ec;
-    return std::filesystem::exists(m_path, ec);
+    ifstream file(m_path);
+    return file.is_open();
 }
 
-std::vector<ProductCategory> CategoryRepository::load(std::vector<std::string> *errors) const
+vector<ProductCategory> CategoryRepository::load(vector<string> *errors) const
 {
-    std::vector<ProductCategory> categories;
-    std::ifstream file(m_path);
-    if (!file)
-        return categories;
-    std::set<std::string> ids;
-    std::string line;
-    int number = 0;
-    while (std::getline(file, line))
+    vector<ProductCategory> categories;
+    ifstream file(m_path);
+    if (!file.is_open())
+        return categories; // no file yet: no categories
+
+    string line;
+    int lineNumber = 0;
+    while (getline(file, line))
     {
-        ++number;
-        if (number == 1 && line.compare(0, 3, "\xEF\xBB\xBF") == 0)
-            line.erase(0, 3); // UTF-8 byte-order mark
-        if (trim(line).empty())
-            continue;
+        lineNumber++;
+        if (trim(line) == "")
+            continue; // skip empty lines
+
         ProductCategory c;
-        std::string why;
+        string why;
         if (!decode(line, c, &why))
         {
             if (errors)
-                errors->push_back("PCategory.txt line " + std::to_string(number) + ": " + why);
+                errors->push_back("PCategory.txt line " + to_string(lineNumber) + ": " + why);
             continue;
         }
-        if (!ids.insert(c.id).second)
+
+        // the same id may appear only once (linear search through what we have read so far)
+        bool repeated = false;
+        for (int i = 0; i < (int)categories.size(); i++)
+            if (categories[i].id == c.id)
+                repeated = true;
+        if (repeated)
         {
             if (errors)
-                errors->push_back("PCategory.txt line " + std::to_string(number) + ": category id " + c.id +
+                errors->push_back("PCategory.txt line " + to_string(lineNumber) + ": category id " + c.id +
                                   " appears twice");
             continue;
         }
@@ -114,47 +159,28 @@ std::vector<ProductCategory> CategoryRepository::load(std::vector<std::string> *
     return categories;
 }
 
-bool CategoryRepository::save(const std::vector<ProductCategory> &categories, std::string *error) const
+bool CategoryRepository::save(const vector<ProductCategory> &categories, string *error) const
 {
-    for (const auto &c : categories)
-        if (const std::string why = validate(c); !why.empty())
-        {
-            if (error)
-                *error = "category " + c.id + ": " + why;
-            return false;
-        }
-    const std::string tmp = m_path + ".tmp";
+    // check every category first, so a bad one never reaches the file
+    for (int i = 0; i < (int)categories.size(); i++)
     {
-        std::ofstream out(tmp, std::ios::trunc);
-        if (!out)
+        string problem = validate(categories[i]);
+        if (problem != "")
         {
             if (error)
-                *error = "cannot write " + tmp;
-            return false;
-        }
-        for (const auto &c : categories)
-            out << encode(c) << '\n';
-        if (!out)
-        {
-            if (error)
-                *error = "write failed for " + tmp;
+                *error = "category " + categories[i].id + ": " + problem;
             return false;
         }
     }
-    std::error_code ec;
-    std::filesystem::rename(tmp, m_path, ec);
-    if (ec)
+
+    ofstream file(m_path); // opening for writing empties the old file
+    if (!file.is_open())
     {
-        ec.clear();
-        std::filesystem::copy_file(tmp, m_path, std::filesystem::copy_options::overwrite_existing, ec);
-        std::error_code ignored;
-        std::filesystem::remove(tmp, ignored);
-        if (ec)
-        {
-            if (error)
-                *error = "cannot replace " + m_path + ": " + ec.message();
-            return false;
-        }
+        if (error)
+            *error = "cannot write " + m_path;
+        return false;
     }
+    for (int i = 0; i < (int)categories.size(); i++)
+        file << encode(categories[i]) << "\n";
     return true;
 }

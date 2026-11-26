@@ -84,22 +84,37 @@ public:
     bool takeParked(const QString &code, ParkedOrder &out); // reads it (it stays on hold until it is paid)
     bool discardParked(const QString &code, QString *error = nullptr);
 
-    // ---- manager sign-off (needed to edit a paid order) ----
-    // Demo check only: replace with real staff accounts when the back-end has them.
-    static QString demoManagerId() { return QStringLiteral("MGR-004"); }
-    static QString demoManagerName() { return QStringLiteral("Salman Tariq"); }
-    static QString demoManagerPin() { return QStringLiteral("1234"); }
-    // Approvals given on the Orders page for editing a paid order (kept for this session, consumed on use).
+    // ---- edit requests (requirement 3): a cashier asks, a manager approves or rejects ----
+    // Saved in data/EditRequests.txt, so a request survives a restart and is seen by every terminal on the same data
+    // folder. An approval is good for one edit: it is used up when the edit is saved or cancelled.
+    struct EditRequest
+    {
+        QString orderId;
+        QString status; // "pending" | "approved" | "rejected" | "used"
+        QString cashier, reason;
+        QDateTime requestedAt;
+        QString manager; // who decided
+        QDateTime decidedAt;
+    };
+    QVector<EditRequest> editRequests() const;            // newest first
+    QVector<EditRequest> pendingEditRequests() const;     // waiting for a manager, oldest first
+    const EditRequest *latestEditRequest(const QString &orderId) const;
+    QString requestEdit(const QString &orderId, const QString &cashier, const QString &reason); // empty = sent
+    QString decideEdit(const QString &orderId, const QString &manager, bool approve);          // empty = done
+    int approvedUnusedCount() const;                      // approved, not yet used (cashier's to-do)
+    void reloadEditRequests();                            // re-read the file (another terminal may have changed it)
+
+    // Used by Record Order: an approved request for this order (a signed-in manager approves his own edit).
     struct Approval { QString manager, reason; QDateTime at; };
     void grantApproval(const QString &orderId, const QString &manager, const QString &reason);
     bool approvalFor(const QString &orderId, Approval *out = nullptr) const;
-    void revokeApproval(const QString &orderId);
-    bool verifyManager(const QString &staffId, const QString &pin, QString *managerName = nullptr) const;
+    void revokeApproval(const QString &orderId); // the approval is used up
 
 signals:
     void categoriesChanged();
     void seasonsChanged();
     void parkedChanged();
+    void editRequestsChanged();
 
 private:
     UiStore();
@@ -112,5 +127,9 @@ private:
     void saveSeasons();
     QVector<Category> m_categories;
     QVector<Season> m_seasons;
-    QMap<QString, Approval> m_approvals;
+    QString editRequestsPath() const;
+    bool saveEditRequests(const QVector<EditRequest> &requests, QString *error = nullptr);
+    void setEditRequests(const QVector<EditRequest> &requests); // keeps memory + file + watcher in step
+    QVector<EditRequest> m_requests;
+    class QFileSystemWatcher *m_watcher = nullptr;
 };
