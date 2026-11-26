@@ -53,11 +53,14 @@ namespace ean8
 // ======================= Product =======================
 Product::Product(int id, std::string barcode, std::string acronym, std::string name, MeasurementUnit unit,
                  double unitPrice, double tax, double discount, int availableQuantity,
-                 std::string barcodeFilePath)
+                 std::string barcodeFilePath, std::string categoryId)
     : id_(id), barcode_(std::move(barcode)), acronym_(std::move(acronym)), name_(std::move(name)),
       unit_(unit), unitPrice_(unitPrice), tax_(tax), discount_(discount),
-      availableQuantity_(availableQuantity), barcodeFilePath_(std::move(barcodeFilePath))
+      availableQuantity_(availableQuantity), barcodeFilePath_(std::move(barcodeFilePath)),
+      categoryId_(std::move(categoryId))
 {
+    if (categoryId_.empty() && barcode_.size() >= 2)
+        categoryId_ = barcode_.substr(0, 2); // older Product.txt lines have no Category Id field
 }
 
 void Product::deductStock(int qty)
@@ -78,6 +81,7 @@ ProductDescription ProductDescriber::describe(const Product &p) const
     const std::string unit = p.getMeasurementUnitName();
     d.fields = {
         {"Product ID", std::to_string(p.getProductID())},
+        {"Category ID", p.getCategoryId()},
         {"Barcode", p.getBarcode()},
         {"Acronym", p.getAcronym()},
         {"Name", p.getProductName()},

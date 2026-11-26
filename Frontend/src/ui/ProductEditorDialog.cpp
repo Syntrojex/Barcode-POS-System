@@ -116,14 +116,7 @@ namespace Dialogs
         bool curListed = false;
         for (const auto &c : store.categories())
         {
-            // The Increment 2 backend only accepts some 2-digit prefixes; those are listed but cannot be picked.
-            const bool usable = app.backendAcceptsPrefix(c.id) || c.id == curCat;
-            catBox->addItem(QString("%1 - %2%3").arg(c.id, c.name, usable ? QString() : QString("   (prefix not accepted by Product.txt rules yet)")),
-                            c.id);
-            if (!usable)
-                if (auto *m = qobject_cast<QStandardItemModel *>(catBox->model()))
-                    if (auto *it = m->item(catBox->count() - 1))
-                        it->setEnabled(false);
+            catBox->addItem(QString("%1 - %2").arg(c.id, c.name), c.id); // the Category Id becomes the barcode prefix
             if (c.id == curCat)
                 curListed = true;
         }
@@ -420,6 +413,7 @@ namespace Dialogs
             p.discount = disc->value();
             p.stock = stock->value();
             p.ean = code;
+            p.categoryId = code.left(2); // requirement 2: the Category Id is stored in Product.txt
             QString err;
             const bool ok = isNew ? app.addProduct(p, &err) : app.updateProduct(p, &err);
             if (!ok)

@@ -62,6 +62,13 @@ public:
     void check(const Product &p, ValidationReport &r) const override;
 };
 
+// Increment 3, requirements 1-2: the Category Id is 2 digits (01-99) and equals the first two barcode digits.
+class CategoryIdRule : public IProductRule
+{
+public:
+    void check(const Product &p, ValidationReport &r) const override;
+};
+
 class BarcodePathRule : public IProductRule
 {
 public:

@@ -74,6 +74,13 @@ bool BillingService::checkout(const std::string& orderId, const PaymentRequest& 
     if (seasonal < 0 || special < 0) return fail(error, "Seasonal and special discounts cannot be negative.");
     if (seasonal + special > result.totals.payable + 0.005)
         return fail(error, "Seasonal and special discounts are larger than the bill.");
+    {
+        const double base = result.totals.withoutTax - result.totals.discount - seasonal;
+        double units = 0; // the checkout screen rounds per unit, so allow half a paisa per unit
+        for (const auto& line : result.lines) units += line.quantity;
+        if (special > common::roundMoney(base * kMaxSpecialDiscountPercent / 100.0) + 0.01 + 0.005 * units)
+            return fail(error, "The special discount cannot be more than 8 percent of the bill.");
+    }
     result.seasonalDiscount = seasonal;
     result.specialDiscount = special;
     result.totals.payable = common::roundMoney(result.totals.payable - seasonal - special);
@@ -139,6 +146,13 @@ bool BillingService::rebill(const std::string& orderId, const PaymentRequest& pa
     if (seasonal < 0 || special < 0) return fail(error, "Seasonal and special discounts cannot be negative.");
     if (seasonal + special > result.totals.payable + 0.005)
         return fail(error, "Seasonal and special discounts are larger than the bill.");
+    {
+        const double base = result.totals.withoutTax - result.totals.discount - seasonal;
+        double units = 0; // the checkout screen rounds per unit, so allow half a paisa per unit
+        for (const auto& line : result.lines) units += line.quantity;
+        if (special > common::roundMoney(base * kMaxSpecialDiscountPercent / 100.0) + 0.01 + 0.005 * units)
+            return fail(error, "The special discount cannot be more than 8 percent of the bill.");
+    }
     result.seasonalDiscount = seasonal;
     result.specialDiscount = special;
     result.totals.payable = common::roundMoney(result.totals.payable - seasonal - special);

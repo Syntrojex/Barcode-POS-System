@@ -416,7 +416,9 @@ void RecordOrderPage::processBarcode(const QString& codeIn, bool fromScanner, bo
     m_feed->setCode(p->ean);
     setPreview(p);
     m_manual->clear();
-    if (fromScanner && AppState::instance().settings().autoAddScans)
+    // A camera scan, or a complete barcode typed / sent by a USB scanner (which "types" the code and presses
+    // Enter), goes straight into the cart. Typing a product ID or acronym only shows it, to check before adding.
+    if ((fromScanner || code == p->ean) && AppState::instance().settings().autoAddScans)
     {
         if (!addToCart(*p))
             return;

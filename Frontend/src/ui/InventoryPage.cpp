@@ -127,7 +127,7 @@ InventoryPage::InventoryPage(QWidget *parent) : QWidget(parent)
         for (const auto &p : AppState::instance().products())
         {
             const int q = m_edits.value(p.id, p.stock);
-            rows << QString("%1,%2,%3,%4,%5,%6,%7").arg(p.id).arg(p.ean, p.sku, csvField(p.name), p.ean.left(2)).arg(q).arg(stockText(q, limit).toUpper());
+            rows << QString("%1,%2,%3,%4,%5,%6,%7").arg(p.id).arg(p.ean, p.sku, csvField(p.name), p.categoryId).arg(q).arg(stockText(q, limit).toUpper());
         }
         if (writeCsv(this, "inventory.csv", rows)) emit toast("Stock ledger exported"); });
     connect(&AppState::instance(), &AppState::changed, this, &InventoryPage::refresh);
@@ -185,7 +185,7 @@ void InventoryPage::rebuild()
     for (const auto &p : base)
     {
         const int qty = m_edits.value(p.id, p.stock);
-        if (!cat.isEmpty() && p.ean.left(2) != cat) continue;
+        if (!cat.isEmpty() && p.categoryId != cat) continue;
         if (m_lowOnly->isChecked() && qty > limit) continue;
         rows << p;
     }
@@ -196,12 +196,12 @@ void InventoryPage::rebuild()
     {
         const ProductInfo p = rows[r];
         m_table->setRowHeight(r, 52);
-        const Category *c = UiStore::instance().category(p.ean.left(2));
+        const Category *c = UiStore::instance().category(p.categoryId);
         m_table->setItem(r, 0, item("PRD-" + QString::number(p.id).rightJustified(4, '0'), Qt::AlignLeft | Qt::AlignVCenter, "#004ac6", true));
         auto *product = item(p.name + "\nEAN: " + p.ean + "  -  " + p.unit);
         product->setToolTip(product->text());
         m_table->setItem(r, 1, product);
-        m_table->setItem(r, 2, item(p.sku + "\n" + (c ? c->name : QString("Category " + p.ean.left(2)))));
+        m_table->setItem(r, 2, item(p.sku + "\n" + (c ? c->name : QString("Category " + p.categoryId))));
         m_table->setItem(r, 5, item(W::money(p.price), Qt::AlignRight | Qt::AlignVCenter));
 
         auto *cell = new QWidget;

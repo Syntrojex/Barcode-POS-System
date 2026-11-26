@@ -2,7 +2,9 @@
 #include "product/ProductModel.h"
 #include "product/ProductStorage.h"
 #include "product/ProductValidation.h"
+#include "product/CategoryStorage.h"
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -39,7 +41,7 @@ int main()
     // ---- validation + loader
     CHECK(loadText(std::string(kGood) + "\n").products.size() == 1);
     CHECK(loadText("1 01001020 TOOLONGACRO Milk count 340 0 10 42 a.png#\n").products.empty());   // acronym > 8
-    CHECK(loadText("1 40001029 OLP Milk count 100 0 0 5 a.png#\n").products.empty());           // must start with 0
+    CHECK(loadText("1 40001029 OLP Milk count 100 0 0 5 a.png#\n").products.size() == 1);       // category 40 is fine
     CHECK(loadText("1 00001020 OLP Milk count 100 0 0 5 a.png#\n").products.empty());           // 00xxxxxx not allowed
     CHECK(loadText("1 01001020 OLP Milk count 100 0 0 5 a.png#\n").products.size() == 1);       // 01xxxxxx is fine
     CHECK(loadText("1 4000 OLP Milk count 340 0 10 42 a.png#\n").products.empty());              // barcode not 8 digits
@@ -110,6 +112,44 @@ int main()
     CHECK(b.loadProducts(tmp) && b.getProducts().size() == a.getProducts().size() &&
           b.searchByID(1)->getAvailableQuantity() == 40);
     std::remove(tmp.c_str());
+
+    // ---- Increment 3, requirement 2: Category Id stored in Product.txt
+    {
+        const ProductLoadResult r = loadText("1 10000014 MILKPAK Nestle Milkpak 1L count 300 15 0 20 data/barcodes/10000014.png 10#\n");
+        CHECK(r.products.size() == 1 && r.products[0].getCategoryId() == "10" &&
+              r.products[0].getProductName() == "Nestle Milkpak 1L");
+        CHECK(loadText(std::string(kGood) + "\n").products[0].getCategoryId() == "01");         // old line: from barcode
+        CHECK(loadText("1 10000014 MILK Milk count 300 0 0 2 a.png 20#\n").products.empty());   // id != barcode prefix
+        CHECK(loadText("1 10000014 MILK Milk count 300 0 0 2 a.png 00#\n").products.empty());   // category 00
+        const Product p = r.products[0];
+        const std::string line = ProductFileWriter().serialize(p);
+        CHECK(line == "1 10000014 MILKPAK Nestle Milkpak 1L count 300.00 15.00 0.00 20 data/barcodes/10000014.png 10#");
+        CHECK(ProductRecordCodec::format(p).size() > 0 && ProductRecordCodec::parse("1 10000014 MILK Milk count 1 0 0 2 a.png 10#").ok);
+        CHECK(pm.loadProducts("data/Product.txt") && pm.searchByID(1)->getCategoryId() == "01");
+    }
+
+    // ---- Increment 3, requirement 1: PCategory.txt
+    {
+        ProductCategory c;
+        CHECK(CategoryRepository::decode("10 Dairy & Milk Products DAI#", c) && c.id == "10" &&
+              c.name == "Dairy & Milk Products" && c.acronym == "DAI");
+        CHECK(CategoryRepository::encode(c) == "10 Dairy & Milk Products DAI#");
+        CHECK(!CategoryRepository::decode("10 Dairy DAI", c));      // no '#'
+        CHECK(!CategoryRepository::decode("1 Dairy DAI#", c));      // id not 2 digits
+        CHECK(!CategoryRepository::decode("00 Nothing NON#", c));   // 00 is not a category
+        CHECK(!CategoryRepository::decode("10 DAI#", c));           // name missing
+        const std::string file = "pcategory_test.tmp";
+        CategoryRepository repo(file);
+        CHECK(repo.save({{"01", "General Store", "GEN"}, {"80", "Frozen Foods", "FRZ"}}));
+        std::vector<std::string> errs;
+        auto loaded = repo.load(&errs);
+        CHECK(loaded.size() == 2 && loaded[1].name == "Frozen Foods" && errs.empty());
+        CHECK(!repo.save({{"0A", "Bad", "BAD"}}));                   // invalid rows are refused
+        { std::ofstream f(file, std::ios::app); f << "80 Duplicate DUP#\nbroken line\n"; }
+        loaded = repo.load(&errs);
+        CHECK(loaded.size() == 2 && errs.size() == 2);
+        std::remove(file.c_str());
+    }
 
     std::cout << (failures ? "FAILED" : "ALL OK") << " (" << failures << " failures)\n";
     return failures ? 1 : 0;

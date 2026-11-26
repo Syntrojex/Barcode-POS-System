@@ -30,9 +30,10 @@ class Product
 {
 public:
     Product() = default;
+    // categoryId: the product's 2-digit Category Id (PCategory.txt). Empty = take the first two barcode digits.
     Product(int id, std::string barcode, std::string acronym, std::string name, MeasurementUnit unit,
             double unitPrice, double tax, double discount, int availableQuantity,
-            std::string barcodeFilePath);
+            std::string barcodeFilePath, std::string categoryId = {});
 
     int getProductID() const { return id_; }
     const std::string &getBarcode() const { return barcode_; }
@@ -45,6 +46,7 @@ public:
     double getDiscount() const { return discount_; }
     int getAvailableQuantity() const { return availableQuantity_; }
     const std::string &getBarcodeFilePath() const { return barcodeFilePath_; }
+    const std::string &getCategoryId() const { return categoryId_; } // Increment 3, requirement 2
 
     void deductStock(int qty); // throws std::invalid_argument if qty is invalid
 
@@ -59,6 +61,7 @@ private:
     double discount_ = 0;
     int availableQuantity_ = 0;
     std::string barcodeFilePath_;
+    std::string categoryId_;
 };
 
 // ---------- Describing a product ----------

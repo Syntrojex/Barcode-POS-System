@@ -1,6 +1,7 @@
 #include "UiStore.h"
 #include "AppState.h"
 #include "billing/SeasonRepository.h"
+#include "product/CategoryStorage.h"
 #include <QDir>
 #include <QRegularExpression>
 #include <algorithm>
@@ -38,22 +39,75 @@ UiStore &UiStore::instance()
 
 UiStore::UiStore()
 {
-    // Categories: the ones from the design plus "01" for the products already in Product.txt (Increment 2 barcodes).
-    m_categories = {
-        {"01", "General Store", "GEN", "#2554d8"},
-        {"10", "Dairy & Milk Products", "DAI", "#2554d8"},
-        {"20", "Bakery & Fresh Bread", "BAK", "#535e7a"},
-        {"30", "Beverages & Tea", "BEV", "#006e4c"},
-        {"40", "Snacks & Confectionery", "SNK", "#2554d8"},
-        {"50", "Grocery & Staples", "GRC", "#b6c4ff"},
-        {"60", "Personal Care & Hygiene", "PER", "#b6c4ff"},
-        {"70", "Household & Cleaning", "HSD", "#b6c4ff"},
-    };
-
+    loadCategories(); // PCategory.txt (requirement 1)
     loadSeasons(); // real seasons from Seasons.txt (no demo seasons)
 }
 
-// ---------------------------------------------------------------- categories
+// ---------------------------------------------------------------- categories (PCategory.txt)
+namespace
+{
+    QString categoryColor(const QString &id)
+    {
+        static const char *kColors[] = {"#2554d8", "#535e7a", "#006e4c", "#b6c4ff"};
+        return kColors[id.toInt() % 4];
+    }
+}
+
+QString UiStore::categoriesPath() const
+{
+    return QDir(AppState::instance().dataDir()).filePath("PCategory.txt");
+}
+
+void UiStore::loadCategories()
+{
+    CategoryRepository repo(categoriesPath().toStdString());
+    m_categories.clear();
+    if (!repo.exists())
+    {
+        // First run: create PCategory.txt with a starting set; "01" holds the products already in Product.txt.
+        const QVector<Category> starter = {
+            {"01", "General Store", "GEN", ""},          {"10", "Dairy & Milk Products", "DAI", ""},
+            {"20", "Bakery & Fresh Bread", "BAK", ""},   {"30", "Beverages & Tea", "BEV", ""},
+            {"40", "Snacks & Confectionery", "SNK", ""}, {"50", "Grocery & Staples", "GRC", ""},
+            {"60", "Personal Care & Hygiene", "PER", ""}, {"70", "Household & Cleaning", "HSD", ""},
+        };
+        QString error;
+        if (!saveCategories(starter, &error))
+            qWarning("Could not create PCategory.txt: %s", qPrintable(error));
+        m_categories = starter;
+    }
+    else
+    {
+        std::vector<std::string> errors;
+        for (const auto &r : repo.load(&errors))
+            m_categories.push_back({QString::fromStdString(r.id), QString::fromStdString(r.name),
+                                    QString::fromStdString(r.acronym), QString()});
+        for (const auto &e : errors)
+            qWarning("%s", e.c_str()); // bad lines are skipped, not fatal
+    }
+    // Products whose Category Id is missing from the file still get a row, so they can be seen and fixed.
+    for (const auto &p : AppState::instance().products())
+        if (!p.categoryId.isEmpty() && !category(p.categoryId))
+            m_categories.push_back({p.categoryId, "Category " + p.categoryId, "C" + p.categoryId, QString()});
+    std::sort(m_categories.begin(), m_categories.end(), [](const Category &a, const Category &b) { return a.id < b.id; });
+    for (auto &c : m_categories)
+        c.color = categoryColor(c.id);
+}
+
+bool UiStore::saveCategories(const QVector<Category> &categories, QString *error)
+{
+    std::vector<ProductCategory> rows;
+    for (const auto &c : categories)
+        rows.push_back({c.id.toStdString(), c.name.trimmed().toStdString(), c.acronym.trimmed().toStdString()});
+    std::string why;
+    if (!CategoryRepository(categoriesPath().toStdString()).save(rows, &why))
+    {
+        if (error) *error = "Could not save PCategory.txt: " + QString::fromStdString(why);
+        return false;
+    }
+    return true;
+}
+
 const Category *UiStore::category(const QString &id) const
 {
     for (const auto &c : m_categories)
@@ -66,7 +120,7 @@ int UiStore::productCount(const QString &id) const
 {
     int n = 0;
     for (const auto &p : AppState::instance().products())
-        if (p.ean.left(2) == id)
+        if ((p.categoryId.isEmpty() ? p.ean.left(2) : p.categoryId) == id)
             ++n;
     return n;
 }
@@ -94,13 +148,17 @@ QString UiStore::validateCategory(const QString &id, const QString &name, const 
     static const QRegularExpression twoDigits("^\\d{2}$");
     if (!twoDigits.match(id).hasMatch())
         return "Category ID must be exactly 2 digits.";
+    if (id == "00")
+        return "Category ID 00 is not allowed (barcodes cannot start with 00). Use 01 to 99.";
     if (const Category *c = category(id); c && id != ignoreId)
         return QString("Category ID \"%1\" is already in use by \"%2\". Please pick an unused 2-digit code (e.g. %3).")
             .arg(id, c->name, freeIds(1).value(0, "80"));
     if (name.trimmed().isEmpty())
         return "Category name is required.";
-    if (acronym.trimmed().isEmpty() || acronym.trimmed().size() > 3)
-        return "Acronym must be 1 to 3 characters.";
+    if (acronym.trimmed().isEmpty() || acronym.trimmed().size() > 3 || acronym.trimmed().contains(' '))
+        return "Acronym must be 1 to 3 characters, without spaces.";
+    if (name.contains('#'))
+        return "Category name cannot contain '#'.";
     for (const auto &c : m_categories)
         if (c.id != ignoreId && c.acronym.compare(acronym.trimmed(), Qt::CaseInsensitive) == 0)
             return QString("Acronym \"%1\" is already used by \"%2\".").arg(acronym.trimmed().toUpper(), c.name);
@@ -118,8 +176,13 @@ bool UiStore::addCategory(const Category &c, QString *error)
     Category n = c;
     n.name = c.name.trimmed();
     n.acronym = c.acronym.trimmed().toUpper();
-    m_categories.push_back(n);
-    std::sort(m_categories.begin(), m_categories.end(), [](const Category &a, const Category &b) { return a.id < b.id; });
+    n.color = categoryColor(n.id);
+    QVector<Category> next = m_categories;
+    next.push_back(n);
+    std::sort(next.begin(), next.end(), [](const Category &a, const Category &b) { return a.id < b.id; });
+    if (!saveCategories(next, error))
+        return false;
+    m_categories = next;
     emit categoriesChanged();
     return true;
 }
@@ -137,14 +200,19 @@ bool UiStore::updateCategory(const QString &oldId, const Category &c, QString *e
         if (error) *error = "This category already has products; changing its id would break their barcodes.";
         return false;
     }
-    for (auto &x : m_categories)
+    QVector<Category> next = m_categories;
+    for (auto &x : next)
         if (x.id == oldId)
         {
             x = c;
             x.name = c.name.trimmed();
             x.acronym = c.acronym.trimmed().toUpper();
+            x.color = categoryColor(x.id);
         }
-    std::sort(m_categories.begin(), m_categories.end(), [](const Category &a, const Category &b) { return a.id < b.id; });
+    std::sort(next.begin(), next.end(), [](const Category &a, const Category &b) { return a.id < b.id; });
+    if (!saveCategories(next, error))
+        return false;
+    m_categories = next;
     emit categoriesChanged();
     return true;
 }
@@ -159,7 +227,11 @@ bool UiStore::removeCategory(const QString &id, QString *error)
     for (int i = 0; i < m_categories.size(); ++i)
         if (m_categories[i].id == id)
         {
-            m_categories.removeAt(i);
+            QVector<Category> next = m_categories;
+            next.removeAt(i);
+            if (!saveCategories(next, error))
+                return false;
+            m_categories = next;
             emit categoriesChanged();
             return true;
         }

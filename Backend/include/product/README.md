@@ -1,29 +1,35 @@
 # Product module (standard C++17)
 
-This module uses only the C++ standard library. It does not include Qt headers and can be compiled/tested independently of the GUI.
+This module uses only the C++ standard library. It does not include Qt headers and can be compiled and tested
+independently of the GUI.
 
-- `Product`: product data and validation rules.
-- `ProductManager`: catalogue loading, lookup, uniqueness checks, and stock reservation.
-- `FileIO`: text-file persistence for product, order, order-detail, and bill records.
+- `ProductModel.h/.cpp`: the `Product` class (including its Category Id), measurement units, EAN-8 checks,
+  `ProductDescriber` and text formatting.
+- `ProductValidation.h/.cpp`: the product rules (`ProductValidator`) and stock checks (`StockValidator`).
+- `ProductStorage.h/.cpp`: reading and writing `Product.txt`, and the in-memory catalogue `ProductManager`.
+- `CategoryStorage.h/.cpp`: reading and writing `PCategory.txt` (`CategoryRepository`).
 
 ## Product.txt format
 
-Each record is exactly ten space-separated fields followed by `#`:
+One product per line, space separated, ending with `#`:
 
-`productId barcode acronym name measurementUnit unitPrice tax discount availableQuantity barcodeFilePath#`
+`productId barcode acronym name measurementUnit unitPrice tax discount availableQuantity barcodeFilePath categoryId#`
 
-`acronym` is limited to 8 characters. `measurementUnit` must be `count` or `weight`. Because the assignment specifies space-separated fields without quoting/escaping, `name` and `barcodeFilePath` must not contain spaces. Use a relative path where practical, for example `assets/barcodes/12345678.png`.
+Example: `1 01001020 OLPMILK Olpers Full Cream Milk 1L count 340.00 0.00 10.00 42 data/barcodes/01001020.png 01#`
 
-The project archive's `data/Product.txt` was empty, so no sample product rows have been fabricated. Add the actual product records supplied by your team/instructor.
+- `name` may contain spaces (it is everything between the acronym and the measurement unit).
+- `measurementUnit` is `count` or `weight`.
+- `categoryId` is 2 digits (01-99), must exist in `PCategory.txt`, and must equal the first two barcode digits.
+- Lines written before Increment 3 have no `categoryId`; they are still read and take it from the barcode.
 
-## Standalone compile check
+## PCategory.txt format
 
-From the repository root (G++):
+One category per line, space separated, ending with `#`:
 
-```sh
-g++ -std=c++17 -Wall -Wextra -Wpedantic -I Backend/include \
-  Backend/src/product/Product.cpp \
-  Backend/src/product/ProductManager.cpp \
-  Backend/src/product/FileIO.cpp \
-  path/to/your_product_test.cpp -o product_test
-```
+`categoryId categoryName categoryAcronym#`, e.g. `10 Dairy & Milk Products DAI#`
+
+The Category Id is the first two digits of every barcode generated for that category.
+
+## Tests
+
+`tests/product_tests.cpp` (CTest name `product`).

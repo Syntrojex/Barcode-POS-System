@@ -43,6 +43,7 @@ add_library(product_core STATIC
     Backend/src/product/ProductModel.cpp
     Backend/src/product/ProductStorage.cpp
     Backend/src/product/ProductValidation.cpp
+    Backend/src/product/CategoryStorage.cpp
 )
 
 target_include_directories(product_core PUBLIC
