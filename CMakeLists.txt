@@ -407,7 +407,26 @@ endif()
 
 add_executable(BarcodeHub WIN32
     Frontend/src/main.cpp
+    Frontend/resources/app_icon.qrc
 )
+
+if(WIN32)
+    enable_language(RC)
+    configure_file(Frontend/resources/app_icon.rc.in app_icon.rc @ONLY)
+    if(MINGW)
+        # Compile the resource without Qt include paths. windres can misquote paths with spaces.
+        set(_app_icon_object "${CMAKE_CURRENT_BINARY_DIR}/app_icon.obj")
+        add_custom_command(OUTPUT "${_app_icon_object}"
+            COMMAND "${CMAKE_RC_COMPILER}" -O coff app_icon.rc app_icon.obj
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+            DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/app_icon.rc" "${CMAKE_CURRENT_SOURCE_DIR}/assets/pos_icon.ico"
+            VERBATIM)
+        set_source_files_properties("${_app_icon_object}" PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+        target_sources(BarcodeHub PRIVATE "${_app_icon_object}")
+    else()
+        target_sources(BarcodeHub PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app_icon.rc")
+    endif()
+endif()
 
 target_link_libraries(BarcodeHub PRIVATE
     barcode_ui

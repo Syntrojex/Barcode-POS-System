@@ -2,6 +2,7 @@
 #include "Theme.h"
 #include <QApplication>
 #include <QFont>
+#include <QIcon>
 #include "Dialogs.h"
 #include <QStyleFactory>
 
@@ -9,6 +10,7 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     QApplication::setApplicationName("BarcodeHub");
+    QApplication::setWindowIcon(QIcon(":/app/pos_icon.png"));
     QApplication::setStyle(QStyleFactory::create("Fusion")); // identical look on every platform
     QFont f = app.font();
     f.setPointSizeF(9.5);
