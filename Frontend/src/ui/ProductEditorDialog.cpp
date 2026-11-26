@@ -1,6 +1,6 @@
-// "Add New Product to Catalog" / "Edit Product" (manager).
-// Layout follows the Stitch design: 1 Category selection, 2 Product specifications, EAN-8 barcode engine on the right.
-// Frontend only: everything is saved through the existing AppState::addProduct / updateProduct (Increment 2 backend).
+// "New Product" / "Edit Product" dialog (manager): a simple form on the left, the barcode on the right.
+// The barcode is generated automatically from the chosen category; saving goes through AppState::addProduct /
+// updateProduct, which write Product.txt (with the Category Id) and the barcode PNG.
 #include "BarcodeArt.h"
 #include "Dialogs.h"
 #include "Theme.h"
@@ -31,16 +31,6 @@
 
 namespace
 {
-    // Round numbered badge "1" / "2" in front of a section title.
-    QLabel *stepDot(int n)
-    {
-        auto *l = new QLabel(QString::number(n));
-        l->setFixedSize(22, 22);
-        l->setAlignment(Qt::AlignCenter);
-        l->setStyleSheet("background:#2554d8; color:white; border-radius:11px; font-weight:800; font-size:12px;");
-        return l;
-    }
-
     // Saves a one-page A4 sheet (3 x 8 labels) with this barcode; returns false when the user cancels or it fails.
     bool saveLabelSheet(QWidget *parent, const QString &code, const QString &name)
     {
@@ -87,248 +77,130 @@ namespace Dialogs
         const bool isNew = (existing == nullptr);
         const ProductInfo cur = existing ? *existing : ProductInfo();
 
-        Ui::Modal d(parent, isNew ? "plus" : "edit",
-                    isNew ? "Add New Product to Catalog" : "Edit Product",
-                    isNew ? "Configure SKU specs, retail pricing and auto-generate the category-linked EAN-8 barcode"
-                          : "Change the product details. The barcode stays the same.",
-                    isNew ? "SKU ENTRY" : "EDIT", 900);
+        Ui::Modal d(parent, isNew ? "plus" : "edit", isNew ? "New Product" : "Edit Product",
+                    isNew ? "Choose a category and fill in the details - the barcode is created for you."
+                          : "Barcode and category stay the same.",
+                    QString(), 780);
 
-        auto *cols = new QHBoxLayout;
-        cols->setSpacing(14);
-        auto *left = new QVBoxLayout;
-        left->setSpacing(12);
-
-        // ------------------------------------------------ 1. category
-        auto *c1 = W::card(nullptr, "subCard");
-        auto *v1 = new QVBoxLayout(c1);
-        v1->setContentsMargins(14, 12, 14, 12);
-        v1->setSpacing(8);
-        auto *h1 = new QHBoxLayout;
-        h1->setSpacing(8);
-        h1->addWidget(stepDot(1));
-        h1->addWidget(W::label("Category Selection *", "h2"));
-        h1->addStretch();
-        h1->addWidget(W::label("DEFINES BARCODE PREFIX", "caption"));
-        v1->addLayout(h1);
-
-        auto *catBox = new QComboBox;
-        const QString curCat = cur.ean.left(2);
-        bool curListed = false;
-        for (const auto &c : store.categories())
+        // small helpers: a caption above a field, and a money box without spin arrows
+        auto field = [](const QString &caption, QWidget *w)
         {
-            catBox->addItem(QString("%1 - %2").arg(c.id, c.name), c.id); // the Category Id becomes the barcode prefix
-            if (c.id == curCat)
-                curListed = true;
-        }
-        if (!isNew && !curListed && curCat.size() == 2)
-            catBox->addItem(curCat + " - (category not configured)", curCat);
-        if (isNew)
-        {
-            for (int i = 0; i < catBox->count(); ++i)
-            {
-                auto *m = qobject_cast<QStandardItemModel *>(catBox->model());
-                if (!m || m->item(i)->isEnabled())
-                {
-                    catBox->setCurrentIndex(i);
-                    break;
-                }
-            }
-        }
-        else
-        {
-            const int idx = catBox->findData(curCat);
-            if (idx >= 0)
-                catBox->setCurrentIndex(idx);
-            catBox->setEnabled(false); // the category is part of the barcode, which is fixed
-        }
-        catBox->setMinimumHeight(38);
-        v1->addWidget(catBox);
-        auto *note = W::label("The first two digits of every barcode come automatically from the Category ID "
-                              "(e.g. 10 for Dairy). Categories are managed on the Categories page.", "muted");
-        note->setWordWrap(true);
-        v1->addWidget(note);
-        left->addWidget(c1);
-
-        // ------------------------------------------------ 2. specifications
-        auto *c2 = W::card(nullptr, "subCard");
-        auto *v2 = new QVBoxLayout(c2);
-        v2->setContentsMargins(14, 12, 14, 12);
-        v2->setSpacing(8);
-        auto *h2 = new QHBoxLayout;
-        h2->setSpacing(8);
-        h2->addWidget(stepDot(2));
-        h2->addWidget(W::label("Product Specifications", "h2"));
-        h2->addStretch();
-        v2->addLayout(h2);
-
-        auto *g = new QGridLayout;
-        g->setHorizontalSpacing(10);
-        g->setVerticalSpacing(4);
-        g->setColumnStretch(0, 3);
-        g->setColumnStretch(1, 3);
-        g->setColumnStretch(2, 3);
-
-        auto *idField = new QLineEdit(QString("PRD-%1").arg(isNew ? app.nextProductId() : cur.id, 4, 10, QChar('0')));
-        idField->setReadOnly(true);
-        idField->setMinimumHeight(36);
-        auto *name = new QLineEdit(cur.name);
-        name->setPlaceholderText("e.g. Olpers Full Cream Milk 1.5L");
-        name->setMinimumHeight(36);
-        g->addWidget(W::label("PRODUCT ID", "caption"), 0, 0);
-        g->addWidget(W::label("PRODUCT NAME *", "caption"), 0, 1, 1, 2);
-        g->addWidget(idField, 1, 0);
-        g->addWidget(name, 1, 1, 1, 2);
-
-        auto *acr = new QLineEdit(cur.sku);
-        acr->setMaxLength(8);
-        acr->setPlaceholderText("e.g. OLPMILK");
-        acr->setMinimumHeight(36);
-        auto *acrCount = W::label("", "caption");
-        auto *acrHead = new QHBoxLayout;
-        acrHead->setContentsMargins(0, 0, 0, 0);
-        acrHead->addWidget(W::label("ACRONYM *", "caption"));
-        acrHead->addStretch();
-        acrHead->addWidget(acrCount);
-        auto *acrHeadW = new QWidget;
-        acrHeadW->setLayout(acrHead);
-        g->addWidget(acrHeadW, 2, 0);
-        g->addWidget(W::label("UNIT TYPE", "caption"), 2, 1, 1, 2);
-        g->addWidget(acr, 3, 0);
-
-        auto *unitRow = new QHBoxLayout;
-        unitRow->setSpacing(6);
-        auto *countBtn = W::button("Count / Unit", "tab");
-        auto *weightBtn = W::button("Weight / Kg", "tab");
-        countBtn->setCheckable(true);
-        weightBtn->setCheckable(true);
-        countBtn->setMinimumHeight(36);
-        weightBtn->setMinimumHeight(36);
-        auto *unitGroup = new QButtonGroup(&d);
-        unitGroup->setExclusive(true);
-        unitGroup->addButton(countBtn);
-        unitGroup->addButton(weightBtn);
-        (cur.unit == "weight" ? weightBtn : countBtn)->setChecked(true);
-        unitRow->addWidget(countBtn, 1);
-        unitRow->addWidget(weightBtn, 1);
-        auto *unitW = new QWidget;
-        unitW->setLayout(unitRow);
-        unitRow->setContentsMargins(0, 0, 0, 0);
-        g->addWidget(unitW, 3, 1, 1, 2);
-
-        auto money = [&](double value)
+            auto *box = new QVBoxLayout;
+            box->setSpacing(5);
+            box->addWidget(W::label(caption, "caption"));
+            box->addWidget(w);
+            return box;
+        };
+        auto money = [](double value)
         {
             auto *s = new QDoubleSpinBox;
-            s->setPrefix("PKR ");
             s->setDecimals(2);
             s->setRange(0, 10000000);
             s->setValue(value);
-            s->setMinimumHeight(36);
+            s->setButtonSymbols(QAbstractSpinBox::NoButtons);
+            s->setMinimumHeight(38);
             return s;
         };
+
+        auto *cols = new QHBoxLayout;
+        cols->setSpacing(18);
+
+        // ------------------------------------------------ form (left)
+        auto *form = new QVBoxLayout;
+        form->setSpacing(14);
+
+        auto *catBox = new QComboBox;
+        catBox->setMinimumHeight(38);
+        const QString curCat = cur.categoryId.isEmpty() ? cur.ean.left(2) : cur.categoryId;
+        for (const auto &c : store.categories())
+            catBox->addItem(c.id + "  ·  " + c.name, c.id); // the Category Id becomes the barcode prefix
+        if (!isNew && catBox->findData(curCat) < 0 && curCat.size() == 2)
+            catBox->addItem(curCat + "  ·  (not in PCategory.txt)", curCat);
+        if (!isNew)
+        {
+            catBox->setCurrentIndex(qMax(0, catBox->findData(curCat)));
+            catBox->setEnabled(false); // the category is part of the barcode, which is fixed
+        }
+        form->addLayout(field("Category", catBox));
+
+        auto *name = new QLineEdit(cur.name);
+        name->setPlaceholderText("e.g. Olpers Full Cream Milk 1.5L");
+        name->setMinimumHeight(38);
+        form->addLayout(field("Product name", name));
+
+        auto *row1 = new QHBoxLayout;
+        row1->setSpacing(12);
+        auto *acr = new QLineEdit(cur.sku);
+        acr->setMaxLength(8);
+        acr->setPlaceholderText("Up to 8 letters");
+        acr->setMinimumHeight(38);
+        row1->addLayout(field("Acronym", acr), 1);
+        auto *unitRow = new QHBoxLayout;
+        unitRow->setSpacing(6);
+        auto *countBtn = W::button("Count", "tab");
+        auto *weightBtn = W::button("Weight", "tab");
+        auto *unitGroup = new QButtonGroup(&d);
+        for (auto *b : {countBtn, weightBtn})
+        {
+            b->setCheckable(true);
+            b->setMinimumHeight(38);
+            unitGroup->addButton(b);
+            unitRow->addWidget(b, 1);
+        }
+        (cur.unit == "weight" ? weightBtn : countBtn)->setChecked(true);
+        auto *unitW = new QWidget;
+        unitW->setLayout(unitRow);
+        unitRow->setContentsMargins(0, 0, 0, 0);
+        row1->addLayout(field("Sold by", unitW), 1);
+        form->addLayout(row1);
+
+        auto *row2 = new QHBoxLayout;
+        row2->setSpacing(12);
         auto *price = money(cur.price);
         auto *tax = money(cur.tax);
         auto *disc = money(cur.discount);
-        g->addWidget(W::label("RETAIL PRICE (NO TAX)", "caption"), 4, 0);
-        g->addWidget(W::label("TAX PER UNIT", "caption"), 4, 1);
-        g->addWidget(W::label("DISCOUNT / UNIT", "caption"), 4, 2);
-        g->addWidget(price, 5, 0);
-        g->addWidget(tax, 5, 1);
-        g->addWidget(disc, 5, 2);
-        v2->addLayout(g);
+        row2->addLayout(field("Price (PKR, no tax)", price), 1);
+        row2->addLayout(field("Tax (PKR)", tax), 1);
+        row2->addLayout(field("Discount (PKR)", disc), 1);
+        form->addLayout(row2);
 
-        auto *gst = W::button("Set tax to 5% of price", "mini");
-        QObject::connect(gst, &QPushButton::clicked, &d, [=] { tax->setValue(qRound64(price->value() * 5.0) / 100.0); });
-        v2->addWidget(gst, 0, Qt::AlignLeft);
-
-        // stock stepper
-        auto *stockRow = new QHBoxLayout;
-        stockRow->setSpacing(8);
-        auto *stockTxt = new QVBoxLayout;
-        stockTxt->setSpacing(0);
-        stockTxt->addWidget(W::label(isNew ? "Initial Stock Volume" : "Stock on hand", "h2"));
-        stockTxt->addWidget(W::label(isNew ? "Register the starting quantity" : "Available quantity", "muted"));
-        stockRow->addLayout(stockTxt, 1);
-        auto *minus = W::button("−", "step");
-        auto *plus = W::button("+", "step");
+        auto *row3 = new QHBoxLayout;
+        row3->setSpacing(12);
         auto *stock = new QSpinBox;
         stock->setRange(0, 1000000);
         stock->setValue(cur.stock);
         stock->setButtonSymbols(QAbstractSpinBox::NoButtons);
-        stock->setAlignment(Qt::AlignCenter);
-        stock->setMinimumWidth(80);
-        stock->setMinimumHeight(36);
-        QObject::connect(minus, &QPushButton::clicked, &d, [=] { stock->setValue(stock->value() - 1); });
-        QObject::connect(plus, &QPushButton::clicked, &d, [=] { stock->setValue(stock->value() + 1); });
-        stockRow->addWidget(minus);
-        stockRow->addWidget(stock);
-        stockRow->addWidget(plus);
-        v2->addLayout(stockRow);
-        left->addWidget(c2);
-        left->addStretch();
-        cols->addLayout(left, 6);
+        stock->setMinimumHeight(38);
+        row3->addLayout(field(isNew ? "Opening stock" : "Stock", stock), 1);
+        row3->addStretch(2);
+        form->addLayout(row3);
+        form->addStretch();
+        cols->addLayout(form, 3);
 
-        // ------------------------------------------------ barcode engine (right)
-        auto *c3 = W::card(nullptr, "subCard");
-        auto *v3 = new QVBoxLayout(c3);
-        v3->setContentsMargins(14, 12, 14, 12);
-        v3->setSpacing(8);
-        auto *h3 = new QHBoxLayout;
-        h3->setSpacing(8);
-        h3->addWidget(W::label("EAN-8 Barcode Engine", "h2"));
-        h3->addStretch();
-        auto *engineBadge = W::badge("Ready", "green");
-        h3->addWidget(engineBadge);
-        v3->addLayout(h3);
-
-        auto *gen = W::button(isNew ? "Generate Barcode" : "Barcode locked", "primary", "bolt");
-        gen->setMinimumHeight(40);
-        gen->setEnabled(isNew);
-        v3->addWidget(gen);
-
+        // ------------------------------------------------ barcode (right)
+        auto *card = W::card(nullptr, "subCard");
+        auto *cv = new QVBoxLayout(card);
+        cv->setContentsMargins(16, 14, 16, 14);
+        cv->setSpacing(8);
+        cv->addWidget(W::label("Barcode", "caption"));
         auto *preview = new QLabel;
         preview->setAlignment(Qt::AlignCenter);
-        preview->setMinimumHeight(96);
-        preview->setStyleSheet("background:white; border:1px solid #dbe4f7; border-radius:10px;");
-        v3->addWidget(preview);
-
-        auto *digits = new QHBoxLayout;
-        digits->setSpacing(6);
-        digits->addStretch();
-        auto *dPre = W::label("", "mono");
-        auto *dSer = W::label("", "mono");
-        auto *dChk = W::label("", "mono");
-        dPre->setStyleSheet("background:#dce1ff; color:#1d46b4; font-weight:800; font-size:17px; padding:3px 8px; border-radius:6px;");
-        dSer->setStyleSheet("font-weight:800; font-size:17px; padding:3px 4px;");
-        dChk->setStyleSheet("background:#85f8c4; color:#005137; font-weight:800; font-size:17px; padding:3px 8px; border-radius:6px;");
-        digits->addWidget(dPre);
-        digits->addWidget(dSer);
-        digits->addWidget(dChk);
-        digits->addStretch();
-        v3->addLayout(digits);
-
-        auto kv = [&](const QString &k, QLabel *&val)
-        {
-            auto *r = new QHBoxLayout;
-            r->addWidget(W::label(k, "muted"));
-            r->addStretch();
-            val = W::label("—", "mono");
-            val->setStyleSheet("font-weight:700;");
-            r->addWidget(val);
-            v3->addLayout(r);
-        };
-        QLabel *kPrefix = nullptr, *kSerial = nullptr, *kCheck = nullptr;
-        kv("Category prefix", kPrefix);
-        kv("Item serial", kSerial);
-        kv("Mod-10 check digit", kCheck);
-        auto *pathLbl = W::label("", "muted");
-        pathLbl->setWordWrap(true);
-        v3->addWidget(pathLbl);
-
-        auto *sheet = W::button("Print Barcode Label Sheet", "soft", "print");
-        sheet->setMinimumHeight(38);
-        v3->addWidget(sheet);
-        v3->addStretch();
-        cols->addWidget(c3, 4);
+        preview->setMinimumHeight(92);
+        preview->setStyleSheet("background:white; border-radius:8px;");
+        cv->addWidget(preview);
+        auto *codeLbl = W::label("", "mono");
+        codeLbl->setAlignment(Qt::AlignCenter);
+        codeLbl->setStyleSheet("font-size:20px; font-weight:800; letter-spacing:3px;");
+        cv->addWidget(codeLbl);
+        auto *catLbl = W::label("", "muted");
+        catLbl->setAlignment(Qt::AlignCenter);
+        catLbl->setWordWrap(true);
+        cv->addWidget(catLbl);
+        cv->addStretch();
+        auto *sheet = W::button("Print labels", "flat", "print");
+        cv->addWidget(sheet, 0, Qt::AlignHCenter);
+        card->setMinimumWidth(250);
+        cols->addWidget(card, 2);
         d.body()->addLayout(cols);
 
         auto *errLbl = W::label("", "muted");
@@ -342,32 +214,23 @@ namespace Dialogs
         auto showCode = [&]
         {
             const bool have = code.size() == 8;
-            dPre->setText(have ? code.left(2) : "--");
-            dSer->setText(have ? code.mid(2, 5) : "-----");
-            dChk->setText(have ? code.right(1) : "-");
-            kPrefix->setText(have ? code.left(2) : "—");
-            kSerial->setText(have ? code.mid(2, 5) : "—");
-            kCheck->setText(have ? code.right(1) + "  (valid)" : "—");
-            pathLbl->setText(have ? "Saved as data/barcodes/" + code + ".png" : "No barcode yet - pick a category.");
+            codeLbl->setText(have ? code : "--------");
+            const Category *c = store.category(have ? code.left(2) : catBox->currentData().toString());
+            catLbl->setText(have ? "Starts with category " + code.left(2) + (c ? " (" + c->name + ")" : QString()) : QString());
             sheet->setEnabled(have);
             if (have)
                 preview->setPixmap(QPixmap::fromImage(BarcodeArt::render(code, 2, 70, false)));
             else
-                preview->setText("—");
-            W::setBadge(engineBadge, have ? "Ready" : "Waiting", have ? "green" : "grey");
+                preview->setText("Pick a category");
         };
-        auto generate = [&]
+        auto generate = [&] // new products: a fresh barcode for the chosen category, no button needed
         {
             if (!isNew)
                 return;
             code = app.nextBarcode(catBox->currentData().toString());
+            errLbl->setVisible(code.isEmpty());
             if (code.isEmpty())
-            {
-                errLbl->setText("No free barcode left in this category (serial 00001 - 99999 is used up).");
-                errLbl->show();
-            }
-            else
-                errLbl->hide();
+                errLbl->setText("This category has no free barcodes left.");
             showCode();
         };
         auto suggestAcronym = [&]
@@ -377,29 +240,23 @@ namespace Dialogs
             return s.left(8);
         };
         bool acrTouched = !isNew;
-        auto updateCount = [&] { acrCount->setText(QString("[ %1 / 8 max ]").arg(acr->text().size())); };
         QObject::connect(acr, &QLineEdit::textEdited, &d, [&](const QString &) { acrTouched = true; });
-        QObject::connect(acr, &QLineEdit::textChanged, &d, [&](const QString &) { updateCount(); });
         QObject::connect(name, &QLineEdit::textChanged, &d, [&](const QString &)
                          {
             if (!acrTouched)
                 acr->setText(suggestAcronym()); });
         QObject::connect(catBox, qOverload<int>(&QComboBox::currentIndexChanged), &d, [&](int) { generate(); });
-        QObject::connect(gen, &QPushButton::clicked, &d, [&] { generate(); });
         QObject::connect(sheet, &QPushButton::clicked, &d, [&]
                          {
-            if (code.size() == 8 && saveLabelSheet(&d, code, name->text().trimmed().isEmpty() ? acr->text() : name->text().trimmed()))
-                errLbl->hide(); });
+            if (code.size() == 8)
+                saveLabelSheet(&d, code, name->text().trimmed().isEmpty() ? acr->text() : name->text().trimmed()); });
 
-        // footer: Cancel [Esc] ... hint ... Save [Enter]
-        auto *cancel = W::button("Cancel  [Esc]", "", "close");
-        auto *hint = W::label("Press Enter to save instantly", "muted");
-        auto *save = W::button(isNew ? "Save Product to Inventory" : "Save Changes", "primary", "check");
+        auto *cancel = W::button("Cancel", "flat");
+        auto *save = W::button(isNew ? "Add Product" : "Save Changes", "primary", "check");
         save->setMinimumHeight(40);
-        save->setDefault(true);
-        d.footer()->addWidget(cancel);
+        save->setDefault(true); // Enter saves
         d.footer()->addStretch();
-        d.footer()->addWidget(hint);
+        d.footer()->addWidget(cancel);
         d.footer()->addWidget(save);
         QObject::connect(cancel, &QPushButton::clicked, &d, &QDialog::reject);
         QObject::connect(save, &QPushButton::clicked, &d, [&]
@@ -424,7 +281,6 @@ namespace Dialogs
             }
             d.accept(); });
 
-        updateCount();
         if (isNew)
             generate();
         else
