@@ -13,6 +13,7 @@
 #include "ScannerPage.h"
 #include "SettingsPage.h"
 #include "Theme.h"
+#include "UiStore.h"
 #include "Widgets.h"
 #include <QApplication>
 #include <QCloseEvent>
@@ -97,6 +98,7 @@ MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
     m_products->setRole(m_role);
     m_products->setViewOnly(!RolePolicy::canOpen(m_role, RecordOrder));
     m_scanner->setViewOnly(!RolePolicy::canOpen(m_role, RecordOrder));
+    m_orders->setUser(m_userName);
     m_orders->setRole(m_role);
     m_record->setRole(m_role);
 
@@ -106,6 +108,28 @@ MainWindow::MainWindow(UserRole role, const QString &userName, QWidget *parent)
     m_toastTimer = new QTimer(this);
     m_toastTimer->setSingleShot(true);
     connect(m_toastTimer, &QTimer::timeout, m_toast, &QWidget::hide);
+
+    // ---- edit requests: badge on "Orders", and a notice when a manager signs in with requests waiting ----
+    auto updateRequestBadge = [this]
+    {
+        if (m_nav.size() <= Orders)
+            return;
+        auto *count = m_nav[Orders]->findChild<QLabel *>("navCount");
+        if (!count)
+            return;
+        const auto &store = UiStore::instance();
+        const int n = m_role == UserRole::Manager ? store.pendingEditRequests().size() : store.approvedUnusedCount();
+        count->setText(QString::number(n));
+        count->setVisible(n > 0);
+        count->setToolTip(m_role == UserRole::Manager ? "Edit requests waiting for your approval"
+                                                      : "Approved edit requests - open them on Orders");
+    };
+    connect(&UiStore::instance(), &UiStore::editRequestsChanged, this, updateRequestBadge);
+    updateRequestBadge();
+    if (m_role == UserRole::Manager && !UiStore::instance().pendingEditRequests().isEmpty())
+        QTimer::singleShot(600, this, [this] {
+            showToast(QString("%1 edit request(s) waiting for your approval on Orders")
+                          .arg(UiStore::instance().pendingEditRequests().size())); });
 
     // ---- page wiring ----
     for (QObject *o : QList<QObject *>(pages.begin(), pages.end()))
@@ -229,6 +253,18 @@ QWidget *MainWindow::buildSidebar()
             l->setAttribute(Qt::WA_TransparentForMouseEvents);
         bh->addWidget(ic);
         bh->addWidget(tx, 1);
+        if (i == Orders)
+        {
+            // edit requests: waiting for a manager (manager) / approved and ready to open (cashier)
+            auto *count = new QLabel;
+            count->setObjectName("navCount");
+            count->setAlignment(Qt::AlignCenter);
+            count->setMinimumWidth(20);
+            count->setStyleSheet("background:#e8a317; color:#1b1b1b; border-radius:9px; font-weight:800; font-size:11px; padding:1px 6px;");
+            count->setAttribute(Qt::WA_TransparentForMouseEvents);
+            count->hide();
+            bh->addWidget(count);
+        }
         v->addWidget(b);
         m_nav << b;
         b->setVisible(RolePolicy::canOpen(m_role, i)); // hide pages this role cannot use
