@@ -232,7 +232,7 @@ void TerminalUiTests::preferencesReachCheckoutAndReceipt()
         auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
         if (!dialog)
             return;
-        auto *wallet = button(*dialog, "Wallet\nQR CODE");
+        auto *wallet = button(*dialog, "Wallet");
         correctWallet = wallet && wallet->isChecked();
         dialog->accept();
     });
